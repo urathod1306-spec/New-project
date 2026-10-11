@@ -1,0 +1,24 @@
+@model RequestTableModel
+@if (Model.Items.Count == 0)
+{
+    <p class="empty">@Model.Empty</p>
+}
+else
+{
+    <table class="table">
+        <thead><tr><th>Request no.</th><th>Subject</th>@if (Model.ShowSubmitter) { <th>Submitted by</th> }<th>Status</th><th>With</th><th>Last updated</th></tr></thead>
+        <tbody>
+            @foreach (var r in Model.Items)
+            {
+                <tr>
+                    <td class="nowrap"><a href="/Requests/Details/@r.Id">@r.RequestNumber</a></td>
+                    <td><a href="/Requests/Details/@r.Id"><strong>@r.Subject</strong></a><div class="muted small">@r.RequestCategory @(r.Amount.HasValue ? "· " + Fmt.Money(r.Amount) : "")</div></td>
+                    @if (Model.ShowSubmitter) { <td>@r.SubmitterName<div class="muted small">@r.SubmitterVertical</div></td> }
+                    <td><span class="badge @r.State">@r.State</span></td>
+                    <td>@(r.State is RequestStates.Submitted or RequestStates.UnderReview or RequestStates.Returned or RequestStates.Draft ? r.AssignedToName : "—")</td>
+                    <td class="nowrap">@F.DateTime(r.UpdatedAt)<div class="muted small">@F.DaysSince(r.UpdatedAt) day(s) ago</div></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

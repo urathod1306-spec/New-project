@@ -1,0 +1,13 @@
+@model PagerModel
+@if (Model.Pages > 1)
+{
+    <nav class="pager" aria-label="Pages">
+        @if (Model.Page > 1) { <a href="@Model.Url(Model.Page - 1)">‹ Previous</a> }
+        @for (var p = Math.Max(1, Model.Page - 3); p <= Math.Min(Model.Pages, Model.Page + 3); p++)
+        {
+            if (p == Model.Page) { <span class="current">@p</span> }
+            else { <a href="@Model.Url(p)">@p</a> }
+        }
+        @if (Model.Page < Model.Pages) { <a href="@Model.Url(Model.Page + 1)">Next ›</a> }
+    </nav>
+}

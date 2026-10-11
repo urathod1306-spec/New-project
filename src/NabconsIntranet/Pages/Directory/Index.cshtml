@@ -1,0 +1,70 @@
+@page
+@model NabconsIntranet.Pages.StaffDirectory.IndexModel
+@{
+    ViewData["Title"] = "Staff Directory";
+}
+<div class="page-head">
+    <div>
+        <h1>Staff Directory</h1>
+        <p>@Model.Result.Total staff found. Contact details are for official use only.</p>
+    </div>
+    @if (User.IsAdmin())
+    {
+        <div class="actions">
+            <a class="btn" href="/Admin/Staff">Manage staff</a>
+            <a class="btn" href="/Admin/StaffImport">Import CSV</a>
+        </div>
+    }
+</div>
+<form class="card filters" method="get">
+    <div class="field wide">
+        <label for="q">Name, employee code, designation, e-mail or extension</label>
+        <input type="search" id="q" name="q" value="@Model.Q" maxlength="100" />
+    </div>
+    <div class="field">
+        <label for="vertical">Vertical / department</label>
+        <select id="vertical" name="vertical">
+            <option value="">All verticals</option>
+            @foreach (var v in Model.Verticals) { <option selected="@(v == Model.Vertical)">@v</option> }
+        </select>
+    </div>
+    <div class="field">
+        <label for="location">Office / location</label>
+        <select id="location" name="location">
+            <option value="">All locations</option>
+            @foreach (var l in Model.Locations) { <option selected="@(l == Model.Location)">@l</option> }
+        </select>
+    </div>
+    <div class="actions">
+        <button class="btn primary" type="submit">Search</button>
+        <a class="btn" href="/Directory">Clear</a>
+    </div>
+</form>
+
+<div class="card table-wrap">
+    @if (Model.Result.Total == 0)
+    {
+        <p class="empty">No staff match your search.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead><tr><th>Name</th><th>Designation</th><th>Vertical</th><th>Location</th><th>E-mail</th><th>Ext.</th><th>Mobile</th></tr></thead>
+            <tbody>
+                @foreach (var s in Model.Result.Items)
+                {
+                    <tr>
+                        <td><div class="person"><span class="avatar">@Fmt.Initials(s.FullName)</span><span><strong>@s.FullName</strong><br /><span class="muted small">@s.EmployeeCode</span></span></div></td>
+                        <td>@s.Designation</td>
+                        <td>@s.Vertical</td>
+                        <td>@s.Location</td>
+                        <td>@if (!string.IsNullOrEmpty(s.OfficialEmail)) { <a href="mailto:@s.OfficialEmail">@s.OfficialEmail</a> }</td>
+                        <td class="nowrap">@s.Extension</td>
+                        <td class="nowrap">@(s.ShowMobile ? s.Mobile : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, Model.PageUrl)" />
+    }
+</div>

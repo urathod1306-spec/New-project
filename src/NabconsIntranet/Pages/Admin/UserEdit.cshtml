@@ -1,0 +1,63 @@
+@page "{id:long?}"
+@model NabconsIntranet.Pages.Admin.UserEditModel
+@{
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? "Add user" : "Edit user";
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Admin/Users">← Users</a></p>
+        <h1>@ViewData["Title"]</h1>
+    </div>
+    @if (Model.Existing?.IsLockedOut == true)
+    {
+        <form method="post" asp-page-handler="Unlock" asp-route-id="@Model.Id"><button class="btn warning" type="submit">Unlock account</button></form>
+    }
+</div>
+<form method="post" class="card" asp-route-id="@(isNew ? null : Model.Id)">
+    <partial name="_Errors" />
+    <div class="form-grid">
+        <div class="field">
+            <label asp-for="Input.Username"></label>
+            @if (isNew) { <input asp-for="Input.Username" placeholder="@(Model.WindowsMode ? "DOMAIN\\username" : "e.g. r.sharma")" /> }
+            else { <input asp-for="Input.Username" readonly /> }
+            <span class="hint">@(Model.WindowsMode ? "Use the Windows sign-in name exactly, e.g. NABARD\\rsharma." : "Cannot be changed later.")</span>
+        </div>
+        <div class="field"><label asp-for="Input.DisplayName"></label><input asp-for="Input.DisplayName" /></div>
+        <div class="field"><label asp-for="Input.Email">Official e-mail</label><input asp-for="Input.Email" /></div>
+        <div class="field">
+            <label asp-for="Input.Vertical">Vertical</label>
+            <select asp-for="Input.Vertical">
+                <option value="">— none —</option>
+                @foreach (var v in Model.Verticals) { <option value="@v">@v</option> }
+            </select>
+            <span class="hint">Controls access to “issuing vertical only” circulars.</span>
+        </div>
+        <div class="field full">
+            <label>Roles</label>
+            <div class="checks">
+                @foreach (var r in Roles.All)
+                {
+                    <label class="check">
+                        <input type="checkbox" name="Input.Roles" value="@r" checked="@(Model.Input.Roles.Contains(r) || r == Roles.Staff)" disabled="@(r == Roles.Staff)" />
+                        <strong>@r</strong> <span class="muted small">— @Roles.Descriptions[r]</span>
+                    </label>
+                }
+            </div>
+            <span class="hint">Every user has the Staff role.</span>
+        </div>
+        <label class="check"><input asp-for="Input.IsActive" /> Account active</label>
+        @if (!Model.WindowsMode)
+        {
+            <div class="field full mt">
+                <label asp-for="Input.TempPassword">@(isNew ? "Temporary password" : "Reset password (leave blank to keep current)")</label>
+                <input asp-for="Input.TempPassword" autocomplete="new-password" />
+                <span class="hint">The user must change it at next sign-in. At least 10 characters with upper/lower case, a number and a symbol.</span>
+            </div>
+        }
+    </div>
+    <div class="actions mt">
+        <button class="btn primary" type="submit">Save</button>
+        <a class="btn" href="/Admin/Users">Cancel</a>
+    </div>
+</form>

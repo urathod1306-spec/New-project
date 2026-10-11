@@ -1,0 +1,18 @@
+@page
+@model NabconsIntranet.Pages.Requests.IndexModel
+@{
+    ViewData["Title"] = "My requests";
+}
+<div class="page-head">
+    <div>
+        <h1>My requests</h1>
+        <p>Requests you have raised and their current status.</p>
+    </div>
+    <div class="actions">
+        @if (User.IsAdmin() || User.IsAuditor()) { <a class="btn" href="/Requests/All">All requests</a> }
+        <a class="btn primary" href="/Requests/Edit">+ New request</a>
+    </div>
+</div>
+<div class="card table-wrap">
+    <partial name="_RequestTable" model='new RequestTableModel(Model.Items, false, "You have not raised any requests yet.")' />
+</div>

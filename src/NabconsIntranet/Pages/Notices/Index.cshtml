@@ -1,0 +1,52 @@
+@page
+@model NabconsIntranet.Pages.Notices.IndexModel
+@{
+    ViewData["Title"] = "Notice board";
+}
+<div class="page-head">
+    <div>
+        <h1>Notice board</h1>
+        <p>Notices appear on the home page for all staff between the selected dates.</p>
+    </div>
+</div>
+<div class="grid two">
+    <div class="card table-wrap">
+        <h2>Notices</h2>
+        @if (Model.Items.Count == 0) { <p class="empty">No notices yet.</p> }
+        else
+        {
+            <table class="table">
+                <thead><tr><th>Title</th><th>Shown</th><th>Posted</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var n in Model.Items)
+                    {
+                        <tr>
+                            <td><strong>@n.Title</strong> @if (n.IsImportant) { <span class="badge warning">Important</span> }<div class="muted small pre">@n.Body</div></td>
+                            <td class="nowrap">@F.Date(n.StartsOn)@(string.IsNullOrEmpty(n.EndsOn) ? " onwards" : " – " + F.Date(n.EndsOn))</td>
+                            <td class="nowrap">@n.PostedBy<br /><span class="muted small">@F.DateTime(n.PostedAt)</span></td>
+                            <td>@(n.IsActive ? "Active" : "Removed")</td>
+                            <td>
+                                @if (n.IsActive)
+                                {
+                                    <form method="post" asp-page-handler="Deactivate" asp-route-id="@n.Id" class="inline-form">
+                                        <button class="btn sm" type="submit" data-confirm="Remove this notice from the notice board?">Remove</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+    <form method="post" class="card">
+        <h2>Post a notice</h2>
+        <partial name="_Errors" />
+        <div class="field"><label asp-for="Input.Title"></label><input asp-for="Input.Title" /><span asp-validation-for="Input.Title"></span></div>
+        <div class="field"><label asp-for="Input.Body">Message</label><textarea asp-for="Input.Body"></textarea></div>
+        <div class="field"><label asp-for="Input.StartsOn"></label><input asp-for="Input.StartsOn" type="date" /><span asp-validation-for="Input.StartsOn"></span></div>
+        <div class="field"><label asp-for="Input.EndsOn"></label><input asp-for="Input.EndsOn" type="date" /><span asp-validation-for="Input.EndsOn"></span></div>
+        <label class="check"><input asp-for="Input.IsImportant" /> Mark as important</label>
+        <div class="actions mt"><button class="btn primary" type="submit">Post notice</button></div>
+    </form>
+</div>

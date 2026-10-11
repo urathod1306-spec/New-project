@@ -1,0 +1,12 @@
+@* Replaces asp-validation-summary (which emits an inline style blocked by the Content Security Policy). *@
+@{
+    var errors = ViewData.ModelState.Where(kv => kv.Value != null && kv.Value.Errors.Count > 0)
+        .SelectMany(kv => kv.Value!.Errors.Select(e => e.ErrorMessage)).Where(m => !string.IsNullOrEmpty(m)).Distinct().ToList();
+}
+@if (errors.Count > 0)
+{
+    <div class="alert danger" role="alert">
+        <strong>Please correct the following:</strong>
+        <ul>@foreach (var e in errors) { <li>@e</li> }</ul>
+    </div>
+}

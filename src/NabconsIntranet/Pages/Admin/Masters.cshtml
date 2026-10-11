@@ -1,0 +1,44 @@
+@page
+@model NabconsIntranet.Pages.Admin.MastersModel
+@{
+    ViewData["Title"] = "Master lists";
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Admin">← Administration</a></p>
+        <h1>Master lists</h1>
+        <p>Values offered in drop-down lists. Items are deactivated rather than deleted so historical records stay intact.</p>
+    </div>
+</div>
+<div class="tabs">
+    @foreach (var kv in MasterTypes.Labels)
+    {
+        <a class="@(kv.Key == Model.Type ? "active" : "")" href="/Admin/Masters?type=@kv.Key">@kv.Value</a>
+    }
+</div>
+<div class="grid two">
+    <div class="card table-wrap">
+        <table class="table">
+            <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var m in Model.Items)
+                {
+                    <tr>
+                        <td>@m.Name</td>
+                        <td>@if (m.IsActive) { <span class="badge success">Active</span> } else { <span class="badge neutral">Inactive</span> }</td>
+                        <td class="right">
+                            <form method="post" asp-page-handler="Toggle" asp-route-id="@m.Id" class="inline-form">
+                                <button class="btn sm" type="submit">@(m.IsActive ? "Deactivate" : "Re-activate")</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <form method="post" asp-page-handler="Add" asp-route-type="@Model.Type" class="card">
+        <h2>Add to @MasterTypes.Labels[Model.Type].ToLowerInvariant()</h2>
+        <div class="field"><label for="name">Name</label><input type="text" id="name" name="name" maxlength="100" required /></div>
+        <button class="btn primary" type="submit">Add</button>
+    </form>
+</div>

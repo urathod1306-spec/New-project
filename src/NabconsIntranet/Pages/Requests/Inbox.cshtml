@@ -1,0 +1,19 @@
+@page
+@model NabconsIntranet.Pages.Requests.InboxModel
+@{
+    ViewData["Title"] = "Approval inbox";
+}
+<div class="page-head">
+    <div>
+        <h1>Approval inbox</h1>
+        <p>Requests waiting for your review or sanction, oldest first.</p>
+    </div>
+</div>
+<div class="card table-wrap">
+    <h2>Awaiting my action (@Model.Pending.Count)</h2>
+    <partial name="_RequestTable" model='new RequestTableModel(Model.Pending, true, "Nothing is waiting for you. 🎉")' />
+</div>
+<div class="card table-wrap mt">
+    <h2>Recently actioned by me</h2>
+    <partial name="_RequestTable" model='new RequestTableModel(Model.Actioned, true, "You have not actioned any requests yet.")' />
+</div>

@@ -1,0 +1,94 @@
+@page
+@model NabconsIntranet.Pages.Circulars.IndexModel
+@{
+    ViewData["Title"] = "Circulars";
+    var f = Model.Filter;
+}
+<div class="page-head">
+    <div>
+        <h1>Circulars &amp; documents</h1>
+        <p>Search by number, title, keywords or synopsis. @Model.Result.Total found.</p>
+    </div>
+    @if (User.IsPublisher())
+    {
+        <div class="actions"><a class="btn primary" href="/Circulars/Edit">+ New circular</a></div>
+    }
+</div>
+<form class="card filters" method="get">
+    <div class="field wide">
+        <label for="q">Search</label>
+        <input type="search" id="q" name="q" value="@f.Q" maxlength="200" placeholder="e.g. leave, NABCONS/HR, phishing" />
+    </div>
+    <div class="field">
+        <label for="category">Category</label>
+        <select id="category" name="category">
+            <option value="">All categories</option>
+            @foreach (var c in Model.Categories) { <option selected="@(c == f.Category)">@c</option> }
+        </select>
+    </div>
+    <div class="field">
+        <label for="vertical">Issuing vertical</label>
+        <select id="vertical" name="vertical">
+            <option value="">All verticals</option>
+            @foreach (var v in Model.Verticals) { <option selected="@(v == f.Vertical)">@v</option> }
+        </select>
+    </div>
+    <div class="field">
+        <label for="year">Year</label>
+        <select id="year" name="year">
+            <option value="">Any year</option>
+            @foreach (var y in Model.Years) { <option selected="@(y == f.Year)">@y</option> }
+        </select>
+    </div>
+    @if (User.SeesAllCirculars())
+    {
+        <div class="field">
+            <label for="status">Status</label>
+            <select id="status" name="status">
+                <option value="">Published &amp; drafts</option>
+                @foreach (var s in new[] { "Draft", "Published", "Superseded", "Withdrawn" }) { <option selected="@(s == f.Status)">@s</option> }
+            </select>
+        </div>
+    }
+    else
+    {
+        <label class="check"><input type="checkbox" name="withdrawn" value="true" checked="@f.IncludeWithdrawn" /> Include withdrawn</label>
+    }
+    <div class="actions">
+        <button class="btn primary" type="submit">Search</button>
+        <a class="btn" href="/Circulars">Clear</a>
+    </div>
+</form>
+
+<div class="card table-wrap">
+    @if (Model.Result.Total == 0)
+    {
+        <p class="empty">No circulars match your search.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead><tr><th>Number</th><th>Title</th><th>Category</th><th>Issuing vertical</th><th>Issue date</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var c in Model.Result.Items)
+                {
+                    <tr>
+                        <td class="nowrap">@c.CircularNumber</td>
+                        <td>
+                            <a href="/Circulars/Details/@c.Id"><strong>@c.Title</strong></a>
+                            @if (!string.IsNullOrEmpty(c.Synopsis)) { <div class="muted small">@(c.Synopsis.Length > 140 ? c.Synopsis[..140] + "…" : c.Synopsis)</div> }
+                        </td>
+                        <td>@c.Category</td>
+                        <td>@c.IssuingVertical</td>
+                        <td class="nowrap">@F.Date(c.IssueDate)</td>
+                        <td>
+                            <span class="badge @c.DisplayStatus">@c.DisplayStatus</span>
+                            @if (c.Visibility != Visibility.AllStaff) { <span class="badge neutral">@(c.Visibility == Visibility.Vertical ? "Vertical only" : "Restricted")</span> }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, Model.PageUrl)" />
+    }
+</div>

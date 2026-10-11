@@ -1,0 +1,84 @@
+@page "{id:long?}"
+@model NabconsIntranet.Pages.Requests.EditModel
+@{
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? "New request" : "Edit request";
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="@(isNew ? "/Requests" : $"/Requests/Details/{Model.Id}")">← Back</a></p>
+        <h1>@RequestWorkflow.FormName</h1>
+        <p>@(isNew ? "New request" : $"{Model.Existing?.RequestNumber} · {Model.Existing?.State}") — routed to a Reviewing Officer, then a Sanctioning Authority.</p>
+    </div>
+</div>
+@if (Model.Existing?.State == RequestStates.Returned)
+{
+    <div class="alert warning">This request was returned for clarification. Update it and submit again. See the remarks in the request history.</div>
+}
+@if (Model.Approvers.Count < 2)
+{
+    <div class="alert danger">At least two other users with the Approver role are needed before a request can be routed. Please ask the administrator.</div>
+}
+<form method="post" enctype="multipart/form-data" class="card">
+    <partial name="_Errors" />
+    <input type="hidden" asp-for="Input.RowVersion" />
+    <div class="form-grid">
+        <div class="field full">
+            <label asp-for="Input.Subject"></label>
+            <input asp-for="Input.Subject" />
+            <span asp-validation-for="Input.Subject"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Input.RequestCategory"></label>
+            <select asp-for="Input.RequestCategory">
+                <option value="">— select —</option>
+                @foreach (var c in Model.Categories) { <option value="@c">@c</option> }
+            </select>
+        </div>
+        <div class="field">
+            <label asp-for="Input.Amount"></label>
+            <input asp-for="Input.Amount" type="number" step="0.01" min="0" />
+            <span asp-validation-for="Input.Amount"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Input.RequiredBy"></label>
+            <input asp-for="Input.RequiredBy" type="date" />
+        </div>
+        <div class="field"></div>
+        <div class="field full">
+            <label asp-for="Input.Details"></label>
+            <textarea asp-for="Input.Details" rows="7"></textarea>
+            <span asp-validation-for="Input.Details"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Input.ReviewerUserId"></label>
+            <select asp-for="Input.ReviewerUserId">
+                <option value="">— select —</option>
+                @foreach (var a in Model.Approvers) { <option value="@a.Id">@a.DisplayName@(string.IsNullOrEmpty(a.Vertical) ? "" : " (" + a.Vertical + ")")</option> }
+            </select>
+        </div>
+        <div class="field">
+            <label asp-for="Input.ApproverUserId"></label>
+            <select asp-for="Input.ApproverUserId">
+                <option value="">— select —</option>
+                @foreach (var a in Model.Approvers) { <option value="@a.Id">@a.DisplayName@(string.IsNullOrEmpty(a.Vertical) ? "" : " (" + a.Vertical + ")")</option> }
+            </select>
+        </div>
+        <div class="field full">
+            <label for="Uploads">Supporting documents (optional)</label>
+            <input type="file" id="Uploads" name="Uploads" multiple accept="@Model.Accept" data-max-mb="@Site.MaxUploadMB" />
+            <span class="hint">Up to 5 files per save. Allowed: @Model.AllowedList. Max @Site.MaxUploadMB MB each. Attachments cannot be deleted once added.</span>
+            @if (Model.CurrentAttachments.Count > 0)
+            {
+                <ul class="list">
+                    @foreach (var a in Model.CurrentAttachments) { <li><a href="/Requests/Attachment/@a.Id">@a.OriginalFileName</a> <span class="muted small">@Fmt.Size(a.SizeBytes)</span></li> }
+                </ul>
+            }
+        </div>
+    </div>
+    <div class="actions">
+        <button class="btn" type="submit">Save draft</button>
+        <button class="btn primary" type="submit" name="submit" value="true" data-confirm="Submit this request for review? You cannot edit it while it is under review.">Save &amp; submit</button>
+        <a class="btn" href="@(isNew ? "/Requests" : $"/Requests/Details/{Model.Id}")">Cancel</a>
+    </div>
+</form>

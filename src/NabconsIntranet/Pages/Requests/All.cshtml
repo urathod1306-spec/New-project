@@ -1,0 +1,21 @@
+@page
+@model NabconsIntranet.Pages.Requests.AllModel
+@{
+    ViewData["Title"] = "All requests";
+}
+<div class="page-head">
+    <div>
+        <h1>All requests</h1>
+        <p>Read-only overview for administrators and auditors, with ageing since last update.</p>
+    </div>
+</div>
+<div class="tabs">
+    <a class="@(Model.State == null ? "active" : "")" href="/Requests/All">All (@Model.Counts.Values.Sum())</a>
+    @foreach (var s in RequestStates.All)
+    {
+        <a class="@(Model.State == s ? "active" : "")" href="/Requests/All?state=@Uri.EscapeDataString(s)">@s (@Model.Counts.GetValueOrDefault(s))</a>
+    }
+</div>
+<div class="card table-wrap">
+    <partial name="_RequestTable" model='new RequestTableModel(Model.Items, true, "No requests in this state.")' />
+</div>

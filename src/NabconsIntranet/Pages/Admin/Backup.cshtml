@@ -1,0 +1,61 @@
+@page
+@model NabconsIntranet.Pages.Admin.BackupModel
+@{
+    ViewData["Title"] = "Backup & restore";
+    var o = Model.Options;
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Admin">← Administration</a></p>
+        <h1>Backup &amp; restore</h1>
+        <p>Each backup ZIP holds the database, all documents, the configuration and an audit-log export, with a SHA-256 checksum.</p>
+    </div>
+    <form method="post" asp-page-handler="Create"><button class="btn primary" type="submit">Create backup now</button></form>
+</div>
+<div class="grid two">
+    <div class="card table-wrap">
+        <h2>Backups in @o.BackupPath</h2>
+        @if (Model.Items.Count == 0) { <p class="empty">No backups yet.</p> }
+        else
+        {
+            <table class="table compact">
+                <thead><tr><th>File</th><th>Size</th><th>SHA-256</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var b in Model.Items)
+                    {
+                        <tr>
+                            <td class="mono">@b.FileName</td>
+                            <td class="nowrap">@Fmt.Size(b.SizeBytes)</td>
+                            <td class="mono">@b.Sha256</td>
+                            <td><form method="post" asp-page-handler="Verify" asp-route-name="@b.FileName" class="inline-form"><button class="btn sm" type="submit">Verify</button></form></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+    <div class="stack">
+        <div class="card">
+            <h2>Schedule</h2>
+            <p>Automatic backup every day at <strong>@o.DailyBackupTime</strong> (while the intranet is running). Backups older than <strong>@o.BackupRetentionDays days</strong> are removed.</p>
+            @if (string.IsNullOrEmpty(o.SecondaryBackupFolder))
+            {
+                <div class="alert warning">No off-machine copy is configured. Set <span class="mono">SecondaryBackupFolder</span> in appsettings.json to an IT-approved LAN share (e.g. <span class="mono">\\fileserver\NABCONSBackup</span>).</div>
+            }
+            else
+            {
+                <p>Each backup is also copied to <span class="mono">@o.SecondaryBackupFolder</span>.</p>
+            }
+        </div>
+        <div class="card">
+            <h2>How to restore</h2>
+            <ol>
+                <li>Stop the intranet (close its window, or run <span class="mono">Stop-Service.bat</span> if installed as a service).</li>
+                <li>Double-click <span class="mono">Restore-Backup.bat</span> in the application folder and drag the backup ZIP into the window.</li>
+                <li>The checksum is verified; the current data is moved aside (never deleted).</li>
+                <li>Start the intranet and check <a href="/Audit">Audit → Verify integrity</a>.</li>
+            </ol>
+            <p class="muted small">Test a full restore on a spare PC at least once a quarter — a backup is only proven when a restore works.</p>
+        </div>
+    </div>
+</div>

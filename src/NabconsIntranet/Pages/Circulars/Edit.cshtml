@@ -1,0 +1,91 @@
+@page "{id:long?}"
+@model NabconsIntranet.Pages.Circulars.EditModel
+@{
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? "New circular" : "Edit circular";
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="@(isNew ? "/Circulars" : $"/Circulars/Details/{Model.Id}")">← Back</a></p>
+        <h1>@ViewData["Title"]</h1>
+        <p>Metadata is searchable by all permitted staff. Avoid personal or sensitive HR data.</p>
+    </div>
+</div>
+<form method="post" enctype="multipart/form-data" class="card">
+    <partial name="_Errors" />
+    <div class="form-grid">
+        <div class="field">
+            <label asp-for="Input.CircularNumber"></label>
+            <input asp-for="Input.CircularNumber" placeholder="e.g. NABCONS/HR/2026/05" />
+            <span asp-validation-for="Input.CircularNumber"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Input.Category"></label>
+            <select asp-for="Input.Category">
+                <option value="">— select —</option>
+                @foreach (var c in Model.Categories) { <option value="@c">@c</option> }
+            </select>
+            <span asp-validation-for="Input.Category"></span>
+        </div>
+        <div class="field full">
+            <label asp-for="Input.Title"></label>
+            <input asp-for="Input.Title" />
+            <span asp-validation-for="Input.Title"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Input.IssuingVertical"></label>
+            <select asp-for="Input.IssuingVertical">
+                <option value="">— select —</option>
+                @foreach (var v in Model.Verticals) { <option value="@v">@v</option> }
+            </select>
+            <span asp-validation-for="Input.IssuingVertical"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Input.Visibility"></label>
+            <select asp-for="Input.Visibility">
+                @foreach (var kv in Visibility.Labels) { <option value="@kv.Key">@kv.Value</option> }
+            </select>
+            <span asp-validation-for="Input.Visibility"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Input.IssueDate"></label>
+            <input asp-for="Input.IssueDate" type="date" />
+            <span asp-validation-for="Input.IssueDate"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Input.EffectiveDate"></label>
+            <input asp-for="Input.EffectiveDate" type="date" />
+        </div>
+        <div class="field full">
+            <label asp-for="Input.Keywords"></label>
+            <input asp-for="Input.Keywords" placeholder="Comma-separated words staff are likely to search for" />
+        </div>
+        <div class="field full">
+            <label asp-for="Input.Synopsis"></label>
+            <textarea asp-for="Input.Synopsis" placeholder="Short summary of what the circular says. This text is searchable."></textarea>
+        </div>
+        <div class="field">
+            <label asp-for="Input.SupersedesId"></label>
+            <select asp-for="Input.SupersedesId">
+                <option value="">— does not supersede another circular —</option>
+                @foreach (var s in Model.SupersedeOptions) { <option value="@s.Id">@s.CircularNumber — @s.Title</option> }
+            </select>
+            <span class="hint">On publishing, the selected circular is marked “Superseded”.</span>
+            <span asp-validation-for="Input.SupersedesId"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Upload">@(isNew ? "Circular file" : "Replace file (optional — creates a new version)")</label>
+            <input asp-for="Upload" type="file" accept="@Model.Accept" data-max-mb="@Site.MaxUploadMB" />
+            <span class="hint">Allowed: @Model.AllowedList. Max @Site.MaxUploadMB MB.</span>
+            <span asp-validation-for="Upload"></span>
+        </div>
+    </div>
+    <div class="actions">
+        <button class="btn primary" type="submit">Save</button>
+        @if (isNew)
+        {
+            <button class="btn success" type="submit" name="publish" value="true" data-confirm="Save and publish this circular now?">Save &amp; publish</button>
+        }
+        <a class="btn" href="@(isNew ? "/Circulars" : $"/Circulars/Details/{Model.Id}")">Cancel</a>
+    </div>
+</form>

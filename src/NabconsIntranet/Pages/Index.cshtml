@@ -1,0 +1,89 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home";
+    var hour = F.LocalNow.Hour;
+    var greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+}
+<section class="hero">
+    <div>
+        <h1>@greeting, @User.DisplayName()</h1>
+        <p>@Site.Tagline</p>
+    </div>
+    <div class="hero-date">@F.LocalNow.ToString("dddd, dd MMMM yyyy")</div>
+</section>
+
+<div class="grid stats">
+    <div class="stat"><div class="n">@Model.StaffCount</div><div class="l">Staff in directory</div></div>
+    <div class="stat"><div class="n">@Model.CircularCount</div><div class="l">Published circulars</div></div>
+    <a class="stat tile-link" href="/Requests"><div class="n">@Model.OpenRequests</div><div class="l">My open requests</div></a>
+    @if (User.IsApprover())
+    {
+        <a class="stat tile-link" href="/Requests/Inbox"><div class="n">@Model.InboxCount</div><div class="l">Awaiting my action</div></a>
+    }
+</div>
+
+<div class="grid two mt">
+    <div class="stack">
+        <div class="card">
+            <div class="card-head">
+                <h2>Latest circulars</h2>
+                <a href="/Circulars">View all →</a>
+            </div>
+            @if (Model.Latest.Count == 0)
+            {
+                <p class="empty">No circulars have been published yet.</p>
+            }
+            else
+            {
+                <ul class="list">
+                    @foreach (var c in Model.Latest)
+                    {
+                        <li>
+                            <a href="/Circulars/Details/@c.Id"><strong>@c.Title</strong></a>
+                            @if (c.DisplayStatus != "Published") { <span class="badge @c.DisplayStatus">@c.DisplayStatus</span> }
+                            <div class="meta">@c.CircularNumber · @c.Category · @F.Date(c.IssueDate)</div>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <div class="grid tiles">
+            <a class="tile" href="/Directory"><span class="ico">👥</span><span><strong>Staff Directory</strong><small>Find colleagues by name, vertical or office</small></span></a>
+            <a class="tile" href="/Circulars"><span class="ico">📄</span><span><strong>Circulars</strong><small>Search orders, circulars and advisories</small></span></a>
+            <a class="tile" href="/Requests/Edit"><span class="ico">📝</span><span><strong>New request</strong><small>@RequestWorkflow.FormName</small></span></a>
+            <a class="tile" href="/Requests"><span class="ico">📋</span><span><strong>My Requests</strong><small>Track status and approval history</small></span></a>
+        </div>
+    </div>
+
+    <div class="stack">
+        <div class="card">
+            <div class="card-head">
+                <h2>Notice board</h2>
+                @if (User.IsPublisher()) { <a href="/Notices">Manage</a> }
+            </div>
+            @if (Model.Notices.Count == 0)
+            {
+                <p class="empty">No current notices.</p>
+            }
+            @foreach (var n in Model.Notices)
+            {
+                <div class="notice @(n.IsImportant ? "important" : "")">
+                    <strong>@n.Title</strong>
+                    @if (!string.IsNullOrEmpty(n.Body)) { <div class="pre">@n.Body</div> }
+                    <div class="meta">@n.PostedBy · @F.Date(n.StartsOn)</div>
+                </div>
+            }
+        </div>
+        <div class="card">
+            <h2>Find a colleague</h2>
+            <form method="get" action="/Directory">
+                <div class="field">
+                    <input type="search" name="q" placeholder="Name, employee code or designation" maxlength="100" aria-label="Find a colleague" />
+                </div>
+                <button class="btn primary" type="submit">Search directory</button>
+            </form>
+        </div>
+    </div>
+</div>

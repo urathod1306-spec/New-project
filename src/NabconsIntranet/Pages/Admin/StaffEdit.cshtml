@@ -1,0 +1,39 @@
+@page "{id:long?}"
+@model NabconsIntranet.Pages.Admin.StaffEditModel
+@{
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? "Add staff" : "Edit staff";
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Admin/Staff">← Staff directory</a></p>
+        <h1>@ViewData["Title"]</h1>
+        <p>Only official contact information. To remove someone from the directory, set “Active to”.</p>
+    </div>
+</div>
+<form method="post" class="card" asp-route-id="@(isNew ? null : Model.Id)">
+    <partial name="_Errors" />
+    <div class="form-grid">
+        <div class="field"><label asp-for="Input.EmployeeCode"></label>@if (isNew) { <input asp-for="Input.EmployeeCode" /> } else { <input asp-for="Input.EmployeeCode" readonly /> }</div>
+        <div class="field"><label asp-for="Input.FullName"></label><input asp-for="Input.FullName" /></div>
+        <div class="field"><label asp-for="Input.Designation"></label><input asp-for="Input.Designation" /></div>
+        <div class="field">
+            <label asp-for="Input.Vertical">Vertical / department</label>
+            <select asp-for="Input.Vertical"><option value="">— select —</option>@foreach (var v in Model.Verticals) { <option value="@v">@v</option> }</select>
+        </div>
+        <div class="field">
+            <label asp-for="Input.Location">Office / location</label>
+            <select asp-for="Input.Location"><option value="">— select —</option>@foreach (var l in Model.Locations) { <option value="@l">@l</option> }</select>
+        </div>
+        <div class="field"><label asp-for="Input.OfficialEmail"></label><input asp-for="Input.OfficialEmail" /></div>
+        <div class="field"><label asp-for="Input.Extension">Extension</label><input asp-for="Input.Extension" /></div>
+        <div class="field"><label asp-for="Input.Mobile">Official mobile</label><input asp-for="Input.Mobile" /></div>
+        <label class="check full"><input asp-for="Input.ShowMobile" /> Show mobile number in the directory (only where disclosure is approved)</label>
+        <div class="field mt"><label asp-for="Input.ActiveFrom"></label><input asp-for="Input.ActiveFrom" type="date" /></div>
+        <div class="field mt"><label asp-for="Input.ActiveTo"></label><input asp-for="Input.ActiveTo" type="date" /></div>
+    </div>
+    <div class="actions">
+        <button class="btn primary" type="submit">Save</button>
+        <a class="btn" href="/Admin/Staff">Cancel</a>
+    </div>
+</form>

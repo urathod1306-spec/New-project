@@ -1,0 +1,18 @@
+@page
+@model ErrorModel
+@{
+    ViewData["Title"] = "Error";
+    var (title, text) = Model.Code switch
+    {
+        403 => ("Access denied", "You do not have permission to view this page. If you need access, please contact the intranet administrator."),
+        404 => ("Page not found", "The page or document you asked for does not exist, or you are not allowed to see it."),
+        413 => ("File too large", "The upload is larger than the permitted limit."),
+        _ => ("Something went wrong", "The request could not be completed. The error has been logged for the administrator."),
+    };
+}
+<div class="card login-wrap">
+    <h1>@title</h1>
+    <p>@text</p>
+    <p class="muted small">Error code @Model.Code</p>
+    <a class="btn primary" href="/">Go to the home page</a>
+</div>

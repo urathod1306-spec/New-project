@@ -1,0 +1,10 @@
+bin/
+obj/
+build/out/
+*.user
+.vs/
+# runtime folders if someone runs the app from the source tree
+src/NabconsIntranet/data/
+src/NabconsIntranet/documents/
+src/NabconsIntranet/logs/
+src/NabconsIntranet/backups/

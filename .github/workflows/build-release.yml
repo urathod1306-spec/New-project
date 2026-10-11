@@ -1,0 +1,35 @@
+name: Build Windows package
+
+on:
+  push:
+    branches: [ "main", "claude/**" ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build package
+        run: |
+          sudo apt-get install -y zip >/dev/null
+          bash build/package.sh
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: NABCONS-Intranet-win-x64
+          path: |
+            release/*.zip
+            release/*.sha256
+      - name: Attach to GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" release/*.zip release/*.sha256 --title "NABCONS Intranet ${GITHUB_REF_NAME}" --notes "Ready-to-run Windows package. See README-FIRST.txt inside the ZIP." || gh release upload "${GITHUB_REF_NAME}" release/*.zip release/*.sha256 --clobber

@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NabconsIntranet</RootNamespace>
+    <AssemblyName>NabconsIntranet</AssemblyName>
+    <Version>1.0.0</Version>
+    <Product>NABCONS Intranet</Product>
+    <Company>NABARD Consultancy Services</Company>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- Never phone home: no telemetry, no update checks at runtime. -->
+    <UseAppHost>true</UseAppHost>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- Release package for Windows: one self-contained .exe, no .NET install needed on the office PC.
+       The SQLite native DLL is kept next to the .exe (not extracted to %TEMP%) so application
+       allow-listing (AppLocker / WDAC) can approve the whole folder. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Versions are pinned deliberately (software bill of materials: docs/SBOM.md). -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.12" />
+  </ItemGroup>
+
+</Project>

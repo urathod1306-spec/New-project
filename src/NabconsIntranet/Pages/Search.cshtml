@@ -1,0 +1,46 @@
+@page
+@model SearchModel
+@{
+    ViewData["Title"] = "Search";
+}
+<div class="page-head">
+    <div>
+        <h1>Search</h1>
+        @if (Model.Q != null) { <p>Results for “@Model.Q”</p> }
+    </div>
+</div>
+@if (Model.Q == null)
+{
+    <div class="card"><p class="empty">Type a name, circular number, title or keyword in the search box above.</p></div>
+}
+else
+{
+    <div class="grid halves">
+        <div class="card">
+            <div class="card-head"><h2>Staff (@Model.People.Total)</h2><a href="/Directory?q=@Uri.EscapeDataString(Model.Q)">Open in directory →</a></div>
+            @if (Model.People.Total == 0) { <p class="empty">No matching staff.</p> }
+            <ul class="list">
+                @foreach (var s in Model.People.Items.Take(10))
+                {
+                    <li class="person">
+                        <span class="avatar">@Fmt.Initials(s.FullName)</span>
+                        <span><strong>@s.FullName</strong><br /><span class="meta">@s.Designation · @s.Vertical · @s.Location @(string.IsNullOrEmpty(s.Extension) ? "" : "· Ext. " + s.Extension)</span></span>
+                    </li>
+                }
+            </ul>
+        </div>
+        <div class="card">
+            <div class="card-head"><h2>Circulars (@Model.Documents.Total)</h2><a href="/Circulars?q=@Uri.EscapeDataString(Model.Q)">Open in circulars →</a></div>
+            @if (Model.Documents.Total == 0) { <p class="empty">No matching circulars.</p> }
+            <ul class="list">
+                @foreach (var c in Model.Documents.Items.Take(10))
+                {
+                    <li>
+                        <a href="/Circulars/Details/@c.Id"><strong>@c.Title</strong></a> <span class="badge @c.DisplayStatus">@c.DisplayStatus</span>
+                        <div class="meta">@c.CircularNumber · @c.Category · @F.Date(c.IssueDate)</div>
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+}

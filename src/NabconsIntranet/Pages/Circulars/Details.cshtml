@@ -1,0 +1,127 @@
+@page "{id:long}"
+@model NabconsIntranet.Pages.Circulars.DetailsModel
+@{
+    var c = Model.Item;
+    ViewData["Title"] = c.CircularNumber;
+    var current = Model.Files.FirstOrDefault();
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Circulars">← Circulars</a></p>
+        <h1>@c.Title</h1>
+        <p>@c.CircularNumber · <span class="badge @c.DisplayStatus">@c.DisplayStatus</span></p>
+    </div>
+    <div class="actions">
+        @if (current != null)
+        {
+            <a class="btn primary" href="/Circulars/Download/@current.Id">⬇ Download (v@(current.Version))</a>
+        }
+        @if (User.IsPublisher() && c.Status != CircularStatus.Withdrawn)
+        {
+            <a class="btn" href="/Circulars/Edit/@c.Id">Edit details</a>
+        }
+    </div>
+</div>
+
+@if (c.Status == CircularStatus.Withdrawn)
+{
+    <div class="alert danger"><strong>Withdrawn</strong> on @F.DateTime(c.WithdrawnAt) by @c.WithdrawnBy. Reason: @c.WithdrawalReason</div>
+}
+@if (c.SupersededById != null)
+{
+    <div class="alert warning">This circular has been <strong>superseded</strong> by <a href="/Circulars/Details/@c.SupersededById">@c.SupersededByNumber</a>. Refer to the newer circular.</div>
+}
+@if (c.Status == CircularStatus.Draft)
+{
+    <div class="alert info">This is a <strong>draft</strong> and is not visible to staff until it is published.</div>
+}
+
+<div class="grid two">
+    <div class="stack">
+        <div class="card">
+            <h2>Details</h2>
+            <dl class="meta-grid">
+                <dt>Circular / order no.</dt><dd>@c.CircularNumber</dd>
+                <dt>Category</dt><dd>@c.Category</dd>
+                <dt>Issuing vertical</dt><dd>@c.IssuingVertical</dd>
+                <dt>Issue date</dt><dd>@F.Date(c.IssueDate)</dd>
+                <dt>Effective date</dt><dd>@F.Date(c.EffectiveDate)</dd>
+                <dt>Visibility</dt><dd>@(Visibility.Labels.GetValueOrDefault(c.Visibility, c.Visibility))</dd>
+                <dt>Keywords</dt><dd>@c.Keywords</dd>
+                @if (c.SupersedesId != null) { <dt>Supersedes</dt><dd><a href="/Circulars/Details/@c.SupersedesId">@c.SupersedesNumber</a></dd> }
+                @foreach (var r in Model.Replaces) { <dt>Superseded by</dt><dd><a href="/Circulars/Details/@r.Id">@r.CircularNumber</a></dd> }
+                <dt>Published</dt><dd>@(c.PublishedAt == null ? "—" : $"{F.DateTime(c.PublishedAt)} by {c.PublishedBy}")</dd>
+                <dt>Last updated</dt><dd>@F.DateTime(c.UpdatedAt) by @c.UpdatedBy</dd>
+            </dl>
+            @if (!string.IsNullOrEmpty(c.Synopsis))
+            {
+                <h3 class="mt">Synopsis</h3>
+                <p class="pre">@c.Synopsis</p>
+            }
+        </div>
+        <div class="card table-wrap">
+            <h2>File versions</h2>
+            @if (Model.Files.Count == 0) { <p class="empty">No file uploaded yet.</p> }
+            else
+            {
+                <table class="table compact">
+                    <thead><tr><th>Ver.</th><th>File</th><th>Size</th><th>Uploaded</th><th>SHA-256 (integrity)</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in Model.Files)
+                        {
+                            <tr>
+                                <td>v@(f.Version)</td>
+                                <td><a href="/Circulars/Download/@f.Id">@f.OriginalFileName</a></td>
+                                <td class="nowrap">@Fmt.Size(f.SizeBytes)</td>
+                                <td class="nowrap">@F.DateTime(f.UploadedAt)<br /><span class="muted small">@f.UploadedBy</span></td>
+                                <td class="mono">@f.Sha256</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+
+    @if (User.IsPublisher())
+    {
+        <div class="stack">
+            @if (c.Status == CircularStatus.Draft)
+            {
+                <div class="card">
+                    <h2>Publish</h2>
+                    <p class="muted small">Publishing makes this circular visible according to its visibility setting@(c.SupersedesId != null ? $" and marks {c.SupersedesNumber} as superseded" : "").</p>
+                    <form method="post" asp-page-handler="Publish" asp-route-id="@c.Id">
+                        <button class="btn success block" type="submit" data-confirm="Publish @c.CircularNumber now?">Publish circular</button>
+                    </form>
+                </div>
+            }
+            @if (c.Status != CircularStatus.Withdrawn)
+            {
+                <div class="card">
+                    <h2>Upload a new version</h2>
+                    <form method="post" enctype="multipart/form-data" asp-page-handler="Upload" asp-route-id="@c.Id">
+                        <div class="field">
+                            <input type="file" name="file" accept="@Model.Accept" data-max-mb="@Site.MaxUploadMB" required />
+                            <span class="hint">Allowed: @Model.AllowedList. Max @Site.MaxUploadMB MB. Earlier versions are kept.</span>
+                        </div>
+                        <button class="btn block" type="submit">Upload</button>
+                    </form>
+                </div>
+            }
+            @if (c.Status == CircularStatus.Published)
+            {
+                <div class="card">
+                    <h2>Withdraw</h2>
+                    <form method="post" asp-page-handler="Withdraw" asp-route-id="@c.Id">
+                        <div class="field">
+                            <label for="reason">Reason for withdrawal</label>
+                            <textarea id="reason" name="reason" maxlength="500" required></textarea>
+                        </div>
+                        <button class="btn danger block" type="submit" data-confirm="Withdraw @c.CircularNumber? Staff will see it marked as withdrawn.">Withdraw circular</button>
+                    </form>
+                </div>
+            }
+        </div>
+    }
+</div>

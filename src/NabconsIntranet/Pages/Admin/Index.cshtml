@@ -1,0 +1,53 @@
+@page
+@model NabconsIntranet.Pages.Admin.IndexModel
+@{
+    ViewData["Title"] = "Administration";
+    var o = Model.Options;
+}
+<div class="page-head">
+    <div>
+        <h1>Administration</h1>
+        <p>For authorised custodians only. Every change here is recorded in the audit log.</p>
+    </div>
+</div>
+@if (o.SeedDemoData || o.ShowDemoAccountsOnLogin)
+{
+    <div class="alert warning"><strong>Pilot / demo mode is on.</strong> Synthetic demo data and demo accounts are enabled. Before real use, follow “Going live” in the Administrator Guide (docs/ADMIN-GUIDE.md).</div>
+}
+@if (Model.LastBackup == null)
+{
+    <div class="alert danger">No backup has been taken yet. <a href="/Admin/Backup">Create one now</a>.</div>
+}
+<div class="grid stats">
+    <div class="stat"><div class="n">@Model.Users</div><div class="l">Active users</div></div>
+    <div class="stat"><div class="n">@Model.Staff</div><div class="l">Directory entries</div></div>
+    <div class="stat"><div class="n">@Model.Circulars</div><div class="l">Circulars</div></div>
+    <div class="stat"><div class="n">@Model.Requests</div><div class="l">Requests</div></div>
+    <div class="stat"><div class="n">@Model.AuditEntries</div><div class="l">Audit entries</div></div>
+</div>
+<div class="grid tiles mt">
+    <a class="tile" href="/Admin/Users"><span class="ico">🔐</span><span><strong>Users &amp; roles</strong><small>Create users, assign roles, reset passwords, unlock</small></span></a>
+    <a class="tile" href="/Admin/Staff"><span class="ico">👥</span><span><strong>Staff directory</strong><small>Add, edit or deactivate directory entries</small></span></a>
+    <a class="tile" href="/Admin/StaffImport"><span class="ico">📥</span><span><strong>Import staff CSV</strong><small>Controlled bulk update with preview</small></span></a>
+    <a class="tile" href="/Admin/Masters"><span class="ico">🗂️</span><span><strong>Master lists</strong><small>Verticals, locations, categories</small></span></a>
+    <a class="tile" href="/Admin/Backup"><span class="ico">💾</span><span><strong>Backup &amp; restore</strong><small>Create and verify backups</small></span></a>
+    <a class="tile" href="/Audit"><span class="ico">🧾</span><span><strong>Audit log</strong><small>Search, export, verify integrity</small></span></a>
+    <a class="tile" href="/Requests/All"><span class="ico">📋</span><span><strong>All requests</strong><small>Pending approvals and ageing</small></span></a>
+    <a class="tile" href="/Notices"><span class="ico">📢</span><span><strong>Notice board</strong><small>Post notices on the home page</small></span></a>
+</div>
+<div class="card mt">
+    <h2>System information</h2>
+    <dl class="meta-grid">
+        <dt>Version</dt><dd>@(typeof(Program).Assembly.GetName().Version)</dd>
+        <dt>Sign-in mode</dt><dd>@(o.IsWindowsAuth ? "Windows Authentication (Active Directory)" : "Local intranet accounts")</dd>
+        <dt>Server</dt><dd>@Environment.MachineName · @System.Runtime.InteropServices.RuntimeInformation.OSDescription · .NET @Environment.Version</dd>
+        <dt>Application folder</dt><dd class="mono">@o.ContentRoot</dd>
+        <dt>Database</dt><dd class="mono">@o.DatabasePath (@Fmt.Size(Model.DbBytes))</dd>
+        <dt>Documents folder</dt><dd class="mono">@o.DocumentsPath (@Fmt.Size(Model.DocBytes))</dd>
+        <dt>Backup folder</dt><dd class="mono">@o.BackupPath @(string.IsNullOrEmpty(o.SecondaryBackupFolder) ? "" : " + copy to " + o.SecondaryBackupFolder)</dd>
+        <dt>Daily backup</dt><dd>@o.DailyBackupTime, kept for @o.BackupRetentionDays days. Last: @(Model.LastBackup == null ? "never" : Model.LastBackup.FileName)</dd>
+        <dt>Uploads</dt><dd>Max @o.MaxUploadMB MB; @string.Join(", ", o.AllowedUploadExtensions)</dd>
+        <dt>Logs folder</dt><dd class="mono">@o.LogPath</dd>
+    </dl>
+    <p class="muted small mt">Settings are changed in <span class="mono">appsettings.json</span> in the application folder, then restart the intranet.</p>
+</div>

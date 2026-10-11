@@ -1,0 +1,111 @@
+@inject RequestWorkflow Workflow
+@{
+    var signedIn = User.Identity?.IsAuthenticated == true && User.UserId() > 0;
+    var inbox = signedIn && User.IsApprover() ? Workflow.InboxCount(User.UserId()) : 0;
+    var path = Context.Request.Path.Value ?? "/";
+    string Active(string prefix) => (prefix == "/" ? path == "/" : path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ? "active" : "";
+    var title = ViewData["Title"] as string;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@(string.IsNullOrEmpty(title) ? Site.SiteTitle : title + " · " + Site.SiteTitle)</title>
+    <link rel="icon" href="~/img/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="topbar">
+        <div class="wrap topbar-inner">
+            <a class="brand" href="/">
+                <img src="~/img/logo.svg" alt="" width="40" height="40" />
+                <span class="brand-text">
+                    <strong>@Site.SiteTitle</strong>
+                    <small>@Site.OrganisationName</small>
+                </span>
+            </a>
+            @if (signedIn)
+            {
+                <form class="topsearch" method="get" action="/Search" role="search">
+                    <input type="search" name="q" placeholder="Search staff, circulars…" aria-label="Search the intranet" maxlength="100" value="@(path.StartsWith("/Search") ? Context.Request.Query["q"].ToString() : "")" />
+                    <button type="submit" aria-label="Search">Search</button>
+                </form>
+                <details class="usermenu">
+                    <summary><span class="avatar sm">@Fmt.Initials(User.DisplayName())</span><span class="uname">@User.DisplayName()</span></summary>
+                    <div class="menu">
+                        <div class="menu-head">
+                            <strong>@User.DisplayName()</strong>
+                            <small>@User.UserName()</small>
+                            <div class="chips">@foreach (var r in User.RoleNames()) { <span class="chip">@r</span> }</div>
+                        </div>
+                        @if (!Site.IsWindowsAuth)
+                        {
+                            <a href="/Account/ChangePassword">Change password</a>
+                            <form method="post" asp-page="/Account/Logout">
+                                <button type="submit" class="linkbtn">Sign out</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="muted small pad">Signed in with your Windows account</span>
+                        }
+                    </div>
+                </details>
+            }
+        </div>
+        @if (signedIn)
+        {
+            <nav class="mainnav" aria-label="Main">
+                <div class="wrap">
+                    <input type="checkbox" id="navtoggle" class="navtoggle" />
+                    <label for="navtoggle" class="navtoggle-label">☰ Menu</label>
+                    <ul>
+                        <li><a class="@Active("/")" href="/">Home</a></li>
+                        <li><a class="@Active("/Directory")" href="/Directory">Staff Directory</a></li>
+                        <li><a class="@Active("/Circulars")" href="/Circulars">Circulars</a></li>
+                        <li><a class="@(path.StartsWith("/Requests") && !path.StartsWith("/Requests/Inbox") ? "active" : "")" href="/Requests">My Requests</a></li>
+                        @if (User.IsApprover())
+                        {
+                            <li><a class="@Active("/Requests/Inbox")" href="/Requests/Inbox">Approval Inbox @if (inbox > 0) { <span class="count">@inbox</span> }</a></li>
+                        }
+                        @if (User.IsPublisher())
+                        {
+                            <li><a class="@Active("/Notices")" href="/Notices">Notices</a></li>
+                        }
+                        @if (User.CanViewAudit())
+                        {
+                            <li><a class="@Active("/Audit")" href="/Audit">Audit</a></li>
+                        }
+                        @if (User.IsAdmin())
+                        {
+                            <li><a class="@Active("/Admin")" href="/Admin">Administration</a></li>
+                        }
+                    </ul>
+                </div>
+            </nav>
+        }
+    </header>
+
+    <main id="main" class="wrap main">
+        @if (TempData["Message"] is string msg)
+        {
+            <div class="alert success" role="status">@msg</div>
+        }
+        @if (TempData["Error"] is string err)
+        {
+            <div class="alert danger" role="alert">@err</div>
+        }
+        @RenderBody()
+    </main>
+
+    <footer class="footer">
+        <div class="wrap footer-inner">
+            <span>@Site.FooterText</span>
+            <span>@Site.ShortName Intranet v@(typeof(Program).Assembly.GetName().Version?.ToString(3)) · LAN-only · no internet connection used</span>
+        </div>
+    </footer>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+</body>
+</html>

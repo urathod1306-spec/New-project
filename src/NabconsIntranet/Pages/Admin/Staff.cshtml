@@ -1,0 +1,42 @@
+@page
+@model NabconsIntranet.Pages.Admin.StaffModel
+@{
+    ViewData["Title"] = "Manage staff directory";
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Admin">← Administration</a></p>
+        <h1>Manage staff directory</h1>
+        <p>Includes inactive entries. Do not record personal addresses, dates of birth, payroll or appraisal data.</p>
+    </div>
+    <div class="actions">
+        <a class="btn" href="/Admin/Staff?handler=Export">Export CSV</a>
+        <a class="btn" href="/Admin/StaffImport">Import CSV</a>
+        <a class="btn primary" href="/Admin/StaffEdit">+ Add staff</a>
+    </div>
+</div>
+<form class="card filters" method="get">
+    <div class="field wide"><label for="q">Search</label><input type="search" id="q" name="q" value="@Model.Q" /></div>
+    <div class="actions"><button class="btn primary" type="submit">Search</button></div>
+</form>
+<div class="card table-wrap">
+    <table class="table">
+        <thead><tr><th>Code</th><th>Name</th><th>Designation</th><th>Vertical</th><th>Location</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var s in Model.Result.Items)
+            {
+                <tr>
+                    <td class="nowrap">@s.EmployeeCode</td>
+                    <td><strong>@s.FullName</strong><div class="muted small">@s.OfficialEmail</div></td>
+                    <td>@s.Designation</td>
+                    <td>@s.Vertical</td>
+                    <td>@s.Location</td>
+                    <td>@if (s.IsActive(F.Today)) { <span class="badge success">Active</span> } else { <span class="badge neutral">Inactive since @F.Date(s.ActiveTo)</span> }</td>
+                    <td class="nowrap small">@F.DateTime(s.UpdatedAt)<br /><span class="muted">@s.UpdatedBy</span></td>
+                    <td><a class="btn sm" href="/Admin/StaffEdit/@s.StaffId">Edit</a></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, Model.PageUrl)" />
+</div>

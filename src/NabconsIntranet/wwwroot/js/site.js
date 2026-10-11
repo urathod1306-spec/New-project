@@ -1,0 +1,45 @@
+// NABCONS Intranet - small, local, dependency-free script (no inline scripts are allowed by the CSP).
+(function () {
+    'use strict';
+    // Ask for confirmation on buttons/links marked data-confirm="message".
+    document.addEventListener('click', function (e) {
+        var el = e.target.closest('[data-confirm]');
+        if (el && !window.confirm(el.getAttribute('data-confirm'))) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    }, true);
+
+    // Prevent accidental double submission of forms.
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (form.method && form.method.toLowerCase() === 'post') {
+            if (form.dataset.submitted === '1') { e.preventDefault(); return; }
+            form.dataset.submitted = '1';
+            setTimeout(function () { form.dataset.submitted = ''; }, 8000);
+        }
+    });
+
+    // Close the user menu when clicking elsewhere.
+    document.addEventListener('click', function (e) {
+        document.querySelectorAll('details.usermenu[open]').forEach(function (d) {
+            if (!d.contains(e.target)) d.removeAttribute('open');
+        });
+    });
+
+    // Show chosen file names for file inputs.
+    document.querySelectorAll('input[type=file][data-max-mb]').forEach(function (input) {
+        input.addEventListener('change', function () {
+            var max = parseFloat(input.getAttribute('data-max-mb')) * 1024 * 1024;
+            for (var i = 0; i < input.files.length; i++) {
+                if (input.files[i].size > max) {
+                    alert('"' + input.files[i].name + '" is larger than the ' + input.getAttribute('data-max-mb') + ' MB limit.');
+                    input.value = '';
+                    return;
+                }
+            }
+        });
+    });
+})();
+
+document.querySelectorAll('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });

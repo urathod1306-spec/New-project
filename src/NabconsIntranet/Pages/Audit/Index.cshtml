@@ -1,0 +1,47 @@
+@page
+@model NabconsIntranet.Pages.Audit.IndexModel
+@{
+    ViewData["Title"] = "Audit log";
+}
+<div class="page-head">
+    <div>
+        <h1>Audit log</h1>
+        <p>Append-only and hash-chained: entries cannot be edited or deleted, and tampering is detectable.</p>
+    </div>
+    <div class="actions">
+        <a class="btn" href="/Audit?handler=Export&actor=@Uri.EscapeDataString(Model.Actor ?? "")&action=@Uri.EscapeDataString(Model.ActionText ?? "")&from=@Model.From?.ToString("yyyy-MM-dd")&to=@Model.To?.ToString("yyyy-MM-dd")">Export CSV</a>
+        <form method="post" asp-page-handler="Verify"><button class="btn primary" type="submit">Verify integrity</button></form>
+    </div>
+</div>
+<form class="card filters" method="get">
+    <div class="field"><label for="actor">User</label><input type="search" id="actor" name="actor" value="@Model.Actor" /></div>
+    <div class="field wide">
+        <label for="action">Action / details / record id</label>
+        <input type="search" id="action" name="action" value="@Model.ActionText" list="actions" placeholder="e.g. Login.Failed, Request.Approve, NABCONS/HR" />
+        <datalist id="actions">@foreach (var a in Model.ActionNames) { <option value="@a"></option> }</datalist>
+    </div>
+    <div class="field"><label for="from">From</label><input type="date" id="from" name="from" value="@Model.From?.ToString("yyyy-MM-dd")" /></div>
+    <div class="field"><label for="to">To</label><input type="date" id="to" name="to" value="@Model.To?.ToString("yyyy-MM-dd")" /></div>
+    <div class="actions"><button class="btn primary" type="submit">Filter</button><a class="btn" href="/Audit">Clear</a></div>
+</form>
+<div class="card table-wrap">
+    <p class="muted small">@Model.Result.Total entries</p>
+    <table class="table compact">
+        <thead><tr><th>#</th><th>When</th><th>User</th><th>Action</th><th>Record</th><th>Details</th><th>IP address</th></tr></thead>
+        <tbody>
+            @foreach (var e in Model.Result.Items)
+            {
+                <tr>
+                    <td>@e.Id</td>
+                    <td class="nowrap">@F.DateTime(e.Timestamp)</td>
+                    <td>@e.Actor</td>
+                    <td class="nowrap"><strong>@e.Action</strong></td>
+                    <td class="nowrap">@e.EntityType @e.EntityId</td>
+                    <td class="small">@e.Details</td>
+                    <td class="small nowrap">@e.IpAddress</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, Model.PageUrl)" />
+</div>

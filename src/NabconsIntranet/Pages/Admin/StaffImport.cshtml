@@ -1,0 +1,68 @@
+@page
+@model NabconsIntranet.Pages.Admin.StaffImportModel
+@{
+    ViewData["Title"] = "Import staff CSV";
+    var errors = Model.Rows.Count(r => r.Errors.Count > 0);
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Admin/Staff">← Staff directory</a></p>
+        <h1>Import staff from CSV</h1>
+        <p>Rows are matched on <strong>EmployeeCode</strong>: existing entries are updated, new ones are added. Nothing changes until you confirm.</p>
+    </div>
+    <div class="actions"><a class="btn" href="/Admin/StaffImport?handler=Template">Download template</a></div>
+</div>
+
+@if (Model.Token == null)
+{
+    <form method="post" enctype="multipart/form-data" asp-page-handler="Preview" class="card">
+        <h2>1. Choose file</h2>
+        <p class="muted small">Columns: <span class="mono">@StaffImportModel.Header</span>. Only EmployeeCode and FullName are mandatory. Dates as YYYY-MM-DD. Save from Excel as “CSV UTF-8”.</p>
+        <div class="field"><input type="file" name="file" accept=".csv" required /></div>
+        <button class="btn primary" type="submit">Upload and preview</button>
+    </form>
+}
+else
+{
+    <div class="card">
+        <h2>2. Check the preview — @Model.FileName</h2>
+        <p>@Model.Rows.Count rows: <strong>@Model.Rows.Count(r => r.IsNew && r.Errors.Count == 0)</strong> new, <strong>@Model.Rows.Count(r => !r.IsNew && r.Errors.Count == 0)</strong> updates, <strong class="@(errors > 0 ? "text-danger" : "")">@errors</strong> with errors.</p>
+        @if (errors > 0)
+        {
+            <div class="alert danger">Correct the rows marked below in your spreadsheet and upload again. Nothing has been imported.</div>
+        }
+        else
+        {
+            <form method="post" asp-page-handler="Confirm">
+                <input type="hidden" name="token" value="@Model.Token" />
+                <input type="hidden" name="fileName" value="@Model.FileName" />
+                <label class="check"><input type="checkbox" name="deactivateMissing" value="true" /> Mark active staff who are <strong>not</strong> in this file as inactive (full refresh)</label>
+                <div class="actions mt">
+                    <button class="btn primary" type="submit" data-confirm="Import these rows into the staff directory?">3. Confirm import</button>
+                    <a class="btn" href="/Admin/StaffImport">Cancel</a>
+                </div>
+            </form>
+        }
+    </div>
+    <div class="card table-wrap mt">
+        <table class="table compact">
+            <thead><tr><th>Line</th><th>Action</th><th>Code</th><th>Name</th><th>Designation</th><th>Vertical</th><th>Location</th><th>E-mail</th><th>Problems</th></tr></thead>
+            <tbody>
+                @foreach (var r in Model.Rows)
+                {
+                    <tr>
+                        <td>@r.Line</td>
+                        <td>@if (r.Errors.Count > 0) { <span class="badge danger">Error</span> } else if (r.IsNew) { <span class="badge success">New</span> } else { <span class="badge info">Update</span> }</td>
+                        <td>@r.Staff.EmployeeCode</td>
+                        <td>@r.Staff.FullName</td>
+                        <td>@r.Staff.Designation</td>
+                        <td>@r.Staff.Vertical</td>
+                        <td>@r.Staff.Location</td>
+                        <td>@r.Staff.OfficialEmail</td>
+                        <td class="text-danger">@string.Join("; ", r.Errors)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
