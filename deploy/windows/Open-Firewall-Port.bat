@@ -1,6 +1,6 @@
 @echo off
 rem ===== Allow other PCs on the office LAN to reach the intranet (run as Administrator) =====
-set PORT=8080
+set PORT=80
 net session >nul 2>&1
 if %errorlevel% neq 0 (
   echo Please right-click this file and choose "Run as administrator".

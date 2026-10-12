@@ -12,7 +12,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@(string.IsNullOrEmpty(title) ? Site.SiteTitle : title + " · " + Site.SiteTitle)</title>
-    <link rel="icon" href="~/img/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="~/img/favicon.png" type="image/png" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
@@ -20,7 +20,7 @@
     <header class="topbar">
         <div class="wrap topbar-inner">
             <a class="brand" href="/">
-                <img src="~/img/logo.svg" alt="" width="40" height="40" />
+                <img src="~/img/nabcons-logo.png" alt="NABCONS logo" width="72" height="72" />
                 <span class="brand-text">
                     <strong>@Site.SiteTitle</strong>
                     <small>@Site.OrganisationName</small>
@@ -89,6 +89,7 @@
     </header>
 
     <main id="main" class="wrap main">
+        <div class="print-logo"><img src="~/img/nabcons-logo.png" alt="" /><strong>@Site.OrganisationName — @Site.SiteTitle</strong></div>
         @if (TempData["Message"] is string msg)
         {
             <div class="alert success" role="status">@msg</div>
@@ -102,7 +103,7 @@
 
     <footer class="footer">
         <div class="wrap footer-inner">
-            <span>@Site.FooterText</span>
+            <span class="footer-brand"><img src="~/img/nabcons-logo.png" alt="" width="34" height="34" /><span>@Site.FooterText</span></span>
             <span>@Site.ShortName Intranet v@(typeof(Program).Assembly.GetName().Version?.ToString(3)) · LAN-only · no internet connection used</span>
         </div>
     </footer>

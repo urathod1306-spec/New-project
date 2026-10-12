@@ -12,8 +12,9 @@ NABCONS INTRANET - QUICK START (no installation, no internet needed)
    If Windows asks "Allow access?" choose "Private / Domain networks" only.
 
 3. OPEN IT
-   On this PC:          http://localhost:8080
-   From other LAN PCs:  http://<THIS-PC-NAME>:8080   (address shown in the black window)
+   On this PC:          http://localhost
+   From other LAN PCs:  http://<THIS-PC-NAME>      (address shown in the black window)
+   The intranet uses the standard web port 80, so no ":port" is needed in the address.
    If other PCs cannot connect, right-click Open-Firewall-Port.bat > Run as administrator.
 
 4. SIGN IN (pilot demo accounts, password  Nabcons@2026 )
@@ -47,6 +48,9 @@ FOLDERS (created automatically)
    documents\   uploaded circulars/attachments  - never share this folder
    backups\     daily backup ZIPs + checksums   - copy off this PC regularly
    logs\        daily log files
+
+If the window says the port is already in use, another web server (for example IIS)
+is using port 80 - ask IT, or change "Urls" in appsettings.json to another approved port.
 
 Settings (port, organisation name, backup time, upload limits, Windows sign-in)
 are in appsettings.json - edit with Notepad, then restart the intranet.

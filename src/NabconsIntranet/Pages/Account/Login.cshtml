@@ -5,8 +5,12 @@
 }
 <div class="login-wrap">
     <div class="card">
-        <h1>Sign in</h1>
-        <p class="muted">@Site.Tagline</p>
+        <div class="login-title">
+            <img class="login-logo" src="~/img/nabcons-logo.png" alt="NABCONS logo" width="150" height="150" />
+            <h1>@Site.SiteTitle</h1>
+            <p>@Site.OrganisationName</p>
+        </div>
+        <p class="muted">Sign in to continue. @Site.Tagline</p>
         <form method="post" asp-route-returnUrl="@Model.ReturnUrl">
             <partial name="_Errors" />
             <div class="field">

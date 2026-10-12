@@ -6,11 +6,11 @@ A ready-to-run intranet for **NABARD Consultancy Services (NABCONS)**, built for
 
 ## Download and run (no coding)
 
-1. **Download** [`release/NABCONS-Intranet-v1.0.0-win-x64.zip`](release/NABCONS-Intranet-v1.0.0-win-x64.zip) (≈ 46 MB). On GitHub, open the file and click **Download raw file**.
-   SHA-256: see [`release/NABCONS-Intranet-v1.0.0-win-x64.zip.sha256`](release/NABCONS-Intranet-v1.0.0-win-x64.zip.sha256).
+1. **Download** [`release/NABCONS-Intranet-v1.1.0-win-x64.zip`](release/NABCONS-Intranet-v1.1.0-win-x64.zip) (≈ 46 MB). On GitHub, open the file and click **Download raw file**.
+   SHA-256: see [`release/NABCONS-Intranet-v1.1.0-win-x64.zip.sha256`](release/NABCONS-Intranet-v1.1.0-win-x64.zip.sha256).
 2. **Transfer** it to the office PC by the IT-approved method. Right-click → *Properties* → *Unblock*, then **extract** it to `C:\NABCONSIntranet\`.
 3. **Double-click `Start-Intranet.bat`.** Keep the black window open. It shows the address to use.
-4. **Open** `http://localhost:8080` on that PC, or `http://<PC-name>:8080` from colleagues' PCs. If they cannot connect, right-click `Open-Firewall-Port.bat` → *Run as administrator*.
+4. **Open** `http://localhost` on that PC, or `http://<PC-name>` from colleagues' PCs. The intranet uses the standard web port **80**, so no port number is needed. If they cannot connect, right-click `Open-Firewall-Port.bat` → *Run as administrator*.
 5. **Sign in** with a demo account. The password for all of them is `Nabcons@2026`:
 
    | User | Role in the demo |
@@ -59,6 +59,6 @@ When the pilot is accepted, follow **Going live** in the [Administrator Guide](d
 ## For developers
 
 - Source: `src/NabconsIntranet` — ASP.NET Core 10 Razor Pages, SQLite through Microsoft.Data.Sqlite, no front-end frameworks.
-- Run locally: `dotnet run --project src/NabconsIntranet` (needs the .NET 10 SDK), then open http://localhost:8080.
+- Run locally: `dotnet run --project src/NabconsIntranet` (needs the .NET 10 SDK), then open http://localhost:8080 (the development profile uses port 8080; the release uses port 80).
 - Build the Windows package: `bash build/package.sh` → `release/*.zip`. GitHub Actions (`.github/workflows/build-release.yml`) builds it on every push. Pushing a tag `v*` attaches it to a GitHub Release.
 - Use synthetic data only on development machines.

@@ -11,17 +11,17 @@ This guide covers the office-PC pilot (no installation) and the later move to a 
 | PC / server | Windows 10 or 11 (64-bit), or Windows Server 2016 or later |
 | Memory / disk | 4 GB RAM, 1 GB free disk plus space for documents and backups |
 | Software | **None.** The package contains its own .NET runtime and SQLite. No .NET, IIS, Java, Docker or database server needs to be installed. |
-| Network | A fixed IP address or DNS name on the NABARD LAN, and one inbound TCP port (default **8080**) |
+| Network | A fixed IP address or DNS name on the NABARD LAN, and one inbound TCP port (default **80**, the standard web port) |
 | Browsers | Microsoft Edge or Google Chrome (current versions) |
 
 ## 2. Get the package
 
 1. On an approved internet-connected machine, open the GitHub repository and download
-   `release/NABCONS-Intranet-v1.0.0-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
+   `release/NABCONS-Intranet-v1.1.0-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
 2. Transfer the ZIP into the NABARD LAN **only by the IT-approved method** (approved media or transfer gateway), with malware scanning and a change ticket.
 3. On the office PC, check the checksum in PowerShell:
    ```powershell
-   Get-FileHash .\NABCONS-Intranet-v1.0.0-win-x64.zip -Algorithm SHA256
+   Get-FileHash .\NABCONS-Intranet-v1.1.0-win-x64.zip -Algorithm SHA256
    ```
    It must match the `.sha256` file. Inside the ZIP, `SHA256SUMS.txt` lists the checksum of every file, which helps with allow-listing.
 4. Right-click the ZIP → **Properties** → tick **Unblock** if shown → OK. Then extract it to `C:\NABCONSIntranet\`.
@@ -47,16 +47,16 @@ C:\NABCONSIntranet\NABCONS-Intranet\
 1. Double-click **`Start-Intranet.bat`**. A console window opens and shows:
    ```
    NABCONS Intranet is running.  KEEP THIS WINDOW OPEN.
-   On this PC:        http://localhost:8080
-   From other LAN PCs: http://OFFICEPC01:8080
+   On this PC:         http://localhost
+   From other LAN PCs: http://officepc01
    ```
-2. If Windows Defender Firewall asks, allow **Domain/Private** networks only. To let other PCs connect, right-click **`Open-Firewall-Port.bat`** → *Run as administrator*. Opening the port needs local administrator rights. If you do not have them, ask IT to create the inbound rule for TCP 8080.
-3. Browse to `http://localhost:8080` and sign in with a demo account (password `Nabcons@2026`):
+2. If Windows Defender Firewall asks, allow **Domain/Private** networks only. To let other PCs connect, right-click **`Open-Firewall-Port.bat`** → *Run as administrator*. Opening the port needs local administrator rights. If you do not have them, ask IT to create the inbound rule for TCP 80.
+3. Browse to `http://localhost` and sign in with a demo account (password `Nabcons@2026`):
    `admin`, `publisher`, `approver1`, `approver2`, `staff`, `auditor`.
 
 The first start creates the database, the folders, the master lists and the synthetic demo data: 25 staff, 11 circulars in 3 categories, 4 requests with approval history, and 2 notices.
 
-> If the window says the port is already in use, the intranet is already running (check for another window or the Windows service), or another program is using the port. Change `"Urls"` in `appsettings.json` (e.g. `http://0.0.0.0:8081`).
+> If the window says the port is already in use, either the intranet is already running (check for another window or the Windows service), or another web server is using port 80. On Windows this is usually IIS (*World Wide Web Publishing Service*) or another web application. Ask IT to stop or rebind it, or change `"Urls"` in `appsettings.json` to another approved port (e.g. `http://0.0.0.0:8080`) and update `PORT` in `Open-Firewall-Port.bat`. Binding to port 80 does not need administrator rights; opening it in the firewall does.
 
 ## 4. Run permanently as a Windows service
 
@@ -79,7 +79,7 @@ Edit with Notepad, save, then restart the intranet (close and reopen the window,
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `Urls` | `http://0.0.0.0:8080` | Address and port. Use `http://0.0.0.0:80` for no port in the URL (port 80 must be free). |
+| `Urls` | `http://0.0.0.0:80` | Address and port (80 = standard web port, no port in the URL). Change only if IT assigns a different port. |
 | `OrganisationName`, `SiteTitle`, `Tagline`, `FooterText` | NABCONS | Branding shown on every page |
 | `AuthenticationMode` | `Local` | `Local` = intranet accounts; `Windows` = Windows Authentication / AD (section 7) |
 | `InitialAdminPassword` | `Admin@12345` | Password given to `admin` on a fresh database or after `Reset-Admin-Password.bat` (it must be changed at first sign-in) |
@@ -109,7 +109,7 @@ Ask NABARD IT for a certificate from the internal certificate authority, issued 
 },
 ```
 
-Then open port 443 instead of 8080 in the firewall (edit `PORT` in `Open-Firewall-Port.bat`). Users browse to `https://nabcons-intranet.<internal-domain>`. Cookies are automatically marked *Secure* over HTTPS. Restrict NTFS access to the `.pfx` and `appsettings.json` to administrators and the service account.
+Then open port 443 instead of 80 in the firewall (edit `PORT` in `Open-Firewall-Port.bat`). Users browse to `https://nabcons-intranet.<internal-domain>`. Cookies are automatically marked *Secure* over HTTPS. Restrict NTFS access to the `.pfx` and `appsettings.json` to administrators and the service account.
 
 ## 7. Windows Authentication / Active Directory (if NABARD IT permits)
 
