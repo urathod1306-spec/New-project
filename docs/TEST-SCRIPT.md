@@ -4,7 +4,7 @@ Run on the isolated test PC with the demo data (password for all demo accounts: 
 
 | # | Area | Steps | Expected result | Result |
 |---|---|---|---|---|
-| 1 | Unauthorised access | Open `http://<host>/Circulars` in a private window without signing in | Redirected to sign-in; no content shown ✔ | |
+| 1 | Unauthorised access | Open `http://<host>:8080/Circulars` in a private window without signing in | Redirected to sign-in; no content shown ✔ | |
 | 2 | Role segregation | Sign in as `staff`; open `/Admin`, `/Audit`, `/Circulars/Edit`, `/Notices` | "Access denied" for each ✔ | |
 | 3 | Role segregation | Sign in as `auditor`; try `/Circulars/Edit` and any Admin page | Denied; audit and all requests are viewable read-only ✔ | |
 | 4 | Direct URL guessing | As `publisher`, create a draft circular and note its download link `/Circulars/Download/<n>`. Sign in as `staff` and open that link, and the details page | "Page not found" (404). Drafts and restricted files cannot be fetched by URL ✔ | |

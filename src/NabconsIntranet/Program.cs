@@ -159,7 +159,7 @@ app.MapRazorPages();
 
 if (!Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService())
 {
-    var port = new Uri((builder.Configuration["Urls"] ?? "http://0.0.0.0:80").Split(';')[0].Replace("0.0.0.0", "localhost").Replace("*", "localhost").Replace("+", "localhost")).Port;
+    var port = new Uri((builder.Configuration["Urls"] ?? "http://0.0.0.0:8080").Split(';')[0].Replace("0.0.0.0", "localhost").Replace("*", "localhost").Replace("+", "localhost")).Port;
     var ips = System.Net.Dns.GetHostAddresses(System.Net.Dns.GetHostName())
         .Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !System.Net.IPAddress.IsLoopback(a)).Select(a => a.ToString()).ToList();
     Console.WriteLine();
@@ -183,8 +183,8 @@ catch (IOException ex) when (ex.InnerException is System.Net.Sockets.SocketExcep
     Console.Error.WriteLine();
     Console.Error.WriteLine("The intranet could not start because its network port is already in use.");
     Console.Error.WriteLine("It is probably already running (check for another window, or the Windows service).");
-    Console.Error.WriteLine("On port 80, IIS (\"World Wide Web Publishing Service\") or another web server may also be using it;");
-    Console.Error.WriteLine("ask IT to stop it, or change \"Urls\" in appsettings.json to another approved port, e.g. http://0.0.0.0:8080");
+    Console.Error.WriteLine("Another program may also be using the port; ask IT, or change \"Urls\" in appsettings.json");
+    Console.Error.WriteLine("to another approved port, e.g. http://0.0.0.0:8081");
     Console.Error.WriteLine("Details: " + ex.Message);
     return 10;
 }
