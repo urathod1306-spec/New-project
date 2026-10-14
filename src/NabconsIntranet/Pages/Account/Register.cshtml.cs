@@ -20,6 +20,7 @@ public class RegisterModel(RegistrationRepository registrations, UserRepository 
         public string? Vertical { get; set; }
         public string? Location { get; set; }
         [StringLength(150), Display(Name = "Official e-mail")] public string? OfficialEmail { get; set; }
+        [StringLength(100), Display(Name = "Please specify the location")] public string? LocationOther { get; set; }
         [StringLength(30), Display(Name = "Employee code (if known)")] public string? EmployeeCode { get; set; }
         [Required, DataType(DataType.Password)] public string Password { get; set; } = "";
         [Required, DataType(DataType.Password), Display(Name = "Confirm password")] public string ConfirmPassword { get; set; } = "";
@@ -33,6 +34,8 @@ public class RegisterModel(RegistrationRepository registrations, UserRepository 
     public List<string> Verticals { get; private set; } = new();
     public List<string> Locations { get; private set; } = new();
 
+    public const string OtherLocation = "__other__";
+
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
     private void LoadLists()
@@ -40,7 +43,8 @@ public class RegisterModel(RegistrationRepository registrations, UserRepository 
         Verticals = masters.Names(MasterTypes.Vertical);
         Locations = masters.Names(MasterTypes.Location);
         if (Match?.Vertical is string v && !Verticals.Contains(v)) Verticals.Insert(0, v);
-        if (Match?.Location is string l && !Locations.Contains(l)) Locations.Insert(0, l);
+        // A directory location that is not in the list (e.g. typed earlier via "Others") is shown pre-filled in the box.
+        if (Match?.Location is string l && !Locations.Contains(l) && Input.Location == l) { Input.Location = OtherLocation; Input.LocationOther = l; }
     }
 
     public IActionResult OnGet()
@@ -97,6 +101,14 @@ public class RegisterModel(RegistrationRepository registrations, UserRepository 
         MaskedEmail = RegistrationRepository.MaskEmail(Match?.OfficialEmail);
         LoadLists();
 
+        string? location = Clean(Input.Location, 100);
+        if (location == OtherLocation)
+        {
+            location = Clean(Input.LocationOther, 100);
+            if (location == null) ModelState.AddModelError("Input.LocationOther", "Type your office / location, or choose one from the list.");
+        }
+        else if (location != null && !Locations.Contains(location, StringComparer.OrdinalIgnoreCase))
+            ModelState.AddModelError("Input.Location", "Choose a location from the list, or “Others” to type it.");
         var email = Clean(Input.OfficialEmail, 150);
         if (email != null && !MailAddress.TryCreate(email, out _)) ModelState.AddModelError("Input.OfficialEmail", "Enter a valid e-mail address.");
         if (Match == null && email == null) ModelState.AddModelError("Input.OfficialEmail", "Enter your official e-mail address.");
@@ -109,7 +121,7 @@ public class RegisterModel(RegistrationRepository registrations, UserRepository 
             Mobile = Mobile!, StaffId = Match?.StaffId,
             EmployeeCode = Match?.EmployeeCode ?? Clean(Input.EmployeeCode, 30),
             FullName = Input.FullName.Trim(), Designation = Clean(Input.Designation, 120),
-            Vertical = Clean(Input.Vertical, 100), Location = Clean(Input.Location, 100),
+            Vertical = Clean(Input.Vertical, 100), Location = location,
             OfficialEmail = email ?? Match?.OfficialEmail,
             PasswordHash = PasswordHasher.Hash(Input.Password), IpAddress = Ip,
         });

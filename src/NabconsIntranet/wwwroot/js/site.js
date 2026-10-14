@@ -44,6 +44,17 @@
 
 document.querySelectorAll('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
 
+// A drop-down with data-other-toggle="<id>" shows that block only when "Others" is chosen.
+document.querySelectorAll('select[data-other-toggle]').forEach(function (s) {
+    var box = document.getElementById(s.getAttribute('data-other-toggle'));
+    function sync() {
+        var other = s.value === '__other__';
+        box.classList.toggle('hidden', !other);
+        var input = box.querySelector('input'); if (input) { input.required = other; if (other && document.activeElement === s) input.focus(); }
+    }
+    s.addEventListener('change', sync); sync();
+});
+
 // Mobile-number fields: allow digits only.
 document.querySelectorAll('input[data-digits-only]').forEach(function (i) {
     i.addEventListener('input', function () {

@@ -43,6 +43,8 @@ Staff can register themselves from the sign-in page (**New user? Register here**
 1. **The person enters their 10-digit mobile number.** It becomes their sign-in name.
    - **Number found in the staff directory:** their name, designation, vertical and office are filled in for them to confirm or correct. The e-mail on record is shown only partly (`a******a@…`), so someone guessing numbers learns little.
    - **Number not in the directory:** they fill in their details as a new person.
+   - *Vertical* may be left blank (**Not applicable / leave blank**).
+   - *Office / location* lists all state and union-territory capitals plus your offices, alphabetically. **Others** lets them type a location that is not listed; the typed text goes into the directory on approval. If it should become a regular choice, add it under *Administration → Master lists → Offices / Locations*.
    - They choose their own password, using the usual password rules.
 2. **The request waits for approval.** The *Administration* menu shows a count, and *Administration → Self-registrations* lists the requests. If the person tries to sign in meanwhile, they are told the registration is awaiting approval.
 3. **The administrator opens the request.** For existing staff, a side-by-side comparison highlights anything the person changed.

@@ -41,6 +41,53 @@ public static class Schema
             );
             CREATE INDEX IF NOT EXISTS IX_RegistrationRequests_Mobile ON RegistrationRequests(Mobile, Status);
             """),
+        // Adds every state and union-territory capital to the office/location list of an EXISTING installation.
+        // Skips names already present (also "Mumbai (Head Office)"-style entries). On a brand-new database the
+        // list is still empty here, and the first-run setup adds the same capitals itself.
+        (3, "State and UT capitals added to office/location list (v1.1.1)", """
+            WITH c(Name, Ord) AS (VALUES
+                ('Agartala', 0),
+                ('Aizawl', 1),
+                ('Amaravati', 2),
+                ('Bengaluru', 3),
+                ('Bhopal', 4),
+                ('Bhubaneswar', 5),
+                ('Chandigarh', 6),
+                ('Chennai', 7),
+                ('Daman', 8),
+                ('Dehradun', 9),
+                ('Dispur', 10),
+                ('Gandhinagar', 11),
+                ('Gangtok', 12),
+                ('Hyderabad', 13),
+                ('Imphal', 14),
+                ('Itanagar', 15),
+                ('Jaipur', 16),
+                ('Jammu', 17),
+                ('Kavaratti', 18),
+                ('Kohima', 19),
+                ('Kolkata', 20),
+                ('Leh', 21),
+                ('Lucknow', 22),
+                ('Mumbai', 23),
+                ('New Delhi', 24),
+                ('Panaji', 25),
+                ('Patna', 26),
+                ('Puducherry', 27),
+                ('Raipur', 28),
+                ('Ranchi', 29),
+                ('Shillong', 30),
+                ('Shimla', 31),
+                ('Srinagar', 32),
+                ('Sri Vijaya Puram (Port Blair)', 33),
+                ('Thiruvananthapuram', 34)
+            )
+            INSERT INTO MasterItems (Type, Name, SortOrder, IsActive)
+            SELECT 'Location', c.Name, 100 + c.Ord, 1 FROM c
+            WHERE EXISTS (SELECT 1 FROM MasterItems WHERE Type = 'Location')
+              AND NOT EXISTS (SELECT 1 FROM MasterItems m WHERE m.Type = 'Location'
+                              AND (m.Name = c.Name COLLATE NOCASE OR m.Name LIKE c.Name || ' (%'));
+            """),
     };
 
     public const string Sql = """

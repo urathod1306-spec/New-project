@@ -24,6 +24,12 @@ public sealed class Seeder(IntranetOptions o, UserRepository users, MasterReposi
         ("auditor", "Meera Nair", "Staff,Auditor", "Finance & Accounts", "Auditor - read-only audit history"),
     };
 
+    /// <summary>Capitals of all 28 states and 8 union territories (Chandigarh serves Punjab, Haryana and the UT; J&amp;K has Srinagar and Jammu).</summary>
+    public static readonly string[] StateAndUtCapitals =
+    {
+        "Agartala", "Aizawl", "Amaravati", "Bengaluru", "Bhopal", "Bhubaneswar", "Chandigarh", "Chennai", "Daman", "Dehradun", "Dispur", "Gandhinagar", "Gangtok", "Hyderabad", "Imphal", "Itanagar", "Jaipur", "Jammu", "Kavaratti", "Kohima", "Kolkata", "Leh", "Lucknow", "Mumbai", "New Delhi", "Panaji", "Patna", "Puducherry", "Raipur", "Ranchi", "Shillong", "Shimla", "Srinagar", "Sri Vijaya Puram (Port Blair)", "Thiruvananthapuram"
+    };
+
     public void Run()
     {
         AuditService.AmbientActor.Value = "system (first-run setup)";
@@ -53,8 +59,10 @@ public sealed class Seeder(IntranetOptions o, UserRepository users, MasterReposi
         }
         Ensure(MasterTypes.Vertical, "Agri & Allied", "Climate Change & Sustainability", "Rural Infrastructure", "Financial Inclusion",
             "Microfinance & Livelihoods", "Watershed & Natural Resources", "IT & Digital", "Finance & Accounts", "HR & Administration");
-        Ensure(MasterTypes.Location, "Mumbai (Head Office)", "New Delhi", "Lucknow", "Bhopal", "Pune", "Hyderabad", "Bengaluru",
-            "Kolkata", "Guwahati", "Chennai", "Jaipur");
+        var offices = new[] { "Mumbai (Head Office)", "New Delhi", "Lucknow", "Bhopal", "Pune", "Hyderabad", "Bengaluru",
+            "Kolkata", "Guwahati", "Chennai", "Jaipur" };
+        Ensure(MasterTypes.Location, offices.Concat(StateAndUtCapitals.Where(c =>
+            !offices.Any(o => o.Equals(c, StringComparison.OrdinalIgnoreCase) || o.StartsWith(c + " (", StringComparison.OrdinalIgnoreCase)))).ToArray());
         Ensure(MasterTypes.CircularCategory, "HR Circulars", "Administrative Orders", "IT & Security Advisories");
         Ensure(MasterTypes.RequestCategory, "Office Administration", "Procurement (below delegated limit)", "Travel / Tour Approval",
             "Training / Workshop Nomination", "IT Equipment / Access", "Other");

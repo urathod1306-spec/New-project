@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>NabconsIntranet</RootNamespace>
     <AssemblyName>NabconsIntranet</AssemblyName>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <Product>NABCONS Intranet</Product>
     <Company>NABARD Consultancy Services</Company>
     <InvariantGlobalization>false</InvariantGlobalization>

@@ -1,4 +1,4 @@
-# NABCONS Intranet — Software Bill of Materials (v1.1.0)
+# NABCONS Intranet — Software Bill of Materials (v1.1.1)
 
 All components are from Microsoft or the SQLitePCLRaw project (the SQLite build used by Microsoft.Data.Sqlite). Versions are pinned in `src/NabconsIntranet/NabconsIntranet.csproj`. No JavaScript or CSS frameworks are used. The site's own stylesheet and script are in `wwwroot/`.
 

@@ -8,7 +8,12 @@ public sealed class MasterRepository(Db db)
         "SELECT * FROM MasterItems WHERE Type = @type " + (activeOnly ? "AND IsActive = 1 " : "") + "ORDER BY SortOrder, Name",
         new { type });
 
-    public List<string> Names(string type) => List(type).Select(m => m.Name).ToList();
+    /// <summary>Names for drop-downs. The office/location list (all state and UT capitals) is shown alphabetically.</summary>
+    public List<string> Names(string type)
+    {
+        var names = List(type).Select(m => m.Name);
+        return (type == MasterTypes.Location ? names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase) : names).ToList();
+    }
 
     public MasterItem? Get(long id) => db.Single<MasterItem>("SELECT * FROM MasterItems WHERE Id = @id", new { id });
 

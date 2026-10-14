@@ -41,11 +41,17 @@
                 <div class="field"><label asp-for="Input.Designation"></label><input asp-for="Input.Designation" /></div>
                 <div class="field">
                     <label asp-for="Input.Vertical">Vertical / department</label>
-                    <select asp-for="Input.Vertical"><option value="">— select —</option>@foreach (var v in Model.Verticals) { <option value="@v">@v</option> }</select>
+                    <select asp-for="Input.Vertical"><option value="">— Not applicable / leave blank —</option>@foreach (var v in Model.Verticals) { <option value="@v">@v</option> }</select>
                 </div>
                 <div class="field">
                     <label asp-for="Input.Location">Office / location</label>
-                    <select asp-for="Input.Location"><option value="">— select —</option>@foreach (var l in Model.Locations) { <option value="@l">@l</option> }</select>
+                    <select asp-for="Input.Location" data-other-toggle="location-other"><option value="">— select —</option>@foreach (var l in Model.Locations) { <option value="@l">@l</option> }<option value="@NabconsIntranet.Pages.Account.RegisterModel.OtherLocation">Others (type below)</option></select>
+                    <span asp-validation-for="Input.Location"></span>
+                </div>
+                <div class="field @(Model.Input.Location == NabconsIntranet.Pages.Account.RegisterModel.OtherLocation ? "" : "hidden")" id="location-other">
+                    <label asp-for="Input.LocationOther"></label>
+                    <input asp-for="Input.LocationOther" maxlength="100" placeholder="e.g. Thane regional office" />
+                    <span asp-validation-for="Input.LocationOther"></span>
                 </div>
                 <div class="field">
                     <label asp-for="Input.OfficialEmail"></label>
