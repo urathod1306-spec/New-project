@@ -17,11 +17,11 @@ This guide covers the office-PC pilot (no installation) and the later move to a 
 ## 2. Get the package
 
 1. On an approved internet-connected machine, open the GitHub repository and download
-   `release/NABCONS-Intranet-v1.0.1-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
+   `release/NABCONS-Intranet-v1.1.0-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
 2. Transfer the ZIP into the NABARD LAN **only by the IT-approved method** (approved media or transfer gateway), with malware scanning and a change ticket.
 3. On the office PC, check the checksum in PowerShell:
    ```powershell
-   Get-FileHash .\NABCONS-Intranet-v1.0.1-win-x64.zip -Algorithm SHA256
+   Get-FileHash .\NABCONS-Intranet-v1.1.0-win-x64.zip -Algorithm SHA256
    ```
    It must match the `.sha256` file. Inside the ZIP, `SHA256SUMS.txt` lists the checksum of every file, which helps with allow-listing.
 4. Right-click the ZIP → **Properties** → tick **Unblock** if shown → OK. Then extract it to `C:\NABCONSIntranet\`.

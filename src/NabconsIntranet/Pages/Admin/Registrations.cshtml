@@ -1,0 +1,41 @@
+@page
+@model NabconsIntranet.Pages.Admin.RegistrationsModel
+@{
+    ViewData["Title"] = "Registrations";
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Admin">← Administration</a></p>
+        <h1>Self-registrations</h1>
+        <p>Staff who registered themselves. Approving creates their sign-in account (user name = mobile number).</p>
+    </div>
+</div>
+<div class="tabs">
+    @foreach (var s in new[] { "Pending", "Approved", "Rejected", "All" })
+    {
+        <a class="@(Model.Status == s ? "active" : "")" href="/Admin/Registrations?status=@s">@s</a>
+    }
+</div>
+<div class="card table-wrap">
+    @if (Model.Items.Count == 0) { <p class="empty">No registrations here.</p> }
+    else
+    {
+        <table class="table">
+            <thead><tr><th>Submitted</th><th>Name</th><th>Mobile</th><th>Designation / vertical</th><th>Directory</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in Model.Items)
+                {
+                    <tr>
+                        <td class="nowrap">@F.DateTime(r.SubmittedAt)</td>
+                        <td><strong>@r.FullName</strong><div class="muted small">@r.OfficialEmail</div></td>
+                        <td class="nowrap">@r.Mobile</td>
+                        <td>@r.Designation<div class="muted small">@r.Vertical · @r.Location</div></td>
+                        <td>@if (r.StaffId != null) { <span class="badge info">Existing @r.EmployeeCode</span> } else { <span class="badge warning">New</span> }</td>
+                        <td><span class="badge @(r.Status == "Approved" ? "success" : r.Status == "Rejected" ? "danger" : "Submitted")">@r.Status</span>@if (r.DecidedBy != null) { <div class="muted small">@r.DecidedBy, @F.Date(r.DecidedAt)</div> }</td>
+                        <td><a class="btn sm @(r.Status == "Pending" ? "primary" : "")" href="/Admin/RegistrationReview/@r.Id">@(r.Status == "Pending" ? "Review" : "View")</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

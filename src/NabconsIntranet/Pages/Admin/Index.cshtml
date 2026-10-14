@@ -14,6 +14,10 @@
 {
     <div class="alert warning"><strong>Pilot / demo mode is on.</strong> Synthetic demo data and demo accounts are enabled. Before real use, follow “Going live” in the Administrator Guide (docs/ADMIN-GUIDE.md).</div>
 }
+@if (Model.PendingRegistrations > 0)
+{
+    <div class="alert info"><strong>@Model.PendingRegistrations self-registration(s)</strong> waiting for approval. <a href="/Admin/Registrations">Review now</a>.</div>
+}
 @if (Model.LastBackup == null)
 {
     <div class="alert danger">No backup has been taken yet. <a href="/Admin/Backup">Create one now</a>.</div>
@@ -26,6 +30,7 @@
     <div class="stat"><div class="n">@Model.AuditEntries</div><div class="l">Audit entries</div></div>
 </div>
 <div class="grid tiles mt">
+    <a class="tile" href="/Admin/Registrations"><span class="ico">🪪</span><span><strong>Self-registrations @if (Model.PendingRegistrations > 0) { <span class="badge warning">@Model.PendingRegistrations pending</span> }</strong><small>Approve or reject staff who registered themselves</small></span></a>
     <a class="tile" href="/Admin/Users"><span class="ico">🔐</span><span><strong>Users &amp; roles</strong><small>Create users, assign roles, reset passwords, unlock</small></span></a>
     <a class="tile" href="/Admin/Staff"><span class="ico">👥</span><span><strong>Staff directory</strong><small>Add, edit or deactivate directory entries</small></span></a>
     <a class="tile" href="/Admin/StaffImport"><span class="ico">📥</span><span><strong>Import staff CSV</strong><small>Controlled bulk update with preview</small></span></a>

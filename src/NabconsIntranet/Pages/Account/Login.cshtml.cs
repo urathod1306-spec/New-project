@@ -8,7 +8,7 @@ using NabconsIntranet.Infrastructure;
 
 namespace NabconsIntranet.Pages.Account;
 
-public class LoginModel(UserRepository users, AuditService audit, IntranetOptions o) : AppPage
+public class LoginModel(UserRepository users, RegistrationRepository registrations, AuditService audit, IntranetOptions o) : AppPage
 {
     [BindProperty, Required, StringLength(100)] public string Username { get; set; } = "";
     [BindProperty, Required, DataType(DataType.Password), StringLength(200)] public string Password { get; set; } = "";
@@ -27,8 +27,26 @@ public class LoginModel(UserRepository users, AuditService audit, IntranetOption
         ReturnUrl = returnUrl;
         if (!ModelState.IsValid) return Page();
 
-        var u = users.GetByUsername(Username.Trim());
+        // Self-registered staff sign in with their mobile number; accept it with spaces or +91.
+        var login = Username.Trim();
+        var mobile = RegistrationRepository.Normalize(login);
+        if (mobile != null && login.All(ch => char.IsDigit(ch) || ch is ' ' or '+' or '-')) login = mobile;
+        var u = users.GetByUsername(login);
         const string generic = "The user name or password is incorrect.";
+        if (u == null && mobile != null && o.SelfRegistrationAvailable)
+        {
+            var reg = registrations.Latest(mobile);
+            if (reg?.Status == RegistrationStatus.Pending && PasswordHasher.Verify(Password, reg.PasswordHash))
+            {
+                ModelState.AddModelError("", "Your registration has been received and is awaiting approval by the administrator. You can sign in once it is approved.");
+                return Page();
+            }
+            if (reg?.Status == RegistrationStatus.Rejected)
+            {
+                ModelState.AddModelError("", "A registration for this mobile number was not approved. Please contact the intranet administrator.");
+                return Page();
+            }
+        }
         if (u == null)
         {
             audit.Log("Login.Failed", "User", null, $"Unknown user name '{Clean(Username, 60)}'", "anonymous");

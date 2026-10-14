@@ -36,6 +36,28 @@ A user can hold several roles. Nobody can approve their own request, and the two
 - Changing roles or deactivating an account signs that user out of open sessions.
 - **Locked out of the only admin account?** On the server, double-click `Reset-Admin-Password.bat`.
 
+## Self-registration (from v1.1.0)
+
+Staff can register themselves from the sign-in page (**New user? Register here**). Every registration needs an administrator's approval.
+
+1. **The person enters their 10-digit mobile number.** It becomes their sign-in name.
+   - **Number found in the staff directory:** their name, designation, vertical and office are filled in for them to confirm or correct. The e-mail on record is shown only partly (`a******a@…`), so someone guessing numbers learns little.
+   - **Number not in the directory:** they fill in their details as a new person.
+   - They choose their own password, using the usual password rules.
+2. **The request waits for approval.** The *Administration* menu shows a count, and *Administration → Self-registrations* lists the requests. If the person tries to sign in meanwhile, they are told the registration is awaiting approval.
+3. **The administrator opens the request.** For existing staff, a side-by-side comparison highlights anything the person changed.
+   - **Approve:** choose any extra roles; Staff is always given. This creates the sign-in account and **always fills in the staff directory**: the existing entry is updated with the confirmed details, or a new entry is added. For new people, enter their employee code. If none is known, a provisional code `REG-<mobile>` is suggested; correct it later under *Administration → Staff directory*.
+   - **Reject:** a reason is required. The person is told the registration was not approved.
+4. The person signs in with their mobile number and chosen password.
+
+Safeguards:
+- One pending registration per number, and no registration for a number that already has an account.
+- Look-ups are limited to 10 per computer every 10 minutes.
+- Every look-up, submission, approval and rejection is in the audit log.
+- Mobile numbers are added to the directory with *Show mobile* switched **off**; switch it on only where disclosure is approved.
+
+To switch self-registration off, set `"SelfRegistrationEnabled": false` in `appsettings.json` and restart. It is not used in Windows-authentication mode.
+
 ## Staff directory
 
 - Holds only official information: employee code, name, designation, vertical, location, official e-mail, extension and (where disclosure is approved) official mobile. **Do not** store home addresses, personal numbers, dates of birth, payroll or appraisal data.

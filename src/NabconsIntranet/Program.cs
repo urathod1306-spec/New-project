@@ -55,6 +55,7 @@ builder.Services.AddSingleton<StaffRepository>();
 builder.Services.AddSingleton<CircularRepository>();
 builder.Services.AddSingleton<NoticeRepository>();
 builder.Services.AddSingleton<RequestWorkflow>();
+builder.Services.AddSingleton<RegistrationRepository>();
 builder.Services.AddTransient<Seeder>();
 builder.Services.AddHostedService<BackupScheduler>();
 
@@ -105,6 +106,7 @@ builder.Services.AddRazorPages(o =>
     o.Conventions.AuthorizePage("/Notices/Index", Policies.Publisher);
     o.Conventions.AuthorizePage("/Requests/Inbox", Policies.Approver);
     o.Conventions.AllowAnonymousToPage("/Account/Login");
+    o.Conventions.AllowAnonymousToPage("/Account/Register");
     o.Conventions.AllowAnonymousToPage("/Account/AccessDenied");
     o.Conventions.AllowAnonymousToPage("/Error");
 });

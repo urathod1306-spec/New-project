@@ -29,4 +29,9 @@ Run on the isolated test PC with the demo data (password for all demo accounts: 
 | 23 | CSV import | Import `sample-data\staff-import-sample.csv` | Preview shows 2 new, 1 update; confirm applies them; audit entry written | |
 | 24 | Edge/Chrome rendering | Check the home page, directory, circular, request and admin pages in Edge and Chrome, at desktop and phone width | Layout correct; no horizontal scrolling on a phone ✔ | |
 | 25 | Restart | Close the console window and start again; reboot the PC with the service installed | Data intact; service starts automatically after reboot | |
+| 27 | Self-registration (existing) | Sign-in page → Register → enter the mobile of a directory entry → change the designation → choose a password → submit | Details pre-filled; e-mail masked; "Registration submitted" ✔ | |
+| 28 | Self-registration (new) | Register a number that is not in the directory | Blank form; submitted ✔ | |
+| 29 | Approval | Admin → Self-registrations → review → approve | Changed fields highlighted; account created; directory entry updated or added (provisional REG-code if none) ✔ | |
+| 30 | Sign-in | Sign in with the mobile number (also try "+91 98…") before and after approval | Before: "awaiting approval"; after: signed in ✔ | |
+| 31 | Rejection / duplicates | Reject one with a reason; register the same number twice | Rejected applicant told not approved; duplicate blocked ✔ | |
 | 26 | No egress | With an outbound "block all" firewall rule for `NabconsIntranet.exe`, use every page | Everything works; no blocked-connection events | |

@@ -20,6 +20,9 @@ public sealed class IntranetOptions
 
     public bool SeedDemoData { get; set; } = true;
     public bool ShowDemoAccountsOnLogin { get; set; } = true;
+    /// <summary>Allow staff to register themselves (local accounts only); an administrator approves each request.</summary>
+    public bool SelfRegistrationEnabled { get; set; } = true;
+    public bool SelfRegistrationAvailable => SelfRegistrationEnabled && !IsWindowsAuth;
 
     public string DataFolder { get; set; } = "data";
     public string DocumentsFolder { get; set; } = "documents";

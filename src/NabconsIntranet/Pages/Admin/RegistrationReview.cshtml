@@ -1,0 +1,84 @@
+@page "{id:long}"
+@model NabconsIntranet.Pages.Admin.RegistrationReviewModel
+@{
+    var r = Model.Item;
+    ViewData["Title"] = "Review registration";
+    var pending = r.Status == RegistrationStatus.Pending;
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Admin/Registrations">← Registrations</a></p>
+        <h1>@r.FullName</h1>
+        <p>Mobile @r.Mobile · submitted @F.DateTime(r.SubmittedAt) from @r.IpAddress · <span class="badge @(r.Status == "Approved" ? "success" : r.Status == "Rejected" ? "danger" : "Submitted")">@r.Status</span></p>
+    </div>
+</div>
+@if (r.Status == RegistrationStatus.Approved)
+{
+    <div class="alert success">Approved by @r.DecidedBy on @F.DateTime(r.DecidedAt). @if (r.CreatedUserId != null) { <a href="/Admin/UserEdit/@r.CreatedUserId">Open the user account</a> }</div>
+}
+@if (r.Status == RegistrationStatus.Rejected)
+{
+    <div class="alert danger">Rejected by @r.DecidedBy on @F.DateTime(r.DecidedAt): @r.DecisionRemarks</div>
+}
+<div class="grid two">
+    <div class="card table-wrap">
+        <h2>@(Model.Staff != null ? "Submitted details compared with the staff directory" : "Submitted details (not in the staff directory)")</h2>
+        @if (Model.Staff != null) { <p class="muted small">Highlighted rows were changed by the applicant.</p> }
+        <table class="table">
+            <thead><tr><th>Field</th>@if (Model.Staff != null) { <th>In directory</th> }<th>Submitted</th></tr></thead>
+            <tbody>
+                @foreach (var row in Model.Rows)
+                {
+                    <tr class="@(Model.Staff != null && row.Changed ? "diff-changed" : "")">
+                        <td>@row.Field</td>
+                        @if (Model.Staff != null) { <td>@row.Directory</td> }
+                        <td>@row.Submitted</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (Model.Staff == null)
+        {
+            <div class="alert warning mt">This mobile number is not in the staff directory. Verify the person's identity and details (e.g. with HR) before approving.</div>
+        }
+    </div>
+    @if (pending)
+    {
+        <div class="stack">
+            <form method="post" asp-page-handler="Approve" asp-route-id="@r.Id" class="card">
+                <h2>Approve</h2>
+                <p class="muted small">Creates a sign-in account: user name <strong>@r.Mobile</strong>, with the password the person chose.</p>
+                <div class="field">
+                    <label>Roles</label>
+                    <div class="checks">
+                        <label class="check"><input type="checkbox" checked disabled /> <strong>Staff</strong></label>
+                        @foreach (var role in Roles.All.Where(x => x != Roles.Staff))
+                        {
+                            <label class="check"><input type="checkbox" name="roles" value="@role" /> <strong>@role</strong> <span class="muted small">— @Roles.Descriptions[role]</span></label>
+                        }
+                    </div>
+                </div>
+                @if (Model.Staff != null)
+                {
+                    <p class="small">The staff directory entry <strong>@Model.Staff.EmployeeCode</strong> will be updated with the submitted details.</p>
+                }
+                else
+                {
+                    <p class="small">The person will be <strong>added to the staff directory</strong>.</p>
+                    <div class="field">
+                        <label for="employeeCode">Employee code for the directory</label>
+                        <input id="employeeCode" name="employeeCode" value="@Model.SuggestedCode" maxlength="30" required />
+                        @if (Model.CodeTaken) { <span class="text-danger">The applicant's code @r.EmployeeCode is already used by another entry; a provisional code is suggested.</span> }
+                        <span class="hint">Replace a provisional REG-… code with the real employee code when known (Administration → Staff directory).</span>
+                    </div>
+                }
+                <button class="btn success block mt" type="submit" data-confirm="Approve this registration and create the account?">Approve and create account</button>
+            </form>
+            <form method="post" asp-page-handler="Reject" asp-route-id="@r.Id" class="card">
+                <h2>Reject</h2>
+                <div class="field"><label for="reason">Reason</label><textarea id="reason" name="reason" maxlength="500" required></textarea></div>
+                <button class="btn danger block" type="submit" data-confirm="Reject this registration?">Reject</button>
+            </form>
+        </div>
+    }
+</div>

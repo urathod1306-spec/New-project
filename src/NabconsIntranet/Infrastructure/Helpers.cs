@@ -132,3 +132,22 @@ public sealed class FileLoggerProvider : ILoggerProvider
         }
     }
 }
+
+/// <summary>Simple per-IP limiter for anonymous actions (e.g. registration look-ups), so mobile numbers cannot be probed in bulk.</summary>
+public static class Throttle
+{
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Queue<System.DateTime>> Hits = new();
+
+    public static bool Allow(string key, int max, TimeSpan window)
+    {
+        var q = Hits.GetOrAdd(key, _ => new Queue<System.DateTime>());
+        lock (q)
+        {
+            var now = System.DateTime.UtcNow;
+            while (q.Count > 0 && now - q.Peek() > window) q.Dequeue();
+            if (q.Count >= max) return false;
+            q.Enqueue(now);
+            return true;
+        }
+    }
+}

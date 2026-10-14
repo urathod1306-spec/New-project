@@ -1,0 +1,76 @@
+@page
+@model NabconsIntranet.Pages.Account.RegisterModel
+@{
+    ViewData["Title"] = "Register";
+}
+<div class="login-wrap">
+    <div class="card">
+        <div class="login-title">
+            <img class="login-logo small-logo" src="~/img/nabcons-logo.png" alt="NABCONS logo" width="96" height="96" />
+            <h1>New user registration</h1>
+            <p>@Site.SiteTitle</p>
+        </div>
+
+        @if (Model.Step == 1)
+        {
+            <p class="muted">Enter your mobile number. If you are already in the staff directory, your details will be filled in for you to confirm. Your mobile number will be your sign-in name.</p>
+            <form method="post" asp-page-handler="Lookup">
+                <partial name="_Errors" />
+                <div class="field">
+                    <label for="Mobile">Mobile number (10 digits)</label>
+                    <input id="Mobile" name="Mobile" value="@Model.Mobile" inputmode="numeric" pattern="[0-9]{10}" maxlength="16" required autocomplete="tel-national" autofocus placeholder="e.g. 9820012345" data-digits-only />
+                </div>
+                <button class="btn primary block" type="submit">Continue</button>
+            </form>
+        }
+        else if (Model.Step == 2)
+        {
+            <form method="post" asp-page-handler="Submit">
+                <partial name="_Errors" />
+                <input type="hidden" name="Mobile" value="@Model.Mobile" />
+                <p><strong>Mobile:</strong> @Model.Mobile <a class="small" href="/Account/Register">change</a></p>
+                @if (Model.Match != null)
+                {
+                    <div class="alert success">We found you in the staff directory. Please check your details and correct anything that has changed; the administrator will review the changes.</div>
+                }
+                else
+                {
+                    <div class="alert info">This mobile number is not in the staff directory yet. Fill in your details; the administrator will verify them before approving.</div>
+                }
+                <div class="field"><label asp-for="Input.FullName"></label><input asp-for="Input.FullName" /><span asp-validation-for="Input.FullName"></span></div>
+                <div class="field"><label asp-for="Input.Designation"></label><input asp-for="Input.Designation" /></div>
+                <div class="field">
+                    <label asp-for="Input.Vertical">Vertical / department</label>
+                    <select asp-for="Input.Vertical"><option value="">— select —</option>@foreach (var v in Model.Verticals) { <option value="@v">@v</option> }</select>
+                </div>
+                <div class="field">
+                    <label asp-for="Input.Location">Office / location</label>
+                    <select asp-for="Input.Location"><option value="">— select —</option>@foreach (var l in Model.Locations) { <option value="@l">@l</option> }</select>
+                </div>
+                <div class="field">
+                    <label asp-for="Input.OfficialEmail"></label>
+                    <input asp-for="Input.OfficialEmail" type="email" placeholder="@(string.IsNullOrEmpty(Model.MaskedEmail) ? "name@nabcons.in" : "Leave blank to keep " + Model.MaskedEmail)" />
+                    @if (!string.IsNullOrEmpty(Model.MaskedEmail)) { <span class="hint">On record: @Model.MaskedEmail. Type a new address only if it has changed.</span> }
+                    <span asp-validation-for="Input.OfficialEmail"></span>
+                </div>
+                @if (Model.Match == null)
+                {
+                    <div class="field"><label asp-for="Input.EmployeeCode"></label><input asp-for="Input.EmployeeCode" /></div>
+                }
+                <div class="field">
+                    <label asp-for="Input.Password">Choose a password</label>
+                    <input asp-for="Input.Password" autocomplete="new-password" />
+                    <span class="hint">At least 10 characters with upper-case, lower-case, a number and a symbol.</span>
+                    <span asp-validation-for="Input.Password"></span>
+                </div>
+                <div class="field"><label asp-for="Input.ConfirmPassword"></label><input asp-for="Input.ConfirmPassword" autocomplete="new-password" /><span asp-validation-for="Input.ConfirmPassword"></span></div>
+                <button class="btn primary block" type="submit" data-confirm="Submit your registration for the administrator's approval?">Submit registration</button>
+            </form>
+        }
+        else
+        {
+            <div class="alert success"><strong>Registration submitted.</strong> The administrator will review it. Once approved, sign in with your mobile number <strong>@Model.Mobile</strong> and the password you chose.</div>
+        }
+        <p class="mt center"><a href="/Account/Login">← Back to sign in</a></p>
+    </div>
+</div>

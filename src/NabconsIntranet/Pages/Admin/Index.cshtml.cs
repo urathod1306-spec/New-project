@@ -3,11 +3,12 @@ using NabconsIntranet.Infrastructure;
 
 namespace NabconsIntranet.Pages.Admin;
 
-public class IndexModel(Db db, IntranetOptions o, BackupService backups) : AppPage
+public class IndexModel(Db db, IntranetOptions o, BackupService backups, RegistrationRepository registrations) : AppPage
 {
     public long Users, Staff, Circulars, Requests, AuditEntries;
     public long DbBytes, DocBytes;
     public BackupInfo? LastBackup;
+    public long PendingRegistrations;
     public IntranetOptions Options => o;
 
     public void OnGet()
@@ -20,5 +21,6 @@ public class IndexModel(Db db, IntranetOptions o, BackupService backups) : AppPa
         DbBytes = System.IO.File.Exists(o.DatabasePath) ? new FileInfo(o.DatabasePath).Length : 0;
         DocBytes = System.IO.Directory.Exists(o.DocumentsPath) ? System.IO.Directory.EnumerateFiles(o.DocumentsPath, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length) : 0;
         LastBackup = backups.List().FirstOrDefault();
+        PendingRegistrations = registrations.PendingCount();
     }
 }

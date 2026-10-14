@@ -19,6 +19,28 @@ public static class Schema
     /// </summary>
     public static readonly (int Version, string Description, string Sql)[] Migrations =
     {
+        (2, "Self-registration requests (v1.1.0)", """
+            CREATE TABLE IF NOT EXISTS RegistrationRequests (
+                Id INTEGER PRIMARY KEY,
+                Mobile TEXT NOT NULL,
+                StaffId INTEGER,
+                EmployeeCode TEXT,
+                FullName TEXT NOT NULL,
+                Designation TEXT,
+                Vertical TEXT,
+                Location TEXT,
+                OfficialEmail TEXT,
+                PasswordHash TEXT,
+                Status TEXT NOT NULL DEFAULT 'Pending',
+                SubmittedAt TEXT NOT NULL,
+                IpAddress TEXT,
+                DecidedBy TEXT,
+                DecidedAt TEXT,
+                DecisionRemarks TEXT,
+                CreatedUserId INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS IX_RegistrationRequests_Mobile ON RegistrationRequests(Mobile, Status);
+            """),
     };
 
     public const string Sql = """

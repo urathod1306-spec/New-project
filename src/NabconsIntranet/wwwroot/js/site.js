@@ -43,3 +43,14 @@
 })();
 
 document.querySelectorAll('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
+
+// Mobile-number fields: allow digits only.
+document.querySelectorAll('input[data-digits-only]').forEach(function (i) {
+    i.addEventListener('input', function () {
+        var v = i.value.replace(/\D/g, '');
+        if (v.length > 10 && v.indexOf('91') === 0) v = v.slice(2);   // pasted +91 98200 12345
+        if (v.length > 10 && v.charAt(0) === '0') v = v.slice(1);      // pasted 098200 12345
+        v = v.slice(0, 10);
+        if (v !== i.value) i.value = v;
+    });
+});
