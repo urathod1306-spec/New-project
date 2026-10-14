@@ -17,11 +17,11 @@ This guide covers the office-PC pilot (no installation) and the later move to a 
 ## 2. Get the package
 
 1. On an approved internet-connected machine, open the GitHub repository and download
-   `release/NABCONS-Intranet-v1.0.0-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
+   `release/NABCONS-Intranet-v1.0.1-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
 2. Transfer the ZIP into the NABARD LAN **only by the IT-approved method** (approved media or transfer gateway), with malware scanning and a change ticket.
 3. On the office PC, check the checksum in PowerShell:
    ```powershell
-   Get-FileHash .\NABCONS-Intranet-v1.0.0-win-x64.zip -Algorithm SHA256
+   Get-FileHash .\NABCONS-Intranet-v1.0.1-win-x64.zip -Algorithm SHA256
    ```
    It must match the `.sha256` file. Inside the ZIP, `SHA256SUMS.txt` lists the checksum of every file, which helps with allow-listing.
 4. Right-click the ZIP → **Properties** → tick **Unblock** if shown → OK. Then extract it to `C:\NABCONSIntranet\`.
@@ -144,11 +144,7 @@ The pilot runs on the application's built-in web server (Kestrel), which is a su
 
 ## 9. Upgrading to a new version
 
-1. Take a backup (`Backup-Now.bat`).
-2. Stop the intranet.
-3. Replace `NabconsIntranet.exe`, `e_sqlite3.dll`, `wwwroot\`, the `.bat` files and `docs\` with the new ones. **Keep** `appsettings.json`, `data\`, `documents\`, `backups\` and `logs\`.
-4. Start the intranet and check *Audit → Verify integrity*.
-5. To roll back, put the previous files back. Restore the backup only if the database was changed.
+Extract the new version to a temporary folder and run its **`Upgrade-Existing-Intranet.bat`** as administrator. It backs up, keeps the previous program for roll-back, and replaces only the program files: data, documents, backups, logs and `appsettings.json` are kept. Full steps, checks and roll-back are in **[UPGRADE-GUIDE.md](UPGRADE-GUIDE.md)**.
 
 ## 10. Rebuilding the package yourself (developers only)
 

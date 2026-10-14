@@ -6,8 +6,8 @@ A ready-to-run intranet for **NABARD Consultancy Services (NABCONS)**, built for
 
 ## Download and run (no coding)
 
-1. **Download** [`release/NABCONS-Intranet-v1.0.0-win-x64.zip`](release/NABCONS-Intranet-v1.0.0-win-x64.zip) (≈ 46 MB). On GitHub, open the file and click **Download raw file**.
-   SHA-256: see [`release/NABCONS-Intranet-v1.0.0-win-x64.zip.sha256`](release/NABCONS-Intranet-v1.0.0-win-x64.zip.sha256).
+1. **Download** [`release/NABCONS-Intranet-v1.0.1-win-x64.zip`](release/NABCONS-Intranet-v1.0.1-win-x64.zip) (≈ 46 MB). On GitHub, open the file and click **Download raw file**.
+   SHA-256: see [`release/NABCONS-Intranet-v1.0.1-win-x64.zip.sha256`](release/NABCONS-Intranet-v1.0.1-win-x64.zip.sha256).
 2. **Transfer** it to the office PC by the IT-approved method. Right-click → *Properties* → *Unblock*, then **extract** it to `C:\NABCONSIntranet\`.
 3. **Double-click `Start-Intranet.bat`.** Keep the black window open. It shows the address to use.
 4. **Open** `http://localhost:8080` on that PC, or `http://<PC-name>:8080` from colleagues' PCs. If they cannot connect, right-click `Open-Firewall-Port.bat` → *Run as administrator*.
@@ -50,7 +50,8 @@ When the pilot is accepted, follow **Going live** in the [Administrator Guide](d
 | Document | For |
 |---|---|
 | [`README-FIRST.txt`](deploy/windows/README-FIRST.txt) | One-page quick start (also inside the ZIP) |
-| [Deployment Guide](docs/DEPLOYMENT-GUIDE.md) | Office PC, Windows service, firewall, HTTPS, Windows Authentication, IIS, upgrades |
+| [Deployment Guide](docs/DEPLOYMENT-GUIDE.md) | Office PC, Windows service, firewall, HTTPS, Windows Authentication, IIS |
+| [Upgrade Guide](docs/UPGRADE-GUIDE.md) | Installing a new version over a live intranet **without losing any data**, and rolling back |
 | [Administrator Guide](docs/ADMIN-GUIDE.md) | Going live, users and roles, CSV import, circulars, workflow, audit, backup and restore |
 | [IT & Security Note](docs/IT-SECURITY-NOTE.md) | One-page architecture note and validation checklist for NABARD IT clearance |
 | [Test Script](docs/TEST-SCRIPT.md) | Structured acceptance and security tests |

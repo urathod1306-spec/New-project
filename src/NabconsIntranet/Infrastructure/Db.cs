@@ -12,9 +12,11 @@ namespace NabconsIntranet.Infrastructure;
 public sealed class Db
 {
     private readonly string _connectionString;
+    private readonly IntranetOptions _options;
 
     public Db(IntranetOptions options)
     {
+        _options = options;
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = options.DatabasePath,
@@ -34,8 +36,15 @@ public sealed class Db
 
     public static string Now() => DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
 
-    public void Initialize()
+    /// <summary>
+    /// Creates the database on first start and brings an existing database up to date.
+    /// Existing data is never removed: upgrades only add tables/columns (see Schema.Migrations),
+    /// and a snapshot of the database is saved in the backups folder before any upgrade step runs.
+    /// </summary>
+    public List<string> Initialize()
     {
+        var applied = new List<string>();
+        var isNew = !File.Exists(_options.DatabasePath) || new FileInfo(_options.DatabasePath).Length == 0;
         using var c = Open();
         using (var wal = c.CreateCommand())
         {
@@ -43,6 +52,41 @@ public sealed class Db
             wal.ExecuteNonQuery();
         }
         Exec(c, null, Schema.Sql);
+
+        var current = (int)Scalar<long>(c, null, "SELECT COALESCE(MAX(Version), 1) FROM SchemaInfo");
+        if (current > Schema.Version)
+        {
+            // An older program running on a newer database (e.g. after a roll-back). Upgrades only ever
+            // ADD tables/columns, so this works; the newer features are simply unused until re-upgraded.
+            applied.Add($"Note: the database is at schema version {current}, newer than this program (version {Schema.Version}). " +
+                        "This is expected after a roll-back; no data is affected.");
+            return applied;
+        }
+
+        var pending = Schema.Migrations.Where(m => m.Version > current).OrderBy(m => m.Version).ToList();
+        if (pending.Count == 0) return applied;
+
+        if (!isNew)
+        {
+            Directory.CreateDirectory(_options.BackupPath);
+            var snapshot = Path.Combine(_options.BackupPath,
+                $"pre-upgrade-schema{current}-to-{Schema.Version}-{DateTime.Now:yyyyMMdd-HHmmss}.db");
+            using var snap = c.CreateCommand();
+            snap.CommandText = "VACUUM INTO @p";
+            snap.Parameters.AddWithValue("@p", snapshot);
+            snap.ExecuteNonQuery();
+            applied.Add("Safety copy of the database saved as " + snapshot);
+        }
+
+        foreach (var m in pending)
+        {
+            using var tx = c.BeginTransaction();
+            Exec(c, tx, m.Sql);
+            Exec(c, tx, "INSERT INTO SchemaInfo (Version, AppliedAt) VALUES (@v, @now)", new { v = m.Version, now = Now() });
+            tx.Commit();
+            applied.Add($"Database upgraded to schema version {m.Version}: {m.Description}");
+        }
+        return applied;
     }
 
     // ---- convenience overloads that open their own connection ----

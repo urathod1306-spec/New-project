@@ -38,7 +38,7 @@
 <div class="card mt">
     <h2>System information</h2>
     <dl class="meta-grid">
-        <dt>Version</dt><dd>@(typeof(Program).Assembly.GetName().Version)</dd>
+        <dt>Version</dt><dd>@(typeof(Program).Assembly.GetName().Version?.ToString(3)) (database schema @Schema.Version)</dd>
         <dt>Sign-in mode</dt><dd>@(o.IsWindowsAuth ? "Windows Authentication (Active Directory)" : "Local intranet accounts")</dd>
         <dt>Server</dt><dd>@Environment.MachineName · @System.Runtime.InteropServices.RuntimeInformation.OSDescription · .NET @Environment.Version</dd>
         <dt>Application folder</dt><dd class="mono">@o.ContentRoot</dd>

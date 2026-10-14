@@ -6,7 +6,20 @@ namespace NabconsIntranet.Infrastructure;
 /// </summary>
 public static class Schema
 {
-    public const int Version = 1;
+    /// <summary>Latest schema version this program understands (1 + number of migrations).</summary>
+    public static int Version => Migrations.Length == 0 ? 1 : Migrations.Max(m => m.Version);
+
+    /// <summary>
+    /// Database upgrades, applied in order on start-up to existing databases (and to new ones after
+    /// the base schema below). RULES — so live data is never lost:
+    ///   * only ADD: new tables, new columns (with a DEFAULT), new indexes; never DROP or rename;
+    ///   * never edit or remove an entry once released; add a new one with the next version number;
+    ///   * each step runs in a transaction, after an automatic snapshot of the database.
+    /// Example: (2, "Add Phone to Notices", "ALTER TABLE Notices ADD COLUMN Phone TEXT;"),
+    /// </summary>
+    public static readonly (int Version, string Description, string Sql)[] Migrations =
+    {
+    };
 
     public const string Sql = """
 CREATE TABLE IF NOT EXISTS SchemaInfo (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);

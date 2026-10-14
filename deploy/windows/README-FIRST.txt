@@ -35,11 +35,17 @@ NABCONS INTRANET - QUICK START (no installation, no internet needed)
    "ShowDemoAccountsOnLogin": false, delete the "data" and "documents" folders,
    start again and sign in as  admin / Admin@12345  (you must change it at once).
 
+7. INSTALLING A NEWER VERSION LATER (keeps all users, circulars and documents)
+   Extract the new ZIP to a NEW folder, then right-click its
+   Upgrade-Existing-Intranet.bat > Run as administrator. Never extract it over the
+   live folder. Details: docs\UPGRADE-GUIDE.md
+
 OTHER TOOLS IN THIS FOLDER
    Backup-Now.bat              make a backup now (also runs automatically every day at 19:30)
    Restore-Backup.bat          restore a backup (stop the intranet first)
    Reset-Admin-Password.bat    if the administrator is locked out
    Verify-Audit-Log.bat        check the audit log has not been tampered with
+   Rollback-Upgrade.bat        go back to the program version before the last upgrade
    Stop-Service.bat / Start-Service.bat / Uninstall-Windows-Service.bat
 
 FOLDERS (created automatically)

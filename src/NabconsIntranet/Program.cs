@@ -112,7 +112,11 @@ builder.Services.AddRazorPages(o =>
 var app = builder.Build();
 
 // --- first run: create the database, administrator and (optionally) demo data ---
-app.Services.GetRequiredService<Db>().Initialize();
+foreach (var step in app.Services.GetRequiredService<Db>().Initialize())
+{
+    app.Logger.LogWarning("{Step}", step);
+    app.Services.GetRequiredService<AuditService>().Log("System.Upgraded", "Database", Schema.Version, step, "system");
+}
 app.Services.GetRequiredService<Seeder>().Run();
 app.Services.GetRequiredService<AuditService>().Log("System.Started", "System", null,
     $"NABCONS Intranet {typeof(Program).Assembly.GetName().Version} started; auth={options.AuthenticationMode}", "system");
