@@ -10,7 +10,7 @@ mkdir -p "$OUT"
 python3 -I "$HERE/make-test-images.py" "$OUT/img"
 dotnet publish "$ROOT/src/NabconsIntranet" -c Release -o "$OUT/publish" >/dev/null
 fail=0
-for suite in core registration registration-others profile-photos-card leads desk-notifications; do
+for suite in core registration registration-others profile-photos-card leads desk-notifications enote; do
   pkill -x NabconsIntranet 2>/dev/null || true; sleep 1
   rm -rf "$APP"; cp -r "$OUT/publish" "$APP"
   ( cd "$APP" && nohup ./NabconsIntranet > console.log 2>&1 & )
@@ -18,7 +18,7 @@ for suite in core registration registration-others profile-photos-card leads des
   mkdir -p "$OUT/$suite"
   echo "=== $suite"
   case $suite in
-    profile-photos-card|leads) args=("$OUT/img" "$OUT/$suite") ;;
+    profile-photos-card|leads|enote) args=("$OUT/img" "$OUT/$suite") ;;
     *) args=("$OUT/$suite") ;;
   esac
   result=$(node "$HERE/$suite.e2e.js" "${args[@]}" 2>&1 || true)

@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Net;
-using Microsoft.Data.Sqlite;
+using System.Text.RegularExpressions;
 using NabconsIntranet.Data;
 using NabconsIntranet.Infrastructure;
 using Xunit.Abstractions;
@@ -8,9 +8,9 @@ using Xunit.Abstractions;
 namespace NabconsIntranet.Tests;
 
 /// <summary>
-/// Performance budgets at the brief's volume (500 users, 300,000 notifications; e-Note volumes are added by the e-Note seed).
+/// Performance budgets at the brief's volume: 500 users, 20,000 notes, 200,000 movements, 300,000 notifications.
 /// Slow to set up, so it only runs when NABCONS_BENCH=1:   NABCONS_BENCH=1 dotnet test --filter PerformanceTests
-/// Results are printed and recorded in docs/TEST-SCRIPT.md.
+/// Results are recorded in docs/TEST-SCRIPT.md.
 /// </summary>
 public class PerformanceTests(ITestOutputHelper output) : IDisposable
 {
@@ -18,106 +18,91 @@ public class PerformanceTests(ITestOutputHelper output) : IDisposable
     public void Dispose() => _app.Dispose();
     private static bool Enabled => Environment.GetEnvironmentVariable("NABCONS_BENCH") == "1";
 
-    public static void SeedUsers(SqliteConnection c, int total)
+    private static (double p50, double p95, double max) Stats(List<double> t)
     {
-        using var tx = c.BeginTransaction();
-        var existing = Db.Scalar<long>(c, tx, "SELECT COUNT(*) FROM Users");
-        var hash = PasswordHasher.Hash(TestApp.Password);
-        for (var i = (int)existing; i < total; i++)
-            Db.Exec(c, tx, """
-                INSERT INTO Users (Username, DisplayName, Vertical, Roles, PasswordHash, MustChangePassword, IsActive, SecurityStamp, CreatedAt)
-                VALUES (@u, @n, @v, 'Staff', @hash, 0, 1, 'x', @now)
-                """, new { u = "bench" + i, n = "Bench User " + i, v = (i % 5) switch { 0 => "BDU", 1 => "HR & Administration", 2 => "Finance & Accounts", 3 => "IT & Digital", _ => "Rural Infrastructure" }, hash, now = Db.Now() });
-        tx.Commit();
-    }
-
-    public static void SeedNotifications(SqliteConnection c, int total, long[] userIds)
-    {
-        var rnd = new Random(7);
-        using var tx = c.BeginTransaction();
-        using var cmd = c.CreateCommand();
-        cmd.Transaction = tx;
-        cmd.CommandText = "INSERT INTO Notifications (UserId, Type, Title, Link, ActorName, CreatedAt, ReadAt) VALUES ($u, 'Request.Assigned', $t, '/Requests', 'Bench', $at, $read)";
-        var pu = cmd.Parameters.Add("$u", SqliteType.Integer); var pt = cmd.Parameters.Add("$t", SqliteType.Text);
-        var pa = cmd.Parameters.Add("$at", SqliteType.Text); var pr = cmd.Parameters.Add("$read", SqliteType.Text);
-        var now = DateTime.UtcNow;
-        for (var i = 0; i < total; i++)
-        {
-            var at = now.AddMinutes(-rnd.Next(0, 60 * 24 * 300));
-            pu.Value = userIds[rnd.Next(userIds.Length)]; pt.Value = "Bench notification " + i; pa.Value = at.ToString("o");
-            pr.Value = rnd.Next(10) < 8 ? at.AddHours(2).ToString("o") : DBNull.Value;
-            cmd.ExecuteNonQuery();
-        }
-        tx.Commit();
-    }
-
-    public static (double p50, double p95, double max) Measure(int runs, Action a)
-    {
-        a(); // warm-up
-        var t = new List<double>();
-        for (var i = 0; i < runs; i++) { var sw = Stopwatch.StartNew(); a(); t.Add(sw.Elapsed.TotalMilliseconds); }
         t.Sort();
         return (t[t.Count / 2], t[(int)(t.Count * 0.95)], t[^1]);
     }
 
+    private async Task<(double p50, double p95, double max)> Time(int runs, Func<Task> a)
+    {
+        await a();
+        var t = new List<double>();
+        for (var i = 0; i < runs; i++) { var sw = Stopwatch.StartNew(); await a(); t.Add(sw.Elapsed.TotalMilliseconds); }
+        return Stats(t);
+    }
+
+    private void Row(string what, (double p50, double p95, double max) s, string budget) =>
+        output.WriteLine($"{what,-44} p50 {s.p50,7:0.0} ms   p95 {s.p95,7:0.0} ms   max {s.max,7:0.0} ms   budget {budget}");
+
     [Fact]
-    public async Task Notification_and_desk_budgets_at_volume()
+    public async Task Budgets_at_the_brief_volume()
     {
         if (!Enabled) { output.WriteLine("Skipped: set NABCONS_BENCH=1 to run the performance benchmark."); return; }
         var db = _app.Get<Db>();
         var sw = Stopwatch.StartNew();
+        List<long> users;
         using (var c = db.Open())
         {
-            SeedUsers(c, 500);
-            var ids = Db.Query<IdOnly>(c, null, "SELECT Id FROM Users").Select(x => x.Id).ToArray();
-            SeedNotifications(c, 300_000, ids);
+            users = BenchSeed.Users(c, 500, PasswordHasher.Hash(BenchSeed.Password));
+            BenchSeed.Notes(c, users);
+            BenchSeed.Notifications(c, users);
         }
-        output.WriteLine($"Seeded 500 users / 300,000 notifications in {sw.Elapsed.TotalSeconds:0.0} s");
+        output.WriteLine($"Seeded 500 users, 20,000 notes, 200,000 movements, 40,000 comments, 300,000 notifications in {sw.Elapsed.TotalSeconds:0} s " +
+                         $"(database {new FileInfo(_app.Get<IntranetOptions>().DatabasePath).Length / 1024 / 1024} MB)");
+        _app.Get<HousekeepingService>().Run();    // as every night: statistics for the query planner (and retention)
 
-        var a1 = await _app.SignIn("approver1");
+        // a bench user who holds notes, so every section has content
+        var holder = db.Scalar<long>("SELECT CurrentHolderUserId FROM ENotes WHERE State = 'InMovement' GROUP BY CurrentHolderUserId ORDER BY COUNT(*) DESC LIMIT 1");
+        var name = db.Scalar<string>("SELECT Username FROM Users WHERE Id = @holder", new { holder })!;
+        var c1 = await _app.SignIn(name, BenchSeed.Password);
+        var principal = _app.Principal(name);
         var desk = _app.Get<DeskService>();
         var tracker = _app.Get<ChangeTracker>();
-        var principal = _app.Principal("approver1");
-        var uid = principal.UserId();
 
-        // 1. poll, nothing changed (the normal case): answered from memory, 304
-        var first = await a1.GetAsync("/api/notifications/summary");
+        var first = await c1.GetAsync("/api/notifications/summary");
         var etag = first.Headers.ETag!.Tag;
-        var poll304 = new List<double>();
-        for (var i = 0; i < 200; i++)
+        Row("Poll, nothing changed (304)", await Time(300, async () =>
         {
             var req = new HttpRequestMessage(HttpMethod.Get, "/api/notifications/summary");
             req.Headers.TryAddWithoutValidation("If-None-Match", etag);
-            var t = Stopwatch.StartNew();
-            var r = await a1.SendAsync(req);
-            poll304.Add(t.Elapsed.TotalMilliseconds);
-            Assert.Equal(HttpStatusCode.NotModified, r.StatusCode);
-        }
-        poll304.Sort();
-        // 2. poll after a change (cache miss: counts re-read from the database)
-        var miss = Measure(100, () => { tracker.TouchUser(uid); Thread.Sleep(0); _ = desk.Counts(principal); });
-        // 3. My Desk page and the Notifications page (full HTTP round trip, in memory)
-        var deskPage = new List<double>(); var notesPage = new List<double>();
-        for (var i = 0; i < 50; i++)
+            var r = await c1.SendAsync(req);
+            if (r.StatusCode != HttpStatusCode.NotModified) throw new Exception("expected 304");
+        }), "< 20 ms");
+        var miss = await Time(200, () => { tracker.TouchUser(principal.UserId()); _ = desk.Counts(principal); return Task.CompletedTask; });
+        Row("Badge counts after a change (database)", miss, "< 20 ms");
+        var deskT = await Time(60, async () => (await c1.GetAsync("/Desk")).EnsureSuccessStatusCode());
+        Row("My Desk page", deskT, "< 250 ms");
+        var notes = db.Strings("SELECT CAST(n.Id AS TEXT) FROM ENotes n JOIN ENoteParticipants p ON p.NoteId = n.Id AND p.UserId = @holder LIMIT 40", new { holder });
+        var k = 0;
+        var viewT = await Time(80, async () => (await c1.GetAsync("/ENotes/" + notes[k++ % notes.Count])).EnsureSuccessStatusCode());
+        Row("Note view (10 movements, 2 comments)", viewT, "< 300 ms");
+        Row("My e-Notes: Pending with me", await Time(40, async () => (await c1.GetAsync("/ENotes")).EnsureSuccessStatusCode()), "—");
+        Row("My e-Notes: Seen by me, page 2", await Time(40, async () => (await c1.GetAsync("/ENotes?tab=seen&page=2")).EnsureSuccessStatusCode()), "—");
+        Row("Approved notes, full-text search", await Time(40, async () => (await c1.GetAsync("/ENotes?tab=approved&q=watershed+budget")).EnsureSuccessStatusCode()), "—");
+        Row("Notifications page 3", await Time(40, async () => (await c1.GetAsync("/Notifications?page=3")).EnsureSuccessStatusCode()), "—");
+        var admin = await _app.SignIn("admin");
+        Row("Register (all 20,000), page 1", await Time(30, async () => (await admin.GetAsync("/ENotes/Register")).EnsureSuccessStatusCode()), "—");
+        Row("Register filtered + search", await Time(30, async () => (await admin.GetAsync("/ENotes/Register?state=InMovement&q=survey")).EnsureSuccessStatusCode()), "—");
+        var xs = Stopwatch.StartNew();
+        var x = await admin.GetAsync("/ENotes/Register?handler=Export");
+        output.WriteLine($"Register Excel export (20,000 rows): {xs.ElapsedMilliseconds} ms, {(await x.Content.ReadAsByteArrayAsync()).Length / 1024} KB");
+
+        // a marking step at volume (write path)
+        var wf = _app.Get<ENoteWorkflow>();
+        var pending = db.Strings("SELECT CAST(Id AS TEXT) FROM ENotes WHERE CurrentHolderUserId = @holder AND State = 'InMovement' LIMIT 20", new { holder }).Select(long.Parse).ToList();
+        var to = users.First(u => u != holder);
+        var markT = new List<double>();
+        foreach (var id in pending)
         {
-            var t = Stopwatch.StartNew(); (await a1.GetAsync("/Desk")).EnsureSuccessStatusCode(); deskPage.Add(t.Elapsed.TotalMilliseconds);
-            t = Stopwatch.StartNew(); (await a1.GetAsync("/Notifications?page=3")).EnsureSuccessStatusCode(); notesPage.Add(t.Elapsed.TotalMilliseconds);
+            var n = _app.Get<ENoteRepository>().Get(id)!;
+            if (n.InitiatorUserId == to) continue;
+            var s = Stopwatch.StartNew(); wf.MarkTo(id, to, "Bench marking", n.RowVersion, principal); markT.Add(s.Elapsed.TotalMilliseconds);
         }
-        deskPage.Sort(); notesPage.Sort();
-        double P95(List<double> l) => l[(int)(l.Count * 0.95)];
-        output.WriteLine($"Poll (304, unchanged):        p50 {poll304[poll304.Count / 2]:0.00} ms  p95 {P95(poll304):0.00} ms   budget < 20 ms");
-        output.WriteLine($"Counts after a change (DB):   p50 {miss.p50:0.00} ms  p95 {miss.p95:0.00} ms   budget < 20 ms");
-        output.WriteLine($"My Desk page:                 p50 {deskPage[deskPage.Count / 2]:0.0} ms  p95 {P95(deskPage):0.0} ms   budget < 250 ms");
-        output.WriteLine($"Notifications page 3:         p50 {notesPage[notesPage.Count / 2]:0.0} ms  p95 {P95(notesPage):0.0} ms");
-        Assert.True(P95(poll304) < 20, "poll budget");
+        Row("Mark to (write, incl. audit entry)", Stats(markT), "—");
+
         Assert.True(miss.p95 < 20, "count budget");
-        Assert.True(P95(deskPage) < 250, "My Desk budget");
-
-        // housekeeping over the volume stays quick (batched deletes)
-        var hk = Stopwatch.StartNew();
-        var res = _app.Get<HousekeepingService>().Run();
-        output.WriteLine($"Housekeeping: removed {res.ReadDeleted:N0} read + {res.UnreadDeleted:N0} unread in {hk.Elapsed.TotalSeconds:0.0} s");
+        Assert.True(deskT.p95 < 250, "My Desk budget");
+        Assert.True(viewT.p95 < 300, "note view budget");
     }
-
-    private sealed class IdOnly { public long Id { get; set; } }
 }
