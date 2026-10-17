@@ -107,6 +107,22 @@ To switch self-registration off, set `"SelfRegistrationEnabled": false` in `apps
 - **Housekeeping** runs every day straight after the scheduled backup. It removes old notifications (settings `Notifications:RetainReadDays` and `RetainUnreadDays`) and writes a `System.Housekeeping` entry to the audit log. If `DailyBackupTime` is switched off, housekeeping does not run either.
 - Notifications are a convenience. The **audit log remains the record** of who did what.
 
+## e-Note (v1.3)
+
+- **Vertical codes.** *Master lists → Verticals* has an **e-Note code** column (2–8 letters or digits, e.g. HR, RID). New notes are numbered `NCS/EN/<code>/<FY>/<serial>`; verticals without a code use GEN. A change applies only to notes numbered afterwards. Each code has its own serial, restarting every April.
+- **Categories** are a master list (*Master lists → e-Note categories*).
+- **The register** (*e-Notes → e-Note register*, for Administrators and Auditors) lists every submitted note with its current holder, days with that holder and total days. It can be filtered, searched and exported to Excel.
+  - It shows **metadata only**. The text, note-sheet and attachments follow the normal rules: the people the note passed through, and all staff once it is approved (unless confidential).
+  - The Administrator and Auditor roles give no extra access to note content. Subjects of confidential notes are hidden in the register.
+- **Nobody can edit history.** Comments, movements, submitted text versions and submitted attachments cannot be changed or deleted, even directly in the database (triggers). Corrections are made by adding a comment or a newer attachment.
+- **Out of scope:** disciplinary, vigilance and complaint matters stay on the physical file. Initiators confirm this when they create a note.
+- **Storage:**
+  - attachments: `documents\enotes\<year>\<random>.dat`;
+  - archival PDFs: `documents\enotes\pdf`.
+  - Both are in every backup ZIP, under `documents/`.
+- **Daily housekeeping** (after the scheduled backup) sends ageing reminders and reports any stored e-Note file that has no database record. It never deletes files; see the log.
+- **Switching off:** set `"ENote": { "Enabled": false }`. The data stays and returns when it is switched back on.
+
 ## Audit log
 
 - Records sign-ins (success, failure, lockout), sign-outs, uploads and rejected uploads, publishing, withdrawal, supersession, downloads, every request action, user and role changes, password resets, master-data changes, staff imports and edits, backups and restores.

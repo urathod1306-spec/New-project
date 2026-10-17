@@ -40,6 +40,15 @@ Run on the isolated test PC with the demo data (password for all demo accounts: 
 | 35 | My Desk by role | Sign in as `staff`, `approver1`, `admin`, `bdu` and open *My Desk* | Each sees only the sections for their role or items; sign-in opens My Desk unless switched off in *My Profile → Preferences* ✔ | |
 | 36 | Session timeout with polling | Sign in, leave the page open and untouched for 35 minutes | Signed out as before; the poll does not keep the session alive ✔ (automated with a 1-minute session) | |
 | 37 | Keyboard | Tab to the bell, Enter, arrow keys, Esc | Opens, moves through items, closes and returns focus to the bell ✔ | |
+| 38 | e-Note chain (v1.3) | `staff` drafts with two attachments → marks to `approver1` → comment, attach, mark to `approver2` → *Send back* → `approver1` marks to `coo` → *Return to initiator* → `staff` revises (version 2) and marks to `coo` → *Approve* | Every step on the note-sheet with name, designation and time; number assigned at submission; versions 1 and 2 kept; notifications to each recipient ✔ | |
+| 39 | Only the holder acts | Open a note as someone in the chain who does not hold it now; try the action URLs with a copied form | No action buttons; any POST is refused ✔ | |
+| 40 | Initiator cannot decide | Return a note to its initiator; try *Approve* as the initiator | Refused ✔ | |
+| 41 | Concurrency | Same note in two tabs as the holder; act in tab 1, then tab 2 | Tab 2: "This note has changed" ✔ | |
+| 42 | Visibility / URL guessing | As an unrelated user and as `auditor`/`admin`, open `/ENotes/<n>`, `/ENotes/Attachment/<n>`, `/ENotes/<n>/Pdf`, `/ENotes/<n>/Attachments.zip` for notes in every state, confidential and not | Only approved, non-confidential notes open for them; everything else "Page not found"; the PDF only for the initiator; the register shows metadata only ✔ (automated matrix: 8 states × 2 × 5 roles × 5 addresses) | |
+| 43 | Append-only | In a copy of the database, try `UPDATE`/`DELETE` on `ENoteMovements`, `ENoteComments`, `ENoteBodyVersions`, and `DELETE` on attachments of a submitted note | Refused by triggers ✔ | |
+| 44 | Uploads | Attach a 12 MB file, a renamed `.exe`, a 51st file | Each refused with a clear message; nothing left on disk ✔ | |
+| 45 | Archival PDF | Initiator → *Download PDF for archival* on an approved note; open in a PDF reader; check Hindi text | Fonts embedded; numbered paragraphs; note-sheet; decision; attachment schedule with SHA-256; footer "not digitally signed", page x of y, record SHA-256 ✔ | |
+| 46 | Phone / keyboard | Use a note with the keyboard only (type-ahead with arrows + Enter), and at phone width | Works; no horizontal scrolling ✔ | |
 | 26 | No egress | With an outbound "block all" firewall rule for `NabconsIntranet.exe`, use every page | Everything works; no blocked-connection events | |
 
 ## Performance (v1.3)
