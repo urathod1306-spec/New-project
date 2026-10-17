@@ -9,13 +9,13 @@
         <h1>Business Leads</h1>
         <p>Dashboard for @(Model.Fy == "All" ? "all years" : "FY " + Model.Fy) (April–March). Values are estimated fees in ₹ lakh.</p>
     </div>
-    <form method="get" class="actions">
-        <label for="fy" class="small">Financial year</label>
+    <form method="get" class="inline-filter">
+        <label for="fy">Financial year</label>
         <select id="fy" name="fy" data-autosubmit>
             @foreach (var y in Model.Years) { <option selected="@(Model.Fy == y)">@y</option> }
             <option value="All" selected="@(Model.Fy == "All")">All years</option>
         </select>
-        <button class="btn sm" type="submit">Show</button>
+        <noscript><button class="btn sm" type="submit">Show</button></noscript>
     </form>
 </div>
 <partial name="_LeadTabs" />

@@ -48,7 +48,7 @@
         <table class="table">
             <thead><tr>
                 <th>@Html.Raw(SortLink("ref", "Reference"))</th><th>@Html.Raw(SortLink("client", "Lead / client"))</th><th>@Html.Raw(SortLink("status", "Status"))</th>
-                <th>Owner</th><th>Submitted by</th><th>@Html.Raw(SortLink("value", "Est. ₹ lakh"))</th><th>@Html.Raw(SortLink("due", "Due"))</th><th>@Html.Raw(SortLink("updated", "Updated"))</th>
+                <th class="hide-sm">Owner</th><th class="hide-sm">Submitted by</th><th class="hide-sm">@Html.Raw(SortLink("value", "Est. ₹ lakh"))</th><th>@Html.Raw(SortLink("due", "Due"))</th><th class="hide-sm">@Html.Raw(SortLink("updated", "Updated"))</th>
             </tr></thead>
             <tbody>
                 @foreach (var l in Model.Items)
@@ -56,14 +56,14 @@
                     var open = !LeadStatus.IsClosed(l.Status) && !string.IsNullOrEmpty(l.DueDate);
                     var cls = open && string.CompareOrdinal(l.DueDate, Model.Today) < 0 ? "row-overdue" : open && string.CompareOrdinal(l.DueDate, Model.Soon) <= 0 ? "row-due" : "";
                     <tr class="@cls">
-                        <td class="nowrap"><a href="/Leads/Details/@l.Id">@l.Reference</a></td>
+                        <td class="nowrap ref-cell"><a href="/Leads/Details/@l.Id">@l.Reference</a></td>
                         <td><a href="/Leads/Details/@l.Id"><strong>@l.Title</strong></a><div class="muted small">@l.ClientName@(string.IsNullOrEmpty(l.ClientType) ? "" : " · " + l.ClientType)@(string.IsNullOrEmpty(l.Sector) ? "" : " · " + l.Sector)</div></td>
                         <td><span class="badge @LeadStatus.Css(l.Status)">@l.Status</span></td>
-                        <td>@(l.OwnerName ?? "—")</td>
-                        <td>@l.SubmitterName<div class="muted small">@l.SubmitterVertical</div></td>
-                        <td class="right">@(l.EstimatedValueLakh?.ToString("0.##") ?? "—")</td>
+                        <td class="hide-sm">@(l.OwnerName ?? "—")</td>
+                        <td class="hide-sm">@l.SubmitterName<div class="muted small">@l.SubmitterVertical</div></td>
+                        <td class="right hide-sm">@(l.EstimatedValueLakh?.ToString("0.##") ?? "—")</td>
                         <td class="nowrap">@(string.IsNullOrEmpty(l.DueDate) ? "—" : F.Date(l.DueDate))</td>
-                        <td class="nowrap small">@F.DateTime(l.UpdatedAt)</td>
+                        <td class="nowrap small hide-sm">@F.DateTime(l.UpdatedAt)</td>
                     </tr>
                 }
             </tbody>

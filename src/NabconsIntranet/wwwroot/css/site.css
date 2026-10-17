@@ -145,7 +145,7 @@ table.table { width: 100%; border-collapse: collapse; background: var(--card); }
 .field .hint { color: var(--muted); font-size: .8rem; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 .form-grid .full { grid-column: 1 / -1; }
-input[type=text], input[type=search], input[type=password], input[type=email], input[type=date], input[type=number], input[type=file], select, textarea {
+input:not([type]), input[type=text], input[type=search], input[type=tel], input[type=password], input[type=email], input[type=date], input[type=number], input[type=file], select, textarea {
     width: 100%; padding: 8px 10px; border: 1px solid #c8d1db; border-radius: 8px; font: inherit; background: #fff; color: var(--ink);
 }
 textarea { min-height: 110px; resize: vertical; }
@@ -300,3 +300,5 @@ th a { color: inherit; text-decoration: none; }
 th a.sorted { color: var(--brand-dark); text-decoration: underline; }
 .bar-cell { width: 40%; }
 .bar-cell progress { width: 100%; height: 12px; accent-color: var(--brand); }
+.inline-filter { display: flex; align-items: center; gap: 8px; } .inline-filter label { font-weight: 600; font-size: .88rem; white-space: nowrap; } .inline-filter select { width: auto; }
+@media (max-width: 600px) { .hide-sm { display: none; } .ref-cell { white-space: normal; word-break: break-all; font-size: .8rem; } }
