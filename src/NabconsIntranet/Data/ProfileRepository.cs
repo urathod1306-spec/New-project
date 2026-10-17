@@ -39,7 +39,8 @@ public sealed record ProfileContact(string? Mobile, string? Extension, string? O
 /// My Profile: links accounts to directory rows, applies a user's own contact changes (field by field, audited),
 /// and handles vertical-change requests that an administrator approves.
 /// </summary>
-public sealed class ProfileRepository(Db db, UserRepository users, StaffRepository staff, AuditService audit, IntranetOptions o)
+public sealed class ProfileRepository(Db db, UserRepository users, StaffRepository staff, AuditService audit, IntranetOptions o,
+    INotificationService notifications, ChangeTracker tracker)
 {
     public const string VerticalField = "Vertical";
 
@@ -180,10 +181,16 @@ public sealed class ProfileRepository(Db db, UserRepository users, StaffReposito
             ApplyVertical(u.Id, s?.StaffId, current, newVertical, u.Username);
             return true;
         }
-        var id = db.Insert("""
+        using var c = db.Open();
+        using var tx = c.BeginTransaction();
+        var id = Db.Insert(c, tx, """
             INSERT INTO ProfileChangeRequests (UserId, StaffId, Field, OldValue, NewValue, Status, RequestedAt)
             VALUES (@uid, @sid, 'Vertical', @current, @newVertical, 'Pending', @now)
             """, new { uid = u.Id, sid = s?.StaffId, current, newVertical, now = Db.Now() });
+        notifications.NotifyAdministrators(c, tx, new NotificationActor(u.Id, u.DisplayName), new NotificationMessage("Admin.VerticalChangePending",
+            $"Vertical change awaiting approval — {u.DisplayName}", $"{current ?? "(none)"} → {newVertical ?? "(none)"}", "/Admin/ProfileChanges", "ProfileChange", id));
+        tx.Commit();
+        tracker.Touch(ChangeTracker.AdminQueue);
         audit.Log("Profile.VerticalChangeRequested", "ProfileChange", id, $"{u.Username}: '{current}' -> '{newVertical}'", u.Username);
         return true;
     }
@@ -213,9 +220,19 @@ public sealed class ProfileRepository(Db db, UserRepository users, StaffReposito
             ?? throw new WorkflowException("Request not found.");
         if (r.Status != "Pending") throw new WorkflowException("This request has already been decided.");
         if (!approve && string.IsNullOrWhiteSpace(remarks)) throw new WorkflowException("Enter a reason for rejecting the change.");
-        var n = db.Exec("UPDATE ProfileChangeRequests SET Status = @st, DecidedBy = @actor, DecidedAt = @now, DecisionRemarks = @remarks WHERE Id = @id AND Status = 'Pending'",
-            new { st = approve ? "Approved" : "Rejected", actor, now = Db.Now(), remarks = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim(), id });
-        if (n == 0) throw new WorkflowException("This request has already been decided.");
+        using (var c = db.Open())
+        using (var tx = c.BeginTransaction())
+        {
+            var n = Db.Exec(c, tx, "UPDATE ProfileChangeRequests SET Status = @st, DecidedBy = @actor, DecidedAt = @now, DecisionRemarks = @remarks WHERE Id = @id AND Status = 'Pending'",
+                new { st = approve ? "Approved" : "Rejected", actor, now = Db.Now(), remarks = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim(), id });
+            if (n == 0) throw new WorkflowException("This request has already been decided.");
+            notifications.Notify(c, tx, new[] { r.UserId }, new NotificationActor(users.GetByUsername(actor)?.Id ?? -1, actor), new NotificationMessage(
+                approve ? "Profile.VerticalChangeApproved" : "Profile.VerticalChangeRejected",
+                approve ? $"Your vertical change to {r.NewValue ?? "(none)"} was approved" : $"Your vertical change to {r.NewValue ?? "(none)"} was not approved",
+                approve ? null : remarks?.Trim(), "/Profile", "ProfileChange", id));
+            tx.Commit();
+        }
+        tracker.Touch(ChangeTracker.AdminQueue);
         if (approve)
         {
             var u = users.Get(r.UserId);

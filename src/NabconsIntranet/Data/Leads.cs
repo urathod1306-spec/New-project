@@ -116,17 +116,6 @@ public sealed class LeadFilter
     public string Sort { get; set; } = "updated";
 }
 
-/// <summary>One place to plug in e-mail (or other) notifications later. Every lead event passes through here.</summary>
-public interface ILeadNotifier
-{
-    void LeadEventOccurred(Lead lead, LeadEvent ev);
-}
-
-public sealed class NoLeadNotifications : ILeadNotifier
-{
-    public void LeadEventOccurred(Lead lead, LeadEvent ev) { }
-}
-
 /// <summary>
 /// Who may do what with business leads. BDU membership = the user's current, approved vertical is the configured
 /// Business Development vertical. COO/MD = the LeadViewer role. Administrators get no lead powers by themselves.
@@ -159,7 +148,7 @@ public sealed class LeadAccess(IntranetOptions o, MasterRepository masters)
 
 public sealed record LeadUpdate(string NewStatus, string Remarks, string? LossReason, string? LossReasonText, double? AwardedValueLakh, string? AwardDate);
 
-public sealed class LeadRepository(Db db, AuditService audit, ILeadNotifier notifier, Fmt fmt, LeadAccess access)
+public sealed class LeadRepository(Db db, AuditService audit, INotificationService notifications, ChangeTracker tracker, Fmt fmt, LeadAccess access)
 {
     private const string Select = "SELECT l.*, o.DisplayName AS OwnerName FROM Leads l LEFT JOIN Users o ON o.Id = l.OwnerUserId";
 
@@ -245,10 +234,12 @@ public sealed class LeadRepository(Db db, AuditService audit, ILeadNotifier noti
                 @DueDate, @ContactName, @ContactDesignation, @ContactPhone, @ContactEmail, @Description, @TenderNumber, @Status, @SubmitterUserId,
                 @SubmitterName, @SubmitterVertical, 1, @CreatedAt, @UpdatedAt)
             """, l);
-        var ev = AddEvent(c, tx, l.Id, "Submitted", null, LeadStatus.Submitted, null, null, user, now);
+        AddEvent(c, tx, l.Id, "Submitted", null, LeadStatus.Submitted, null, null, user, now);
+        notifications.NotifyVertical(c, tx, access.BdVerticalName, NotificationActor.From(user), new NotificationMessage("Lead.Submitted",
+            $"New business lead {l.Reference} — {l.Title}", $"{l.ClientName} · submitted by {l.SubmitterName}", $"/Leads/Details/{l.Id}", "Lead", l.Id));
         tx.Commit();
+        tracker.Touch(ChangeTracker.LeadQueue);
         audit.Log("Lead.Submitted", "Lead", l.Id, $"{l.Reference}: {l.Title} ({l.ClientName})");
-        notifier.LeadEventOccurred(l, ev);
         return l;
     }
 
@@ -261,11 +252,10 @@ public sealed class LeadRepository(Db db, AuditService audit, ILeadNotifier noti
             INSERT INTO LeadAttachments (LeadId, Side, StoredPath, OriginalFileName, ContentType, SizeBytes, Sha256, UploadedByUserId, UploadedBy, UploadedAt)
             VALUES (@LeadId, @side, @StoredPath, @OriginalFileName, @ContentType, @SizeBytes, @Sha256, @uid, @name, @now)
             """, new { LeadId = l.Id, side, f.StoredPath, f.OriginalFileName, f.ContentType, f.SizeBytes, f.Sha256, uid = user.UserId(), name = user.DisplayName(), now });
-        var ev = AddEvent(c, tx, l.Id, "Attachment", null, null, null, $"{f.OriginalFileName} ({Fmt.Size(f.SizeBytes)}, {side})", user, now);
+        AddEvent(c, tx, l.Id, "Attachment", null, null, null, $"{f.OriginalFileName} ({Fmt.Size(f.SizeBytes)}, {side})", user, now);
         Db.Exec(c, tx, "UPDATE Leads SET UpdatedAt = @now WHERE Id = @Id", new { now, l.Id });
         tx.Commit();
         audit.Log("Lead.AttachmentAdded", "Lead", l.Id, $"{l.Reference}: {f.OriginalFileName} ({f.SizeBytes} bytes, SHA-256 {f.Sha256})");
-        notifier.LeadEventOccurred(l, ev);
     }
 
     public void AddNote(Lead l, string note, ClaimsPrincipal user, string type = "Note")
@@ -273,11 +263,10 @@ public sealed class LeadRepository(Db db, AuditService audit, ILeadNotifier noti
         var now = Db.Now();
         using var c = db.Open();
         using var tx = c.BeginTransaction(deferred: false);
-        var ev = AddEvent(c, tx, l.Id, type, null, null, note, null, user, now);
+        AddEvent(c, tx, l.Id, type, null, null, note, null, user, now);
         Db.Exec(c, tx, "UPDATE Leads SET UpdatedAt = @now WHERE Id = @Id", new { now, l.Id });
         tx.Commit();
         audit.Log("Lead." + type, "Lead", l.Id, $"{l.Reference}: {note}");
-        notifier.LeadEventOccurred(l, ev);
     }
 
     public void ChangeStatus(Lead l, LeadUpdate u, long expectedVersion, ClaimsPrincipal user)
@@ -313,10 +302,12 @@ public sealed class LeadRepository(Db db, AuditService audit, ILeadNotifier noti
         if (n == 0) throw new WorkflowException("This lead was just updated by someone else. Please review the latest version and try again.");
         var detail = reason != null ? $"Reason: {reason}{(reasonText != null ? " — " + reasonText : "")}"
             : u.NewStatus == LeadStatus.Won ? $"Awarded ₹ {award!.Value.ToString("0.##", CultureInfo.InvariantCulture)} lakh on {awardDate}" : null;
-        var ev = AddEvent(c, tx, l.Id, "StatusChanged", l.Status, u.NewStatus, u.Remarks.Trim(), detail, user, now);
+        AddEvent(c, tx, l.Id, "StatusChanged", l.Status, u.NewStatus, u.Remarks.Trim(), detail, user, now);
+        notifications.Notify(c, tx, new[] { l.SubmitterUserId }, NotificationActor.From(user), new NotificationMessage("Lead.StatusChanged",
+            $"Your lead {l.Reference} is now “{u.NewStatus}”", u.Remarks.Trim(), $"/Leads/Details/{l.Id}", "Lead", l.Id));
         tx.Commit();
+        tracker.Touch(ChangeTracker.LeadQueue);
         audit.Log("Lead.StatusChanged", "Lead", l.Id, $"{l.Reference}: {l.Status} -> {u.NewStatus}; {u.Remarks.Trim()}" + (detail != null ? "; " + detail : ""));
-        notifier.LeadEventOccurred(l, ev);
     }
 
     public void AssignOwner(Lead l, long? ownerUserId, long expectedVersion, ClaimsPrincipal user)
@@ -333,10 +324,16 @@ public sealed class LeadRepository(Db db, AuditService audit, ILeadNotifier noti
         var n = Db.Exec(c, tx, "UPDATE Leads SET OwnerUserId = @ownerUserId, RowVersion = RowVersion + 1, UpdatedAt = @now WHERE Id = @Id AND RowVersion = @expectedVersion",
             new { ownerUserId, now, l.Id, expectedVersion });
         if (n == 0) throw new WorkflowException("This lead was just updated by someone else. Please review the latest version and try again.");
-        var ev = AddEvent(c, tx, l.Id, "OwnerChanged", null, null, null, $"{l.OwnerName ?? "unassigned"} → {ownerName ?? "unassigned"}", user, now);
+        AddEvent(c, tx, l.Id, "OwnerChanged", null, null, null, $"{l.OwnerName ?? "unassigned"} → {ownerName ?? "unassigned"}", user, now);
+        var actor = NotificationActor.From(user);
+        notifications.Notify(c, tx, new[] { l.SubmitterUserId }, actor, new NotificationMessage("Lead.OwnerAssigned",
+            ownerName != null ? $"{ownerName} is now handling your lead {l.Reference}" : $"Your lead {l.Reference} has no owner at present", null, $"/Leads/Details/{l.Id}", "Lead", l.Id));
+        if (ownerUserId is long ownerId && ownerId != l.SubmitterUserId)
+            notifications.Notify(c, tx, new[] { ownerId }, actor, new NotificationMessage("Lead.AssignedToYou",
+                $"Lead {l.Reference} assigned to you — {l.Title}", l.ClientName, $"/Leads/Details/{l.Id}", "Lead", l.Id));
         tx.Commit();
+        if (l.OwnerUserId is long previous) tracker.TouchUser(previous);
         audit.Log("Lead.OwnerChanged", "Lead", l.Id, $"{l.Reference}: owner {l.OwnerName ?? "-"} -> {ownerName ?? "-"}");
-        notifier.LeadEventOccurred(l, ev);
     }
 
     private static LeadEvent AddEvent(Microsoft.Data.Sqlite.SqliteConnection c, Microsoft.Data.Sqlite.SqliteTransaction tx, long leadId, string type,

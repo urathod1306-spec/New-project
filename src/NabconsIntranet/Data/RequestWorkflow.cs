@@ -14,7 +14,7 @@ public sealed record WorkflowAction(string Name, string Label, string ToState, b
 /// Every transition is recorded in the append-only ApprovalActions table and the audit log.
 /// Optimistic concurrency (RowVersion) prevents two approvers acting on the same request at once.
 /// </summary>
-public sealed class RequestWorkflow(Db db, AuditService audit)
+public sealed class RequestWorkflow(Db db, AuditService audit, INotificationService notifications)
 {
     public const string FormName = "General Administrative Approval Request";
 
@@ -205,6 +205,7 @@ public sealed class RequestWorkflow(Db db, AuditService audit)
         if (updated == 0)
             throw new WorkflowException("This request has just been updated by someone else. The latest version is shown below — please review it and try again.");
         AppendAction(c, tx, requestId, action.Name, r.State, action.ToState, user, role, remarks, now);
+        NotifyFor(c, tx, r, action, remarks, user);
         tx.Commit();
         audit.Log("Request." + action.Name, "Request", requestId, $"{r.RequestNumber}: {r.State} -> {action.ToState}" + (remarks != null ? $"; remarks: {remarks}" : ""));
     }
@@ -215,6 +216,35 @@ public sealed class RequestWorkflow(Db db, AuditService audit)
             INSERT INTO ApprovalActions (RequestId, Action, FromState, ToState, ActorUserId, ActorName, ActorRole, Remarks, Timestamp)
             VALUES (@requestId, @action, @from, @to, @uid, @name, @role, @remarks, @now)
             """, new { requestId, action, from, to, uid = user.UserId(), name = user.DisplayName(), role, remarks, now });
+
+    /// <summary>In-app notifications for a workflow step, written in the same transaction as the step.</summary>
+    private void NotifyFor(Microsoft.Data.Sqlite.SqliteConnection c, Microsoft.Data.Sqlite.SqliteTransaction tx, ApprovalRequest r, WorkflowAction action,
+        string? remarks, ClaimsPrincipal user)
+    {
+        var actor = NotificationActor.From(user);
+        var link = $"/Requests/Details/{r.Id}";
+        var what = $"{r.RequestNumber}: {r.Subject}";
+        NotificationMessage M(string type, string title) => new(type, title, remarks, link, "Request", r.Id);
+        switch (action.Name)
+        {
+            case "Submit":
+                if (r.ReviewerUserId is long rev) notifications.Notify(c, tx, new[] { rev }, actor, M("Request.Assigned", $"Request for your review — {what}"));
+                break;
+            case "Recommend":
+                if (r.ApproverUserId is long ap) notifications.Notify(c, tx, new[] { ap }, actor, M("Request.Assigned", $"Request for your sanction — {what}"));
+                notifications.Notify(c, tx, new[] { r.SubmitterUserId }, actor, M("Request.Recommended", $"Your request was recommended — {what}"));
+                break;
+            case "Approve":
+                notifications.Notify(c, tx, new[] { r.SubmitterUserId }, actor, M("Request.Approved", $"Your request was approved — {what}"));
+                break;
+            case "Return":
+                notifications.Notify(c, tx, new[] { r.SubmitterUserId }, actor, M("Request.Returned", $"Your request was returned for clarification — {what}"));
+                break;
+            case "Reject":
+                notifications.Notify(c, tx, new[] { r.SubmitterUserId }, actor, M("Request.Rejected", $"Your request was rejected — {what}"));
+                break;
+        }
+    }
 
     public static IEnumerable<WorkflowAction> Actions => AllActions;
 }
