@@ -26,7 +26,7 @@ function check(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
 
   // ---- admin ----
   let { ctx, page } = await session('admin');
-  check(page.url() === BASE + '/', 'admin lands on home');
+  check(page.url() === BASE + '/Desk', 'admin lands on My Desk (default preference)');
   await page.screenshot({ path: path.join(SHOTS, '01-home.png'), fullPage: true });
   await page.goto(BASE + '/Directory?q=consultant');
   const dirRows = await page.locator('table.table tbody tr').count();

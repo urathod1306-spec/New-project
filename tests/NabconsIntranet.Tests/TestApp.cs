@@ -20,8 +20,13 @@ public sealed class TestApp : IDisposable
     public string Root { get; } = Path.Combine(Path.GetTempPath(), "nabcons-tests-" + Guid.NewGuid().ToString("N"));
     private readonly WebApplicationFactory<Program> _factory;
 
-    public TestApp()
+    private readonly Dictionary<string, string?> _extra;
+
+    /// <param name="settings">Extra settings as environment variables, e.g. ("Intranet__SessionTimeoutMinutes", "1"); cleared on dispose.</param>
+    public TestApp(params (string key, string value)[] settings)
     {
+        _extra = settings.ToDictionary(s => s.key, s => (string?)s.value);
+        foreach (var (k, v) in _extra) Environment.SetEnvironmentVariable(k, v);
         Directory.CreateDirectory(Root);
         // Program reads configuration while building, so the test folders are passed as environment variables.
         Environment.SetEnvironmentVariable("Intranet__DataFolder", Path.Combine(Root, "data"));
@@ -78,6 +83,7 @@ public sealed class TestApp : IDisposable
 
     public void Dispose()
     {
+        foreach (var k in _extra.Keys) Environment.SetEnvironmentVariable(k, null);
         _factory.Dispose();
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         try { Directory.Delete(Root, true); } catch { /* best effort */ }

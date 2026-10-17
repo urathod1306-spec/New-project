@@ -90,10 +90,10 @@ const PW = 'Arjun@Pass2026';
 
   // applicants sign in
   const u = await fresh(); await signin(u, '9000001008', PW);
-  check(u.url() === BASE + '/', 'approved user signs in with mobile number');
+  check(u.url() === BASE + '/Desk', 'approved user signs in with mobile number (lands on My Desk)');
   check((await u.content()).includes('Arjun Mehta'), 'signed in as Arjun Mehta');
   const n = await fresh(); await signin(n, '+91 91234 56789', 'Nikhil@Pass2026');
-  check(n.url() === BASE + '/' && (await n.content()).includes('Approval Inbox'), 'new person signs in (mobile typed with +91/spaces) and has Approver role');
+  check(n.url() === BASE + '/Desk' && (await n.content()).includes('Approval Inbox'), 'new person signs in (mobile typed with +91/spaces) and has Approver role');
   const x = await fresh(); await signin(x, '9876543210', 'Unknown@Pass2026');
   check((await x.content()).includes('not approved'), 'rejected applicant told registration not approved');
   // anonymous cannot reach admin page
