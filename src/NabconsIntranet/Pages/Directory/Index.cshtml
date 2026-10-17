@@ -53,12 +53,12 @@
             <tbody>
                 @foreach (var s in Model.Result.Items)
                 {
-                    <tr>
-                        <td><div class="person"><span class="avatar">@Fmt.Initials(s.FullName)</span><span><strong>@s.FullName</strong><br /><span class="muted small">@s.EmployeeCode</span></span></div></td>
+                    <tr class="card-row" data-card="@s.StaffId" tabindex="0" role="button" aria-label="Show contact card for @s.FullName">
+                        <td><div class="person">@if (s.PhotoUserId != null) { <img class="avatar-photo" src="/photo/@s.PhotoUserId?thumb=true&v=@s.PhotoVersion" alt="" width="38" height="38" loading="lazy" decoding="async" /> } else { <span class="avatar">@Fmt.Initials(s.FullName)</span> }<span><strong>@s.FullName</strong><br /><span class="muted small">@s.EmployeeCode</span></span></div></td>
                         <td>@s.Designation</td>
                         <td>@s.Vertical</td>
                         <td>@s.Location</td>
-                        <td>@if (!string.IsNullOrEmpty(s.OfficialEmail)) { <a href="mailto:@s.OfficialEmail">@s.OfficialEmail</a> }</td>
+                        <td>@if (!string.IsNullOrEmpty(s.OfficialEmail)) { <a href="mailto:@s.OfficialEmail" data-no-card>@s.OfficialEmail</a> }</td>
                         <td class="nowrap">@s.Extension</td>
                         <td class="nowrap">@(s.ShowMobile ? s.Mobile : "")</td>
                     </tr>
@@ -66,5 +66,7 @@
             </tbody>
         </table>
         <partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, Model.PageUrl)" />
+        <p class="muted small mt">Click a name to open the contact card.</p>
     }
 </div>
+<partial name="_ContactCard" />

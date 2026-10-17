@@ -262,3 +262,34 @@ a.tile-link { text-decoration: none; color: var(--ink); } a.tile-link:hover { bo
 .login-logo.small-logo { width: 96px; height: 96px; }
 .diff-changed td { background: var(--warning-light); }
 .diff-changed td:first-child { font-weight: 700; }
+
+/* ---------- photos, profile and contact card (v1.2) ---------- */
+.avatar-photo { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex: none; background: var(--brand-light); display: inline-block; }
+.avatar-photo.sm { width: 32px; height: 32px; border: 2px solid #fff; }
+.avatar.lg, .avatar-photo.lg { width: 72px; height: 72px; font-size: 1.4rem; }
+.avatar.xl, .avatar-photo.xl { width: 120px; height: 120px; font-size: 2.2rem; }
+.profile-head { display: flex; align-items: center; gap: 16px; }
+.profile-head h1 { margin: 0; }
+.photo-edit { display: flex; flex-direction: column; gap: 12px; }
+.photo-frame { display: flex; justify-content: center; padding: 6px 0; }
+.photo-frame .avatar-photo.xl, .photo-frame .avatar.xl { width: 160px; height: 160px; font-size: 2.8rem; }
+tr.card-row { cursor: pointer; }
+tr.card-row:focus { outline: 2px solid var(--brand); outline-offset: -2px; }
+.offscreen { position: fixed; left: -9999px; top: 0; }
+dialog.contact-card { border: 0; border-radius: 14px; padding: 0; width: min(440px, calc(100vw - 32px)); box-shadow: 0 20px 50px rgba(0, 0, 0, .3); color: var(--ink); }
+dialog.contact-card::backdrop { background: rgba(10, 30, 20, .55); }
+.cc-inner { padding: 22px; position: relative; }
+.cc-close { position: absolute; right: 10px; top: 8px; border: 0; background: none; font-size: 1.8rem; line-height: 1; cursor: pointer; color: var(--muted); padding: 4px 10px; border-radius: 8px; }
+.cc-close:hover, .cc-close:focus { background: var(--bg); color: var(--ink); }
+.cc-head { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; padding-right: 30px; }
+.cc-head h2 { margin: 0 0 2px; }
+.cc-head p { margin: 0; }
+.cc-fields { margin: 0 0 8px; border-top: 1px solid var(--line); }
+.cc-fields > div { display: grid; grid-template-columns: 130px 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); align-items: center; }
+.cc-fields dt { color: var(--muted); font-weight: 600; font-size: .85rem; }
+.cc-fields dd { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; word-break: break-word; }
+@media (max-width: 600px) {
+    dialog.contact-card { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
+    .cc-fields > div { grid-template-columns: 1fr; gap: 2px; }
+}
+.decide-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; } .decide-form input { flex: 1 1 160px; min-width: 0; }

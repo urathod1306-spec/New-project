@@ -48,13 +48,25 @@ public sealed class StaffRepository(Db db, Fmt fmt)
         return new Paged<StaffMember>
         {
             Total = db.Scalar<long>("SELECT COUNT(*) FROM Staff" + sqlWhere, args),
-            Items = db.Query<StaffMember>("SELECT * FROM Staff" + sqlWhere + " ORDER BY FullName LIMIT @take OFFSET @skip", args),
+            Items = db.Query<StaffMember>(WithPhoto + sqlWhere + " ORDER BY FullName LIMIT @take OFFSET @skip", args),
             Page = page,
             PageSize = PageSize,
         };
     }
 
     public List<StaffMember> All() => db.Query<StaffMember>("SELECT * FROM Staff ORDER BY FullName");
+
+    /// <summary>Staff rows plus the photo of the linked (active) user account, if any.</summary>
+    private const string WithPhoto = """
+        SELECT Staff.*,
+               (SELECT u.Id FROM Users u WHERE u.StaffId = Staff.StaffId AND u.IsActive = 1 AND u.PhotoVersion > 0 LIMIT 1) AS PhotoUserId,
+               COALESCE((SELECT u.PhotoVersion FROM Users u WHERE u.StaffId = Staff.StaffId AND u.IsActive = 1 AND u.PhotoVersion > 0 LIMIT 1), 0) AS PhotoVersion
+        FROM Staff
+        """;
+
+    /// <summary>A directory entry for the contact card — only entries the directory itself lists (active staff).</summary>
+    public StaffMember? GetForCard(long id) => db.Single<StaffMember>(WithPhoto + " WHERE Staff.StaffId = @id AND (ActiveTo IS NULL OR ActiveTo = '' OR ActiveTo >= @today)",
+        new { id, today = fmt.Today.ToString("yyyy-MM-dd") });
 
     public StaffMember? Get(long id) => db.Single<StaffMember>("SELECT * FROM Staff WHERE StaffId = @id", new { id });
 

@@ -91,7 +91,8 @@ public sealed class PhotoService(IntranetOptions o)
             case SKEncodedOrigin.RightBottom: c.Translate(h, w); c.RotateDegrees(90); c.Scale(-1, 1); c.Translate(-w, 0); break;
             case SKEncodedOrigin.LeftBottom: c.Translate(0, w); c.RotateDegrees(-90); break;
         }
-        c.DrawBitmap(src, 0, 0);
+        using var img = SKImage.FromBitmap(src);
+        c.DrawImage(img, 0, 0, new SKSamplingOptions(SKFilterMode.Linear));
         return dst;
     }
 }

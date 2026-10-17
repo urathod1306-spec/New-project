@@ -1,0 +1,26 @@
+@* Contact card dialog, filled in by site.js from /directory/card/{id}. Native <dialog>: Esc closes, the page behind is inert. *@
+<dialog id="contact-card" class="contact-card" aria-labelledby="cc-name">
+    <div class="cc-inner">
+        <button type="button" class="cc-close" data-cc-close aria-label="Close contact card">×</button>
+        <div class="cc-head">
+            <img id="cc-photo" class="avatar-photo xl hidden" alt="" width="120" height="120" />
+            <span id="cc-initials" class="avatar xl"></span>
+            <div>
+                <h2 id="cc-name"></h2>
+                <p id="cc-designation" class="muted"></p>
+            </div>
+        </div>
+        <dl class="cc-fields">
+            <div data-cc-row="vertical"><dt>Vertical</dt><dd><span data-cc="vertical"></span></dd></div>
+            <div data-cc-row="location"><dt>Office / location</dt><dd><span data-cc="location"></span></dd></div>
+            <div data-cc-row="extension"><dt>Extension</dt><dd><a data-cc="extension" data-cc-href="tel:"></a> <button type="button" class="btn sm" data-copy="extension">Copy</button></dd></div>
+            <div data-cc-row="mobile"><dt>Mobile</dt><dd><a data-cc="mobile" data-cc-href="tel:"></a> <button type="button" class="btn sm" data-copy="mobile">Copy</button></dd></div>
+            <div data-cc-row="email"><dt>E-mail</dt><dd><a data-cc="email" data-cc-href="mailto:"></a> <button type="button" class="btn sm" data-copy="email">Copy</button></dd></div>
+        </dl>
+        <p id="cc-status" class="muted small" role="status" aria-live="polite"></p>
+        <div class="actions">
+            <a id="cc-vcard" class="btn primary" href="#" download>Save contact (.vcf)</a>
+            <button type="button" class="btn" data-cc-close>Close</button>
+        </div>
+    </div>
+</dialog>
