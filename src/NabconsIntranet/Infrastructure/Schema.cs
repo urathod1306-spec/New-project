@@ -221,7 +221,7 @@ public static class Schema
               AND NOT EXISTS (SELECT 1 FROM MasterItems WHERE Type = 'Vertical' AND Name = 'BDU' COLLATE NOCASE);
             """),
         // v1.3.0: in-app notifications, My Desk preference (and, in the same release, e-Note).
-        // NOTE: not released until the 1.3.0 package is built; until then this entry may still grow.
+        // Released in 1.3.0: never edit this entry; add a new one.
         (5, "Notifications, My Desk and e-Note (v1.3.0)", """
             ALTER TABLE Users ADD COLUMN OpenDeskAfterSignIn INTEGER NOT NULL DEFAULT 1;
 
@@ -244,6 +244,163 @@ public static class Schema
 
             CREATE INDEX IF NOT EXISTS IX_Leads_Owner ON Leads(OwnerUserId, Status, DueDate);
             CREATE INDEX IF NOT EXISTS IX_Requests_SubmitterState ON Requests(SubmitterUserId, State);
+
+            -- e-Note: short code per vertical for note numbers (NCS/EN/<code>/<FY>/<serial>); empty = GEN
+            ALTER TABLE MasterItems ADD COLUMN Code TEXT;
+
+            CREATE TABLE IF NOT EXISTS ENoteSerials (
+                Code TEXT NOT NULL,
+                FinancialYear TEXT NOT NULL,
+                LastSerial INTEGER NOT NULL,
+                PRIMARY KEY (Code, FinancialYear)
+            );
+
+            CREATE TABLE IF NOT EXISTS ENotes (
+                Id INTEGER PRIMARY KEY,
+                NoteNumber TEXT UNIQUE,
+                NumberCode TEXT,
+                FinancialYear TEXT,
+                Serial INTEGER,
+                Subject TEXT NOT NULL,
+                Category TEXT,
+                InitiatorUserId INTEGER NOT NULL REFERENCES Users(Id),
+                InitiatorName TEXT NOT NULL,
+                InitiatorDesignation TEXT,
+                InitiatorVertical TEXT,
+                CurrentHolderUserId INTEGER REFERENCES Users(Id),
+                CurrentHolderName TEXT,
+                PreviousHolderUserId INTEGER,
+                HeldSince TEXT,
+                State TEXT NOT NULL,
+                Outcome TEXT,
+                DraftBody TEXT,
+                CurrentBodyVersion INTEGER NOT NULL DEFAULT 0,
+                LastSeq INTEGER NOT NULL DEFAULT 0,
+                IsConfidential INTEGER NOT NULL DEFAULT 0,
+                DeclarationAccepted INTEGER NOT NULL DEFAULT 0,
+                CreatedAt TEXT NOT NULL,
+                SubmittedAt TEXT,
+                DecidedAt TEXT,
+                DecidedByUserId INTEGER,
+                DecidedByName TEXT,
+                DecidedByDesignation TEXT,
+                DecisionRemarks TEXT,
+                ClosedAt TEXT,
+                UpdatedAt TEXT NOT NULL,
+                RowVersion INTEGER NOT NULL DEFAULT 1,
+                PdfPath TEXT,
+                PdfSha256 TEXT,
+                PdfState TEXT,
+                RecordSha256 TEXT,
+                LastAgeingAlertOn TEXT,
+                UNIQUE (NumberCode, FinancialYear, Serial)
+            );
+            CREATE INDEX IF NOT EXISTS IX_ENotes_Holder ON ENotes(CurrentHolderUserId, State, HeldSince);
+            CREATE INDEX IF NOT EXISTS IX_ENotes_Initiator ON ENotes(InitiatorUserId, State, UpdatedAt);
+            CREATE INDEX IF NOT EXISTS IX_ENotes_Approved ON ENotes(Outcome, IsConfidential, DecidedAt);
+            CREATE INDEX IF NOT EXISTS IX_ENotes_StateTime ON ENotes(State, UpdatedAt);
+            CREATE INDEX IF NOT EXISTS IX_ENotes_Submitted ON ENotes(SubmittedAt);
+
+            CREATE TABLE IF NOT EXISTS ENoteBodyVersions (
+                Id INTEGER PRIMARY KEY,
+                NoteId INTEGER NOT NULL REFERENCES ENotes(Id),
+                Version INTEGER NOT NULL,
+                BodyText TEXT NOT NULL,
+                Sha256 TEXT NOT NULL,
+                CreatedByUserId INTEGER NOT NULL,
+                CreatedBy TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                UNIQUE (NoteId, Version)
+            );
+            CREATE TRIGGER IF NOT EXISTS ENoteBodyVersions_no_update BEFORE UPDATE ON ENoteBodyVersions
+            BEGIN SELECT RAISE(ABORT, 'Submitted note text is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS ENoteBodyVersions_no_delete BEFORE DELETE ON ENoteBodyVersions
+            BEGIN SELECT RAISE(ABORT, 'Submitted note text is append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS ENoteMovements (
+                Id INTEGER PRIMARY KEY,
+                NoteId INTEGER NOT NULL REFERENCES ENotes(Id),
+                Seq INTEGER NOT NULL,
+                Action TEXT NOT NULL,
+                FromUserId INTEGER,
+                FromName TEXT,
+                FromDesignation TEXT,
+                ToUserId INTEGER,
+                ToName TEXT,
+                ToDesignation TEXT,
+                FromState TEXT,
+                ToState TEXT NOT NULL,
+                Remarks TEXT,
+                Timestamp TEXT NOT NULL,
+                UNIQUE (NoteId, Seq)
+            );
+            CREATE INDEX IF NOT EXISTS IX_ENoteMovements_To ON ENoteMovements(ToUserId);
+            CREATE TRIGGER IF NOT EXISTS ENoteMovements_no_update BEFORE UPDATE ON ENoteMovements
+            BEGIN SELECT RAISE(ABORT, 'Note movements are append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS ENoteMovements_no_delete BEFORE DELETE ON ENoteMovements
+            BEGIN SELECT RAISE(ABORT, 'Note movements are append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS ENoteComments (
+                Id INTEGER PRIMARY KEY,
+                NoteId INTEGER NOT NULL REFERENCES ENotes(Id),
+                Seq INTEGER NOT NULL,
+                AuthorUserId INTEGER NOT NULL,
+                AuthorName TEXT NOT NULL,
+                AuthorDesignation TEXT,
+                Text TEXT NOT NULL,
+                Timestamp TEXT NOT NULL,
+                UNIQUE (NoteId, Seq)
+            );
+            CREATE TRIGGER IF NOT EXISTS ENoteComments_no_update BEFORE UPDATE ON ENoteComments
+            BEGIN SELECT RAISE(ABORT, 'Note-sheet comments are append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS ENoteComments_no_delete BEFORE DELETE ON ENoteComments
+            BEGIN SELECT RAISE(ABORT, 'Note-sheet comments are append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS ENoteAttachments (
+                Id INTEGER PRIMARY KEY,
+                NoteId INTEGER NOT NULL REFERENCES ENotes(Id),
+                StoredPath TEXT NOT NULL,
+                OriginalFileName TEXT NOT NULL,
+                ContentType TEXT NOT NULL,
+                SizeBytes INTEGER NOT NULL,
+                Sha256 TEXT NOT NULL,
+                UploadedByUserId INTEGER NOT NULL,
+                UploadedByName TEXT NOT NULL,
+                UploadedAt TEXT NOT NULL,
+                StageSeq INTEGER NOT NULL DEFAULT 0,
+                Stage TEXT,
+                SupersededById INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS IX_ENoteAttachments_Note ON ENoteAttachments(NoteId);
+            -- Only draft attachments (note never submitted) may be removed; afterwards they are append-only.
+            CREATE TRIGGER IF NOT EXISTS ENoteAttachments_no_delete BEFORE DELETE ON ENoteAttachments
+            WHEN (SELECT SubmittedAt FROM ENotes WHERE Id = old.NoteId) IS NOT NULL
+            BEGIN SELECT RAISE(ABORT, 'Attachments of a submitted note cannot be removed'); END;
+            -- The only change allowed: marking a file "superseded by" a newer one, once.
+            CREATE TRIGGER IF NOT EXISTS ENoteAttachments_no_update BEFORE UPDATE ON ENoteAttachments
+            WHEN NOT (old.SupersededById IS NULL AND new.SupersededById IS NOT NULL AND new.NoteId = old.NoteId
+                      AND new.StoredPath = old.StoredPath AND new.OriginalFileName = old.OriginalFileName AND new.ContentType = old.ContentType
+                      AND new.SizeBytes = old.SizeBytes AND new.Sha256 = old.Sha256 AND new.UploadedByUserId = old.UploadedByUserId
+                      AND new.UploadedByName = old.UploadedByName AND new.UploadedAt = old.UploadedAt AND new.StageSeq = old.StageSeq
+                      AND new.Stage IS old.Stage)
+            BEGIN SELECT RAISE(ABORT, 'Note attachments are append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS ENoteParticipants (
+                NoteId INTEGER NOT NULL,
+                UserId INTEGER NOT NULL,
+                FirstInvolvedAt TEXT NOT NULL,
+                PRIMARY KEY (NoteId, UserId)
+            ) WITHOUT ROWID;
+            CREATE INDEX IF NOT EXISTS IX_ENoteParticipants_User ON ENoteParticipants(UserId, NoteId);
+
+            CREATE VIRTUAL TABLE IF NOT EXISTS ENoteSearch USING fts5(
+                NoteNumber, Subject, Category, Body, content='', contentless_delete=1, tokenize='unicode61');
+
+            WITH m(Name, Ord) AS (VALUES ('General administration',1),('Finance & accounts',2),('Procurement',3),
+                ('HR (non-disciplinary)',4),('Projects & assignments',5),('IT',6),('Others',7))
+            INSERT INTO MasterItems (Type, Name, SortOrder, IsActive)
+            SELECT 'ENoteCategory', m.Name, m.Ord, 1 FROM m
+            WHERE NOT EXISTS (SELECT 1 FROM MasterItems x WHERE x.Type = 'ENoteCategory' AND x.Name = m.Name COLLATE NOCASE);
             """),
     };
 
