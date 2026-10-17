@@ -10,8 +10,9 @@ public static class Roles
     public const string Approver = "Approver";
     public const string Administrator = "Administrator";
     public const string Auditor = "Auditor";
+    public const string LeadViewer = "LeadViewer";
 
-    public static readonly string[] All = { Staff, Publisher, Approver, Administrator, Auditor };
+    public static readonly string[] All = { Staff, Publisher, Approver, Administrator, Auditor, LeadViewer };
 
     public static readonly Dictionary<string, string> Descriptions = new()
     {
@@ -20,6 +21,7 @@ public static class Roles
         [Approver] = "Review and approve/reject assigned requests",
         [Administrator] = "Manage users, roles, master data, staff directory and backups",
         [Auditor] = "View reports and audit history (read-only)",
+        [LeadViewer] = "See and manage all business leads, pipeline and dashboard (assign to COO and MD)",
     };
 
     public static List<string> Parse(string? roles)

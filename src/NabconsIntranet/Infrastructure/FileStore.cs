@@ -29,24 +29,30 @@ public sealed class FileStore
         [".png"] = "image/png",
         [".jpg"] = "image/jpeg",
         [".jpeg"] = "image/jpeg",
+        [".zip"] = "application/zip",
     };
+
+    /// <summary>Business-lead attachments (fixed list, independent of the circular upload settings).</summary>
+    public static readonly string[] LeadExtensions = { ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".jpg", ".jpeg", ".png", ".zip" };
 
     public FileStore(IntranetOptions o) => _o = o;
 
     public string AllowedList => string.Join(", ", _o.AllowedUploadExtensions);
     public string AcceptAttribute => string.Join(",", _o.AllowedUploadExtensions);
 
-    public async Task<StoredFile> SaveAsync(IFormFile file, string area)
+    public Task<StoredFile> SaveAsync(IFormFile file, string area) => SaveAsync(file, area, _o.AllowedUploadExtensions, _o.MaxUploadBytes);
+
+    public async Task<StoredFile> SaveAsync(IFormFile file, string area, IReadOnlyCollection<string> allowed, long maxBytes)
     {
         var original = Path.GetFileName(file.FileName ?? "").Trim();
         if (string.IsNullOrEmpty(original)) throw new UploadRejectedException("No file name supplied.");
         if (original.Length > 200) original = original[^200..];
         var ext = Path.GetExtension(original).ToLowerInvariant();
-        if (!_o.AllowedUploadExtensions.Contains(ext) || !ContentTypes.ContainsKey(ext))
-            throw new UploadRejectedException($"File type '{ext}' is not allowed. Allowed: {AllowedList}.");
+        if (!allowed.Contains(ext) || !ContentTypes.ContainsKey(ext))
+            throw new UploadRejectedException($"File type '{ext}' is not allowed. Allowed: {string.Join(", ", allowed)}.");
         if (file.Length == 0) throw new UploadRejectedException("The file is empty.");
-        if (file.Length > _o.MaxUploadBytes)
-            throw new UploadRejectedException($"The file is larger than the {_o.MaxUploadMB} MB limit.");
+        if (file.Length > maxBytes)
+            throw new UploadRejectedException($"The file is larger than the {maxBytes / 1024 / 1024} MB limit.");
 
         var header = new byte[8192];
         int read;
@@ -105,7 +111,7 @@ public sealed class FileStore
         return ext switch
         {
             ".pdf" => Starts(h, 0x25, 0x50, 0x44, 0x46, 0x2D),
-            ".docx" or ".xlsx" or ".pptx" => Starts(h, 0x50, 0x4B, 0x03, 0x04),
+            ".docx" or ".xlsx" or ".pptx" or ".zip" => Starts(h, 0x50, 0x4B, 0x03, 0x04),
             ".doc" or ".xls" or ".ppt" => Starts(h, 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1),
             ".png" => Starts(h, 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A),
             ".jpg" or ".jpeg" => Starts(h, 0xFF, 0xD8, 0xFF),

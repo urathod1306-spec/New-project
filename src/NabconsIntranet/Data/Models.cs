@@ -13,6 +13,8 @@ public sealed class AppUser
     public long FailedLogins { get; set; }
     public string? LockoutUntil { get; set; }
     public bool IsActive { get; set; } = true;
+    public long? StaffId { get; set; }
+    public long PhotoVersion { get; set; }
     public string SecurityStamp { get; set; } = "";
     public string? LastLoginAt { get; set; }
     public string CreatedAt { get; set; } = "";
@@ -38,6 +40,10 @@ public static class MasterTypes
     public const string Location = "Location";
     public const string CircularCategory = "CircularCategory";
     public const string RequestCategory = "RequestCategory";
+    public const string ClientType = "ClientType";
+    public const string LeadSector = "LeadSector";
+    public const string LeadSource = "LeadSource";
+    public const string LeadLossReason = "LeadLossReason";
 
     public static readonly Dictionary<string, string> Labels = new()
     {
@@ -45,6 +51,10 @@ public static class MasterTypes
         [Location] = "Offices / Locations",
         [CircularCategory] = "Circular categories",
         [RequestCategory] = "Request categories",
+        [ClientType] = "Lead client types",
+        [LeadSector] = "Lead sectors / domains",
+        [LeadSource] = "Lead sources",
+        [LeadLossReason] = "Lead lost / dropped reasons",
     };
 }
 
@@ -65,6 +75,10 @@ public sealed class StaffMember
     public string? ActiveTo { get; set; }
     public string? UpdatedBy { get; set; }
     public string? UpdatedAt { get; set; }
+
+    // joined: the linked user account's photo (if any)
+    public long? PhotoUserId { get; set; }
+    public long PhotoVersion { get; set; }
 
     public bool IsActive(DateOnly today) =>
         string.IsNullOrEmpty(ActiveTo) || string.CompareOrdinal(ActiveTo, today.ToString("yyyy-MM-dd")) >= 0;

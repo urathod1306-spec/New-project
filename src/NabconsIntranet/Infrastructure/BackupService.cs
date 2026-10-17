@@ -49,6 +49,11 @@ public sealed class BackupService
                 using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
                 {
                     zip.CreateEntryFromFile(dbCopy, "data/intranet.db", CompressionLevel.Optimal);
+                    if (Directory.Exists(_o.UploadsPath))
+                    {
+                        foreach (var f in Directory.EnumerateFiles(_o.UploadsPath, "*", SearchOption.AllDirectories))
+                            zip.CreateEntryFromFile(f, "data/uploads/" + Path.GetRelativePath(_o.UploadsPath, f).Replace('\\', '/'), CompressionLevel.Fastest);
+                    }
                     if (Directory.Exists(_o.DocumentsPath))
                     {
                         foreach (var f in Directory.EnumerateFiles(_o.DocumentsPath, "*", SearchOption.AllDirectories))

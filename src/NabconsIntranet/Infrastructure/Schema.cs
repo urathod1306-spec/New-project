@@ -88,6 +88,138 @@ public static class Schema
               AND NOT EXISTS (SELECT 1 FROM MasterItems m WHERE m.Type = 'Location'
                               AND (m.Name = c.Name COLLATE NOCASE OR m.Name LIKE c.Name || ' (%'));
             """),
+        // v1.2.0: profile links/photos, vertical-change approvals, profile audit trail and the business-lead pipeline.
+        // Additive only. Master-list values are inserted only when missing.
+        (4, "Profiles, photos and business leads (v1.2.0)", """
+            ALTER TABLE Users ADD COLUMN StaffId INTEGER;
+            ALTER TABLE Users ADD COLUMN PhotoVersion INTEGER NOT NULL DEFAULT 0;
+            CREATE INDEX IF NOT EXISTS IX_Users_StaffId ON Users(StaffId);
+
+            CREATE TABLE IF NOT EXISTS ProfileChangeRequests (
+                Id INTEGER PRIMARY KEY,
+                UserId INTEGER NOT NULL,
+                StaffId INTEGER,
+                Field TEXT NOT NULL,
+                OldValue TEXT,
+                NewValue TEXT,
+                Status TEXT NOT NULL DEFAULT 'Pending',
+                RequestedAt TEXT NOT NULL,
+                DecidedBy TEXT,
+                DecidedAt TEXT,
+                DecisionRemarks TEXT
+            );
+            CREATE INDEX IF NOT EXISTS IX_ProfileChangeRequests_Status ON ProfileChangeRequests(Status, UserId);
+
+            CREATE TABLE IF NOT EXISTS ProfileAudit (
+                Id INTEGER PRIMARY KEY,
+                UserId INTEGER NOT NULL,
+                StaffId INTEGER,
+                Field TEXT NOT NULL,
+                OldValue TEXT,
+                NewValue TEXT,
+                ChangedBy TEXT NOT NULL,
+                ChangedAt TEXT NOT NULL
+            );
+            CREATE TRIGGER IF NOT EXISTS ProfileAudit_no_update BEFORE UPDATE ON ProfileAudit
+            BEGIN SELECT RAISE(ABORT, 'Profile audit is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS ProfileAudit_no_delete BEFORE DELETE ON ProfileAudit
+            BEGIN SELECT RAISE(ABORT, 'Profile audit is append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS LeadSerials (FinancialYear TEXT PRIMARY KEY, LastSerial INTEGER NOT NULL);
+
+            CREATE TABLE IF NOT EXISTS Leads (
+                Id INTEGER PRIMARY KEY,
+                Reference TEXT NOT NULL UNIQUE,
+                FinancialYear TEXT NOT NULL,
+                Serial INTEGER NOT NULL,
+                Title TEXT NOT NULL,
+                ClientName TEXT NOT NULL,
+                ClientType TEXT,
+                Sector TEXT,
+                StateLocation TEXT,
+                Source TEXT,
+                EstimatedValueLakh REAL,
+                DueDate TEXT,
+                ContactName TEXT,
+                ContactDesignation TEXT,
+                ContactPhone TEXT,
+                ContactEmail TEXT,
+                Description TEXT NOT NULL,
+                TenderNumber TEXT,
+                Status TEXT NOT NULL,
+                OwnerUserId INTEGER,
+                SubmitterUserId INTEGER NOT NULL,
+                SubmitterName TEXT NOT NULL,
+                SubmitterVertical TEXT,
+                LossReason TEXT,
+                LossReasonText TEXT,
+                AwardedValueLakh REAL,
+                AwardDate TEXT,
+                RowVersion INTEGER NOT NULL DEFAULT 1,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL,
+                UNIQUE (FinancialYear, Serial)
+            );
+            CREATE INDEX IF NOT EXISTS IX_Leads_Submitter ON Leads(SubmitterUserId);
+            CREATE INDEX IF NOT EXISTS IX_Leads_Status ON Leads(Status);
+
+            CREATE TABLE IF NOT EXISTS LeadEvents (
+                Id INTEGER PRIMARY KEY,
+                LeadId INTEGER NOT NULL REFERENCES Leads(Id),
+                EventType TEXT NOT NULL,
+                FromStatus TEXT,
+                ToStatus TEXT,
+                Remarks TEXT,
+                Detail TEXT,
+                ActorUserId INTEGER NOT NULL,
+                ActorName TEXT NOT NULL,
+                Timestamp TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_LeadEvents_Lead ON LeadEvents(LeadId);
+            CREATE TRIGGER IF NOT EXISTS LeadEvents_no_update BEFORE UPDATE ON LeadEvents
+            BEGIN SELECT RAISE(ABORT, 'Lead timeline is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS LeadEvents_no_delete BEFORE DELETE ON LeadEvents
+            BEGIN SELECT RAISE(ABORT, 'Lead timeline is append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS LeadAttachments (
+                Id INTEGER PRIMARY KEY,
+                LeadId INTEGER NOT NULL REFERENCES Leads(Id),
+                Side TEXT NOT NULL,
+                StoredPath TEXT NOT NULL,
+                OriginalFileName TEXT NOT NULL,
+                ContentType TEXT NOT NULL,
+                SizeBytes INTEGER NOT NULL,
+                Sha256 TEXT NOT NULL,
+                UploadedByUserId INTEGER NOT NULL,
+                UploadedBy TEXT NOT NULL,
+                UploadedAt TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_LeadAttachments_Lead ON LeadAttachments(LeadId);
+            CREATE TRIGGER IF NOT EXISTS LeadAttachments_no_delete BEFORE DELETE ON LeadAttachments
+            BEGIN SELECT RAISE(ABORT, 'Lead attachments cannot be deleted'); END;
+
+            WITH m(Type, Name, Ord) AS (VALUES
+                ('ClientType','Central Govt',1),('ClientType','State Govt',2),('ClientType','PSU',3),('ClientType','Bank/FI',4),
+                ('ClientType','Cooperative',5),('ClientType','NGO/Trust',6),('ClientType','Private',7),
+                ('ClientType','International/Multilateral',8),('ClientType','Other',9),
+                ('LeadSector','Agriculture & Allied',1),('LeadSector','Rural Infrastructure',2),('LeadSector','Climate Change & Environment',3),
+                ('LeadSector','Watershed & Natural Resources',4),('LeadSector','Financial Inclusion',5),('LeadSector','Microfinance & Livelihoods',6),
+                ('LeadSector','Cooperatives & FPOs',7),('LeadSector','Skill Development',8),('LeadSector','IT & Digital',9),
+                ('LeadSector','Impact Evaluation & Studies',10),('LeadSector','Capacity Building & Training',11),('LeadSector','Other',12),
+                ('LeadSource','Tender portal',1),('LeadSource','Client referral',2),('LeadSource','NABARD RO/HO',3),
+                ('LeadSource','Direct approach',4),('LeadSource','Repeat client',5),('LeadSource','Other',6),
+                ('LeadLossReason','Price',1),('LeadLossReason','Technical score',2),('LeadLossReason','Eligibility',3),
+                ('LeadLossReason','Client cancelled',4),('LeadLossReason','Not aligned',5),('LeadLossReason','Capacity',6),('LeadLossReason','Other',7)
+            )
+            INSERT INTO MasterItems (Type, Name, SortOrder, IsActive)
+            SELECT m.Type, m.Name, m.Ord, 1 FROM m
+            WHERE NOT EXISTS (SELECT 1 FROM MasterItems x WHERE x.Type = m.Type AND x.Name = m.Name COLLATE NOCASE);
+
+            INSERT INTO MasterItems (Type, Name, SortOrder, IsActive)
+            SELECT 'Vertical', 'BDU', 100, 1
+            WHERE EXISTS (SELECT 1 FROM MasterItems WHERE Type = 'Vertical')
+              AND NOT EXISTS (SELECT 1 FROM MasterItems WHERE Type = 'Vertical' AND Name = 'BDU' COLLATE NOCASE);
+            """),
     };
 
     public const string Sql = """
