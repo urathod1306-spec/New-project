@@ -1,16 +1,19 @@
-@inject RequestWorkflow Workflow
-@inject RegistrationRepository Registrations
-@inject ProfileRepository Profiles
 @inject UserRepository Users
 @inject LeadAccess LeadAccess
-@inject LeadRepository Leads
+@inject DeskService Desk
+@inject NotificationOptions NotifyOptions
 @{
     var signedIn = User.Identity?.IsAuthenticated == true && User.UserId() > 0;
-    var inbox = signedIn && User.IsApprover() ? Workflow.InboxCount(User.UserId()) : 0;
-    var pendingRegs = signedIn && User.IsAdmin() ? Registrations.PendingCount() + Profiles.PendingCount() : 0;
+    // All badge numbers come from one cached query (see DeskService); the page script refreshes them with a small poll.
+    var counts = signedIn ? Desk.Counts(User) : null;
+    var inbox = counts?.Inbox ?? 0;
+    var pendingRegs = counts?.AdminPending ?? 0;
     var me = signedIn ? Users.Get(User.UserId()) : null;
     var leadManager = signedIn && LeadAccess.CanManage(User);
-    var newLeads = leadManager ? Leads.CountSubmitted() : 0;
+    var newLeads = counts?.NewLeads ?? 0;
+    var unread = counts?.Unread ?? 0;
+    var deskTotal = counts?.Total ?? 0;
+    string Hide(long n) => n > 0 ? "" : "hidden";
     var path = Context.Request.Path.Value ?? "/";
     string Active(string prefix) => (prefix == "/" ? path == "/" : path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ? "active" : "";
     var title = ViewData["Title"] as string;
@@ -24,7 +27,7 @@
     <link rel="icon" href="~/img/favicon.png" type="image/png" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body>
+<body data-poll="@(signedIn ? NotifyOptions.EffectivePollSeconds : 0)" data-poll-token="@counts?.Token">
     <a class="skip" href="#main">Skip to content</a>
     <header class="topbar">
         <div class="wrap topbar-inner">
@@ -41,6 +44,23 @@
                     <input type="search" name="q" placeholder="Search staff, circulars…" aria-label="Search the intranet" maxlength="100" value="@(path.StartsWith("/Search") ? Context.Request.Query["q"].ToString() : "")" />
                     <button type="submit" aria-label="Search">Search</button>
                 </form>
+                <details class="bell" id="bell">
+                    <summary id="bell-summary" aria-label="Notifications, @unread unread" title="Notifications">
+                        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3a1.5 1.5 0 0 0-3 0v1.16A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
+                        <span class="bell-count @Hide(unread)" data-badge="unread">@DeskCounts.Badge(unread)</span>
+                    </summary>
+                    <div class="menu bell-menu">
+                        <div class="bell-head">
+                            <strong>Notifications</strong>
+                            <form method="post" asp-page="/Notifications/Index" asp-page-handler="MarkAllRead">
+                                <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                <button type="submit" class="linkbtn small">Mark all read</button>
+                            </form>
+                        </div>
+                        <div id="bell-list" class="bell-list" aria-live="polite"><p class="muted small pad">Your latest notifications are on the <a href="/Notifications">Notifications</a> page.</p></div>
+                        <a class="bell-all" href="/Notifications">View all notifications</a>
+                    </div>
+                </details>
                 <details class="usermenu">
                     <summary>@if (me?.PhotoVersion > 0) { <img class="avatar-photo sm" src="/photo/@me.Id?thumb=true&v=@me.PhotoVersion" alt="" width="32" height="32" /> } else { <span class="avatar sm">@Fmt.Initials(User.DisplayName())</span> }<span class="uname">@User.DisplayName()</span></summary>
                     <div class="menu">
@@ -73,13 +93,14 @@
                     <label for="navtoggle" class="navtoggle-label">☰ Menu</label>
                     <ul>
                         <li><a class="@Active("/")" href="/">Home</a></li>
+                        <li><a class="@Active("/Desk")" href="/Desk">My Desk <span class="count @Hide(deskTotal)" data-badge="desk" title="Items waiting for your action">@DeskCounts.Badge(deskTotal)</span></a></li>
                         <li><a class="@Active("/Directory")" href="/Directory">Staff Directory</a></li>
                         <li><a class="@Active("/Circulars")" href="/Circulars">Circulars</a></li>
                         <li><a class="@(path.StartsWith("/Requests") && !path.StartsWith("/Requests/Inbox") ? "active" : "")" href="/Requests">My Requests</a></li>
-                        <li><a class="@Active("/Leads")" href="@(leadManager ? "/Leads" : "/Leads/Mine")">Business Leads @if (newLeads > 0) { <span class="count" title="Leads still in Submitted">@newLeads</span> }</a></li>
+                        <li><a class="@Active("/Leads")" href="@(leadManager ? "/Leads" : "/Leads/Mine")">Business Leads @if (leadManager) { <span class="count @Hide(newLeads)" data-badge="leads" title="Leads still in Submitted">@DeskCounts.Badge(newLeads)</span> }</a></li>
                         @if (User.IsApprover())
                         {
-                            <li><a class="@Active("/Requests/Inbox")" href="/Requests/Inbox">Approval Inbox @if (inbox > 0) { <span class="count">@inbox</span> }</a></li>
+                            <li><a class="@Active("/Requests/Inbox")" href="/Requests/Inbox">Approval Inbox <span class="count @Hide(inbox)" data-badge="inbox">@DeskCounts.Badge(inbox)</span></a></li>
                         }
                         @if (User.IsPublisher())
                         {
@@ -91,7 +112,7 @@
                         }
                         @if (User.IsAdmin())
                         {
-                            <li><a class="@Active("/Admin")" href="/Admin">Administration @if (pendingRegs > 0) { <span class="count">@pendingRegs</span> }</a></li>
+                            <li><a class="@Active("/Admin")" href="/Admin">Administration <span class="count @Hide(pendingRegs)" data-badge="admin">@DeskCounts.Badge(pendingRegs)</span></a></li>
                         }
                     </ul>
                 </div>

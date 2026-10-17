@@ -198,8 +198,8 @@ public sealed class BackupService
     }
 }
 
-/// <summary>Runs the daily backup at the configured local time.</summary>
-public sealed class BackupScheduler(BackupService backups, AuditService audit, IntranetOptions o, ILogger<BackupScheduler> log) : BackgroundService
+/// <summary>Runs the daily backup at the configured local time, followed by the daily housekeeping.</summary>
+public sealed class BackupScheduler(BackupService backups, AuditService audit, HousekeepingService housekeeping, IntranetOptions o, ILogger<BackupScheduler> log) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -226,6 +226,14 @@ public sealed class BackupScheduler(BackupService backups, AuditService audit, I
                 }
                 // One attempt per day; a failure is visible on the Backup page and in the audit log.
                 try { File.WriteAllText(marker, now.ToString("yyyy-MM-dd")); } catch { /* ignore */ }
+                try
+                {
+                    housekeeping.Run();
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Daily housekeeping failed");
+                }
             }
             await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken).ContinueWith(_ => { });
         }

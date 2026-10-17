@@ -5,11 +5,12 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$HERE/../.."; OUT="$HERE/out"; APP="$OUT/app"
 export BASE_URL="${BASE_URL:-http://127.0.0.1:8080}"
+export Notifications__PollSeconds=30   # the shortest allowed poll, so badge tests finish quickly
 mkdir -p "$OUT"
 python3 -I "$HERE/make-test-images.py" "$OUT/img"
 dotnet publish "$ROOT/src/NabconsIntranet" -c Release -o "$OUT/publish" >/dev/null
 fail=0
-for suite in core registration registration-others profile-photos-card leads; do
+for suite in core registration registration-others profile-photos-card leads desk-notifications; do
   pkill -x NabconsIntranet 2>/dev/null || true; sleep 1
   rm -rf "$APP"; cp -r "$OUT/publish" "$APP"
   ( cd "$APP" && nohup ./NabconsIntranet > console.log 2>&1 & )

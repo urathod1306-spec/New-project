@@ -1,0 +1,53 @@
+@page
+@model NabconsIntranet.Pages.Notifications.IndexModel
+@{
+    ViewData["Title"] = "Notifications";
+    var show = Model.UnreadOnly ? "unread" : null;
+}
+<div class="page-head">
+    <div>
+        <h1>Notifications</h1>
+        <p>Updates about your requests, leads, e-Notes and approvals. Opening one marks it as read.</p>
+    </div>
+    <div class="actions">
+        <form method="post" asp-page-handler="MarkAllRead"><input type="hidden" name="returnUrl" value="@IndexModel.QueryUrl(show, Model.Module)" /><button class="btn" type="submit">Mark all read</button></form>
+    </div>
+</div>
+<nav class="tabs" aria-label="Show">
+    <a class="@(Model.UnreadOnly ? "active" : "")" href="@IndexModel.QueryUrl("unread", Model.Module)">Unread</a>
+    <a class="@(Model.UnreadOnly ? "" : "active")" href="@IndexModel.QueryUrl(null, Model.Module)">All</a>
+</nav>
+<form class="filters" method="get">
+    @if (Model.UnreadOnly) { <input type="hidden" name="show" value="unread" /> }
+    <div class="field">
+        <label for="module">Module</label>
+        <select id="module" name="module" data-autosubmit>
+            <option value="">All modules</option>
+            @foreach (var (k, label) in NotificationModules.Labels)
+            {
+                <option value="@k" selected="@(Model.Module == k)">@label</option>
+            }
+        </select>
+    </div>
+    <noscript><button class="btn" type="submit">Filter</button></noscript>
+</form>
+<div class="card">
+    @if (Model.Result.Items.Count == 0)
+    {
+        <p class="empty">@(Model.UnreadOnly ? "You are all caught up — no unread notifications." : "No notifications.")</p>
+    }
+    else
+    {
+        <ul class="nlist page">
+            @foreach (var n in Model.Result.Items)
+            {
+                <li><a class="nitem @(n.IsRead ? "" : "unread")" href="/Notifications/Open/@n.Id">
+                    <span class="ntitle">@n.Title</span>
+                    @if (!string.IsNullOrEmpty(n.Message)) { <span class="nmsg">@n.Message</span> }
+                    <span class="nmeta">@(NotificationModules.Labels.GetValueOrDefault(n.Module, n.Module)) · @(n.ActorName != null ? n.ActorName + " · " : "")<span title="@F.DateTime(n.CreatedAt)">@F.Relative(n.CreatedAt)</span>@(n.IsRead ? "" : " · unread")</span>
+                </a></li>
+            }
+        </ul>
+        <partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, Model.PageUrl)" />
+    }
+</div>

@@ -98,6 +98,15 @@ To switch self-registration off, set `"SelfRegistrationEnabled": false` in `apps
   - The Administrator role alone does **not** open the pipeline.
 - **Master lists:** lead client types, sectors, sources and lost/dropped reasons are edited under *Master lists*, like the other lists.
 
+## My Desk and notifications (v1.3)
+
+- **My Desk** (`/Desk`) shows each user what is waiting for them. Administrators also see pending self-registrations and vertical/profile changes, and BDU members and LeadViewers see new leads and their assigned leads that are due. Sections appear only for people with the matching role or items.
+- **Notifications** are in-app only: no e-mail, SMS or other outside service.
+  - They are created with the action that causes them, and nobody is notified about their own action.
+  - Administrators are notified about registrations and vertical changes. With Windows sign-in, only administrators whose intranet user record holds the Administrator role are notified; people who get it only from `WindowsAdministrators` or an AD group mapping are not.
+- **Housekeeping** runs every day straight after the scheduled backup. It removes old notifications (settings `Notifications:RetainReadDays` and `RetainUnreadDays`) and writes a `System.Housekeeping` entry to the audit log. If `DailyBackupTime` is switched off, housekeeping does not run either.
+- Notifications are a convenience. The **audit log remains the record** of who did what.
+
 ## Audit log
 
 - Records sign-ins (success, failure, lockout), sign-outs, uploads and rejected uploads, publishing, withdrawal, supersession, downloads, every request action, user and role changes, password resets, master-data changes, staff imports and edits, backups and restores.

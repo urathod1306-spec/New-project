@@ -1,0 +1,123 @@
+@page
+@model NabconsIntranet.Pages.Desk.IndexModel
+@{
+    ViewData["Title"] = "My Desk";
+    var v = Model.View;
+    var c = v.Counts;
+    string Days(string? iso) { var d = F.DaysSince(iso); return d < 1 ? "today" : d == 1 ? "1 day" : $"{d:0} days"; }
+}
+<div class="page-head">
+    <div>
+        <h1>My Desk</h1>
+        <p>Everything waiting for you across the intranet, oldest first. @(c.Total == 0 ? "Nothing is waiting for your action." : $"{c.Total} item(s) need your action.")</p>
+    </div>
+</div>
+
+<div class="desk-grid">
+    @if (v.ShowInbox)
+    {
+        <section class="card desk-card" aria-labelledby="d-inbox">
+            <div class="card-head"><h2 id="d-inbox">Requests awaiting my action <span class="badge info">@c.Inbox</span></h2><a href="/Requests/Inbox">Approval inbox ›</a></div>
+            @if (v.Inbox.Count == 0) { <p class="empty">Nothing is waiting for your review or sanction.</p> }
+            else
+            {
+                <ul class="list">
+                    @foreach (var r in v.Inbox)
+                    {
+                        <li><a href="/Requests/Details/@r.Id"><strong>@r.Subject</strong></a> <span class="badge @r.State.Replace(" ", "")">@r.State</span>
+                            <div class="meta">@r.RequestNumber · from @r.SubmitterName · waiting @Days(r.UpdatedAt)</div></li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+    @if (v.Returned.Count > 0)
+    {
+        <section class="card desk-card" aria-labelledby="d-returned">
+            <div class="card-head"><h2 id="d-returned">My requests returned to me <span class="badge warning">@c.RequestsReturned</span></h2><a href="/Requests">My requests ›</a></div>
+            <ul class="list">
+                @foreach (var r in v.Returned)
+                {
+                    <li><a href="/Requests/Details/@r.Id"><strong>@r.Subject</strong></a><div class="meta">@r.RequestNumber · returned @Days(r.UpdatedAt) ago</div></li>
+                }
+            </ul>
+        </section>
+    }
+    @if (v.ShowAdmin)
+    {
+        <section class="card desk-card" aria-labelledby="d-regs">
+            <div class="card-head"><h2 id="d-regs">Self-registrations to approve <span class="badge info">@c.Registrations</span></h2><a href="/Admin/Registrations">All ›</a></div>
+            @if (v.Registrations.Count == 0) { <p class="empty">No registrations waiting.</p> }
+            else
+            {
+                <ul class="list">
+                    @foreach (var r in v.Registrations)
+                    {
+                        <li><a href="/Admin/RegistrationReview/@r.Id"><strong>@r.Name</strong></a><div class="meta">@r.Detail · waiting @Days(r.At)</div></li>
+                    }
+                </ul>
+            }
+        </section>
+        <section class="card desk-card" aria-labelledby="d-vert">
+            <div class="card-head"><h2 id="d-vert">Vertical / profile changes to approve <span class="badge info">@c.VerticalChanges</span></h2><a href="/Admin/ProfileChanges">All ›</a></div>
+            @if (v.VerticalChanges.Count == 0) { <p class="empty">No changes waiting.</p> }
+            else
+            {
+                <ul class="list">
+                    @foreach (var r in v.VerticalChanges)
+                    {
+                        <li><a href="/Admin/ProfileChanges"><strong>@r.Name</strong></a><div class="meta">@r.Detail · waiting @Days(r.At)</div></li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+    @if (v.ShowLeads)
+    {
+        <section class="card desk-card" aria-labelledby="d-leads">
+            <div class="card-head"><h2 id="d-leads">Leads in “Submitted” <span class="badge info">@c.NewLeads</span></h2><a href="/Leads?Status=Submitted">Pipeline ›</a></div>
+            @if (v.NewLeads.Count == 0) { <p class="empty">No new leads waiting for review.</p> }
+            else
+            {
+                <ul class="list">
+                    @foreach (var l in v.NewLeads)
+                    {
+                        <li><a href="/Leads/Details/@l.Id"><strong>@l.Title</strong></a><div class="meta">@l.Reference · @l.ClientName · from @l.SubmitterName · @Days(l.CreatedAt)</div></li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+    @if (v.ShowLeads || v.MyLeadsDue.Count > 0)
+    {
+        <section class="card desk-card" aria-labelledby="d-due">
+            <div class="card-head"><h2 id="d-due">My assigned leads due within 7 days <span class="badge @(c.MyLeadsDue > 0 ? "warning" : "neutral")">@c.MyLeadsDue</span></h2></div>
+            @if (v.MyLeadsDue.Count == 0) { <p class="empty">None of your leads is due in the next 7 days.</p> }
+            else
+            {
+                <ul class="list">
+                    @foreach (var l in v.MyLeadsDue)
+                    {
+                        var overdue = string.CompareOrdinal(l.DueDate, F.Today.ToString("yyyy-MM-dd")) < 0;
+                        <li><a href="/Leads/Details/@l.Id"><strong>@l.Title</strong></a> @if (overdue) { <span class="badge danger">Overdue</span> }
+                            <div class="meta">@l.Reference · @l.Status · due @F.Date(l.DueDate)</div></li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+    <section class="card desk-card" aria-labelledby="d-notes">
+        <div class="card-head"><h2 id="d-notes">Recent notifications <span class="badge @(c.Unread > 0 ? "info" : "neutral")">@c.Unread unread</span></h2><a href="/Notifications">All ›</a></div>
+        @if (v.Recent.Count == 0) { <p class="empty">No notifications yet.</p> }
+        else
+        {
+            <ul class="nlist">
+                @foreach (var n in v.Recent)
+                {
+                    <li><a class="nitem @(n.IsRead ? "" : "unread")" href="/Notifications/Open/@n.Id"><span class="ntitle">@n.Title</span>
+                        <span class="nmeta">@(n.ActorName != null ? n.ActorName + " · " : "")@F.Relative(n.CreatedAt)</span></a></li>
+                }
+            </ul>
+        }
+    </section>
+</div>

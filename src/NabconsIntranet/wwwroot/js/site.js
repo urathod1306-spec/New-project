@@ -20,9 +20,9 @@
         }
     });
 
-    // Close the user menu when clicking elsewhere.
+    // Close the user menu and the notifications bell when clicking elsewhere.
     document.addEventListener('click', function (e) {
-        document.querySelectorAll('details.usermenu[open]').forEach(function (d) {
+        document.querySelectorAll('details.usermenu[open], details.bell[open]').forEach(function (d) {
             if (!d.contains(e.target)) d.removeAttribute('open');
         });
     });
@@ -195,3 +195,72 @@ document.querySelectorAll('select[data-status-select]').forEach(function (sel) {
 });
 
 document.querySelectorAll('select[data-autosubmit]').forEach(function (s) { s.addEventListener('change', function () { s.form.submit(); }); });
+
+// ---------- notifications: badge refresh by a small poll (no WebSockets / SSE), and the bell drop-down ----------
+(function () {
+    var body = document.body, seconds = parseInt(body.getAttribute('data-poll') || '0', 10);
+    if (!seconds || !window.fetch) return;
+    var interval = Math.max(30, seconds) * 1000, etag = body.getAttribute('data-poll-token') ? '"' + body.getAttribute('data-poll-token') + '"' : '';
+    var inflight = false, errors = 0, timer = null, stopped = false;
+
+    function setBadge(name, n) {
+        document.querySelectorAll('[data-badge="' + name + '"]').forEach(function (el) {
+            el.textContent = n > 99 ? '99+' : String(n);
+            el.classList.toggle('hidden', !n);
+        });
+    }
+    function apply(d) {
+        ['unread', 'desk', 'inbox', 'admin', 'leads', 'enotes'].forEach(function (k) { if (typeof d[k] === 'number') setBadge(k, d[k]); });
+        var s = document.getElementById('bell-summary');
+        if (s) s.setAttribute('aria-label', 'Notifications, ' + d.unread + ' unread');
+        document.dispatchEvent(new CustomEvent('nab:summary', { detail: d }));
+    }
+    function schedule(ms) { clearTimeout(timer); timer = setTimeout(tick, ms); }
+    function tick() {
+        timer = null;
+        if (stopped || inflight) return;
+        if (document.hidden) return;              // paused; resumes when the tab is shown again
+        inflight = true;
+        var headers = { 'Accept': 'application/json' };
+        if (etag) headers['If-None-Match'] = etag;
+        fetch('/api/notifications/summary', { credentials: 'same-origin', cache: 'no-store', headers: headers })
+            .then(function (r) {
+                if (r.status === 401 || r.status === 403) { stopped = true; return null; }   // signed out / session ended
+                if (r.status === 304) return null;
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                etag = r.headers.get('ETag') || '';
+                return r.json();
+            })
+            .then(function (d) { inflight = false; errors = 0; if (d) apply(d); if (!stopped) schedule(interval); })
+            .catch(function () { inflight = false; errors++; if (!stopped) schedule(errors >= 3 ? 300000 : interval); });
+    }
+    document.addEventListener('visibilitychange', function () { if (!document.hidden && !timer && !inflight && !stopped) tick(); });
+    schedule(interval);
+})();
+
+(function () {
+    var bell = document.getElementById('bell');
+    if (!bell) return;
+    var summary = document.getElementById('bell-summary'), list = document.getElementById('bell-list');
+    function items() { return Array.prototype.slice.call(bell.querySelectorAll('.bell-menu a[href], .bell-menu button')); }
+    function load() {
+        fetch('/Notifications?handler=Menu', { credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.text() : null; })
+            .then(function (html) { if (html !== null) list.innerHTML = html; })     // server-rendered, HTML-encoded by Razor
+            .catch(function () { /* keep the link to the Notifications page */ });
+    }
+    bell.addEventListener('toggle', function () { if (bell.open) load(); });
+    bell.addEventListener('keydown', function (e) {
+        if (!bell.open) return;
+        if (e.key === 'Escape') { e.preventDefault(); bell.open = false; summary.focus(); return; }
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+        var all = items(); if (!all.length) return;
+        e.preventDefault();
+        var i = all.indexOf(document.activeElement);
+        if (e.key === 'Home') i = 0;
+        else if (e.key === 'End') i = all.length - 1;
+        else if (e.key === 'ArrowDown') i = i < 0 ? 0 : Math.min(all.length - 1, i + 1);
+        else i = i <= 0 ? -1 : i - 1;
+        (i < 0 ? summary : all[i]).focus();
+    });
+})();

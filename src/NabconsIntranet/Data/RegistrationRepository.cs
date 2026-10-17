@@ -35,7 +35,7 @@ public sealed class RegistrationRequest
 /// Staff self-registration: a person registers with their 10-digit mobile number (which becomes their
 /// sign-in name); an administrator approves or rejects. Existing directory entries are matched by mobile.
 /// </summary>
-public sealed class RegistrationRepository(Db db, StaffRepository staff, UserRepository users, Fmt fmt)
+public sealed class RegistrationRepository(Db db, StaffRepository staff, UserRepository users, Fmt fmt, INotificationService notifications, ChangeTracker tracker)
 {
     private static readonly Regex TenDigits = new(@"^\d{10}$", RegexOptions.Compiled);
 
@@ -85,10 +85,18 @@ public sealed class RegistrationRepository(Db db, StaffRepository staff, UserRep
     {
         r.Status = RegistrationStatus.Pending;
         r.SubmittedAt = Db.Now();
-        return db.Insert("""
+        using var c = db.Open();
+        using var tx = c.BeginTransaction();
+        r.Id = Db.Insert(c, tx, """
             INSERT INTO RegistrationRequests (Mobile, StaffId, EmployeeCode, FullName, Designation, Vertical, Location, OfficialEmail, PasswordHash, Status, SubmittedAt, IpAddress)
             VALUES (@Mobile, @StaffId, @EmployeeCode, @FullName, @Designation, @Vertical, @Location, @OfficialEmail, @PasswordHash, @Status, @SubmittedAt, @IpAddress)
             """, r);
+        notifications.NotifyAdministrators(c, tx, new NotificationActor(0, r.FullName), new NotificationMessage("Admin.RegistrationPending",
+            $"Self-registration awaiting approval — {r.FullName}", string.Join(" · ", new[] { r.Designation, r.Vertical }.Where(x => !string.IsNullOrWhiteSpace(x))),
+            $"/Admin/RegistrationReview/{r.Id}", "Registration", r.Id));
+        tx.Commit();
+        tracker.Touch(ChangeTracker.AdminQueue);
+        return r.Id;
     }
 
     /// <summary>Creates the sign-in account (user name = mobile) and optionally updates or adds the directory entry.</summary>
@@ -135,6 +143,7 @@ public sealed class RegistrationRepository(Db db, StaffRepository staff, UserRep
             WHERE Id = @Id AND Status = 'Pending'
             """, new { actor, now = Db.Now(), userId, r.Id });
         if (n == 0) throw new WorkflowException("This registration was already decided by someone else.");
+        tracker.Touch(ChangeTracker.AdminQueue);
         return userId;
     }
 
@@ -145,5 +154,6 @@ public sealed class RegistrationRepository(Db db, StaffRepository staff, UserRep
             WHERE Id = @id AND Status = 'Pending'
             """, new { id, reason, actor, now = Db.Now() });
         if (n == 0) throw new WorkflowException("This registration was already decided by someone else.");
+        tracker.Touch(ChangeTracker.AdminQueue);
     }
 }

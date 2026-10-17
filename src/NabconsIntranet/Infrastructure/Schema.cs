@@ -220,6 +220,31 @@ public static class Schema
             WHERE EXISTS (SELECT 1 FROM MasterItems WHERE Type = 'Vertical')
               AND NOT EXISTS (SELECT 1 FROM MasterItems WHERE Type = 'Vertical' AND Name = 'BDU' COLLATE NOCASE);
             """),
+        // v1.3.0: in-app notifications, My Desk preference (and, in the same release, e-Note).
+        // NOTE: not released until the 1.3.0 package is built; until then this entry may still grow.
+        (5, "Notifications, My Desk and e-Note (v1.3.0)", """
+            ALTER TABLE Users ADD COLUMN OpenDeskAfterSignIn INTEGER NOT NULL DEFAULT 1;
+
+            CREATE TABLE IF NOT EXISTS Notifications (
+                Id INTEGER PRIMARY KEY,
+                UserId INTEGER NOT NULL REFERENCES Users(Id),
+                Type TEXT NOT NULL,
+                Title TEXT NOT NULL,
+                Message TEXT,
+                Link TEXT,
+                EntityType TEXT,
+                EntityId INTEGER,
+                ActorName TEXT,
+                CreatedAt TEXT NOT NULL,
+                ReadAt TEXT
+            );
+            CREATE INDEX IF NOT EXISTS IX_Notifications_UserRead ON Notifications(UserId, ReadAt, CreatedAt DESC);
+            CREATE INDEX IF NOT EXISTS IX_Notifications_UserTime ON Notifications(UserId, CreatedAt DESC);
+            CREATE INDEX IF NOT EXISTS IX_Notifications_Created ON Notifications(CreatedAt);
+
+            CREATE INDEX IF NOT EXISTS IX_Leads_Owner ON Leads(OwnerUserId, Status, DueDate);
+            CREATE INDEX IF NOT EXISTS IX_Requests_SubmitterState ON Requests(SubmitterUserId, State);
+            """),
     };
 
     public const string Sql = """
