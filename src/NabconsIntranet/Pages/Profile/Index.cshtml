@@ -1,0 +1,173 @@
+@page
+@model NabconsIntranet.Pages.Profile.IndexModel
+@{
+    ViewData["Title"] = "My Profile";
+    var me = Model.Me;
+    var s = Model.Staff;
+    string? Err(string k) => Model.Errors.TryGetValue(k, out var e) ? e : null;
+}
+<div class="page-head">
+    <div class="profile-head">
+        @if (Model.HasPhoto)
+        {
+            <img class="avatar-photo lg" src="/photo/@me.Id?v=@me.PhotoVersion" alt="Photo of @me.DisplayName" width="96" height="96" />
+        }
+        else
+        {
+            <span class="avatar lg">@Fmt.Initials(me.DisplayName)</span>
+        }
+        <div>
+            <h1>@me.DisplayName</h1>
+            <p>@(s?.Designation)@(s?.Designation != null && me.Vertical != null ? " · " : "")@me.Vertical</p>
+        </div>
+    </div>
+    @if (s != null && !Model.Editing)
+    {
+        <div class="actions"><a class="btn primary" href="/Profile?edit=true">Edit contact details</a></div>
+    }
+</div>
+
+@if (s == null)
+{
+    <div class="alert warning">Your account is not yet linked to an entry in the staff directory, so your contact details cannot be edited here. Please ask the intranet administrator to link it (Administration → Users &amp; roles → your account).</div>
+}
+
+<div class="grid two">
+    <div class="stack">
+        <div class="card">
+            <h2>Contact details</h2>
+            @if (Model.Editing && s != null)
+            {
+                <form method="post" asp-page-handler="Contact" novalidate>
+                    @if (Model.Errors.Count > 0) { <div class="alert danger" role="alert">Please correct the highlighted fields.</div> }
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="Mobile">Mobile (10 digits)</label>
+                            <input id="Mobile" name="Mobile" value="@Model.Mobile" inputmode="numeric" maxlength="16" data-digits-only autocomplete="tel-national" />
+                            @if (Err("Mobile") is string e1) { <span class="text-danger">@e1</span> }
+                            @if (RegistrationRepository.IsValidMobile(me.Username)) { <span class="hint">You sign in with your mobile number; changing it changes your sign-in name too.</span> }
+                        </div>
+                        <div class="field">
+                            <label for="Extension">Office extension / landline</label>
+                            <input id="Extension" name="Extension" value="@Model.Extension" maxlength="20" />
+                            @if (Err("Extension") is string e2) { <span class="text-danger">@e2</span> }
+                        </div>
+                        <div class="field">
+                            <label for="OfficialEmail">Official e-mail</label>
+                            <input id="OfficialEmail" name="OfficialEmail" type="email" value="@Model.OfficialEmail" maxlength="150" />
+                            @if (!string.IsNullOrWhiteSpace(Site.OfficialEmailDomain)) { <span class="hint">Must end with @("@" + Site.OfficialEmailDomain.TrimStart('@'))</span> }
+                            @if (Err("OfficialEmail") is string e3) { <span class="text-danger">@e3</span> }
+                        </div>
+                        <div class="field">
+                            <label for="Location">Office / location</label>
+                            <select id="Location" name="Location" data-other-toggle="profile-location-other">
+                                <option value="">— select —</option>
+                                @foreach (var l in Model.Locations) { <option value="@l" selected="@(l == Model.Location)">@l</option> }
+                                <option value="@NabconsIntranet.Pages.Profile.IndexModel.OtherLocation" selected="@(Model.Location == NabconsIntranet.Pages.Profile.IndexModel.OtherLocation)">Others (type below)</option>
+                            </select>
+                            @if (Err("Location") is string e4) { <span class="text-danger">@e4</span> }
+                        </div>
+                        <div class="field full @(Model.Location == NabconsIntranet.Pages.Profile.IndexModel.OtherLocation ? "" : "hidden")" id="profile-location-other">
+                            <label for="LocationOther">Please specify the location</label>
+                            <input id="LocationOther" name="LocationOther" value="@Model.LocationOther" maxlength="100" />
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn primary" type="submit">Save</button>
+                        <a class="btn" href="/Profile">Cancel</a>
+                    </div>
+                </form>
+            }
+            else
+            {
+                <dl class="meta-grid">
+                    <dt>Mobile</dt><dd>@(s?.Mobile ?? "—")</dd>
+                    <dt>Extension / landline</dt><dd>@(s?.Extension ?? "—")</dd>
+                    <dt>Official e-mail</dt><dd>@(s?.OfficialEmail ?? "—")</dd>
+                    <dt>Office / location</dt><dd>@(s?.Location ?? "—")</dd>
+                </dl>
+                @if (s != null && !s.ShowMobile && !string.IsNullOrEmpty(s.Mobile)) { <p class="muted small mt">Your mobile number is not shown in the staff directory (the administrator controls this).</p> }
+            }
+        </div>
+
+        <div class="card">
+            <h2>Vertical</h2>
+            @if (Model.PendingVertical is { } pv)
+            {
+                <div class="alert info">Vertical change pending approval: <strong>@(pv.OldValue ?? "none")</strong> → <strong>@(pv.NewValue ?? "none")</strong> (requested @F.DateTime(pv.RequestedAt)).</div>
+            }
+            <p>Current vertical: <strong>@(me.Vertical ?? "none")</strong></p>
+            @if (Model.PendingVertical == null)
+            {
+                <form method="post" asp-page-handler="Vertical" class="filters">
+                    <div class="field wide">
+                        <label for="Vertical">Change to</label>
+                        <select id="Vertical" name="Vertical">
+                            <option value="">— Not applicable / leave blank —</option>
+                            @foreach (var v in Model.Verticals) { <option value="@v" selected="@(v == me.Vertical)">@v</option> }
+                        </select>
+                    </div>
+                    <div class="actions"><button class="btn" type="submit">@(Site.VerticalChangeRequiresApproval ? "Request change" : "Change vertical")</button></div>
+                </form>
+                @if (Site.VerticalChangeRequiresApproval) { <p class="muted small">Vertical changes are approved by the administrator because the vertical controls access to some areas (e.g. Business Leads).</p> }
+            }
+        </div>
+
+        <div class="card">
+            <h2>Official details</h2>
+            <p class="muted small">Maintained by the administrator. Contact them if anything here is wrong.</p>
+            <dl class="meta-grid">
+                <dt>Name</dt><dd>@me.DisplayName</dd>
+                <dt>Employee code</dt><dd>@(s?.EmployeeCode ?? "—")</dd>
+                <dt>Designation</dt><dd>@(s?.Designation ?? "—")</dd>
+                <dt>Sign-in name</dt><dd class="mono">@me.Username</dd>
+                <dt>Roles</dt><dd><div class="chips">@foreach (var r in me.RoleList) { <span class="chip">@r</span> }</div></dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="stack">
+        <div class="card">
+            <h2>Photo</h2>
+            <div class="photo-edit">
+                <div class="photo-frame">
+                    @if (Model.HasPhoto)
+                    {
+                        <img id="photo-current" class="avatar-photo xl" src="/photo/@me.Id?v=@me.PhotoVersion" alt="Your current photo" width="160" height="160" />
+                    }
+                    else
+                    {
+                        <span id="photo-current" class="avatar xl">@Fmt.Initials(me.DisplayName)</span>
+                    }
+                    <img id="photo-preview" class="avatar-photo xl hidden" alt="Preview of the new photo" width="160" height="160" />
+                </div>
+                <form method="post" enctype="multipart/form-data" asp-page-handler="Photo">
+                    <div class="field">
+                        <label for="photo">@(Model.HasPhoto ? "Replace photo" : "Upload a photo")</label>
+                        <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" data-max-mb="@Site.MaxPhotoMB" data-preview="photo-preview" required />
+                        <span class="hint">JPEG, PNG or WebP, up to @Site.MaxPhotoMB MB. It is cropped to a square and all hidden data (location, camera) is removed.</span>
+                    </div>
+                    <button class="btn primary" type="submit">Save photo</button>
+                </form>
+                @if (Model.HasPhoto)
+                {
+                    <form method="post" asp-page-handler="RemovePhoto" class="mt">
+                        <button class="btn sm" type="submit" data-confirm="Remove your photo?">Remove photo</button>
+                    </form>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Recent changes</h2>
+            @if (Model.History.Count == 0) { <p class="empty">No changes yet.</p> }
+            <ul class="list">
+                @foreach (var h in Model.History)
+                {
+                    <li><strong>@NabconsIntranet.Pages.Profile.IndexModel.Label(h.Field)</strong>: @(string.IsNullOrEmpty(h.OldValue) ? "—" : h.OldValue) → @(string.IsNullOrEmpty(h.NewValue) ? "—" : h.NewValue)
+                        <div class="meta">@F.DateTime(h.ChangedAt) by @h.ChangedBy</div></li>
+                }
+            </ul>
+        </div>
+    </div>
+</div>

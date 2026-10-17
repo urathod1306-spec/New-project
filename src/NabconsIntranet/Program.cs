@@ -169,6 +169,7 @@ app.Use(async (ctx, next) =>
 });
 
 app.MapRazorPages();
+app.MapIntranetEndpoints();
 
 if (!Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService())
 {

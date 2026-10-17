@@ -65,6 +65,10 @@ public sealed class UserRepository(Db db)
     public void RecordSuccessfulLogin(long id) => db.Exec(
         "UPDATE Users SET FailedLogins = 0, LockoutUntil = NULL, LastLoginAt = @now WHERE Id = @id", new { id, now = Db.Now() });
 
+    /// <summary>PhotoVersion is the cache-busting number in photo URLs; 0 means no photo.</summary>
+    public void BumpPhotoVersion(long id, bool removed = false) => db.Exec("UPDATE Users SET PhotoVersion = @v WHERE Id = @id",
+        new { id, v = removed ? 0 : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
+
     public long CountActiveAdmins() =>
         db.Scalar<long>("SELECT COUNT(*) FROM Users WHERE IsActive = 1 AND (',' || Roles || ',') LIKE '%,Administrator,%'");
 }

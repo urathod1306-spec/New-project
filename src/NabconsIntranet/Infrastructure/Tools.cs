@@ -68,6 +68,25 @@ public static class Tools
                 Console.WriteLine($"User 'admin' is active, has the Administrator role and its password is now the InitialAdminPassword from appsettings.json.\nIt must be changed at next sign-in.");
                 return 0;
             }
+            case "--migrate":
+            {
+                // Explicit upgrade step for the live machine: full backup ZIP first, then apply database changes.
+                Console.WriteLine("Taking a full backup before upgrading the database ...");
+                var exists = File.Exists(o.DatabasePath);
+                if (exists)
+                {
+                    var b = new BackupService(o, NullLogger<BackupService>.Instance).Create(audit, Environment.UserDomainName + "\\" + Environment.UserName + " (pre-migration)");
+                    Console.WriteLine($"Backup: {b.FullPath}");
+                }
+                var steps = db.Initialize();
+                foreach (var s in steps)
+                {
+                    Console.WriteLine(s);
+                    audit.Log("System.Upgraded", "Database", Schema.Version, s, Environment.UserDomainName + "\\" + Environment.UserName + " (command line)");
+                }
+                Console.WriteLine(steps.Count == 0 ? $"Database already up to date (schema version {Schema.Version}). Nothing changed." : $"Database is now at schema version {Schema.Version}.");
+                return 0;
+            }
             case "--verify-audit":
             {
                 db.Initialize();
@@ -83,6 +102,7 @@ public static class Tools
                       NabconsIntranet.exe --restore <file.zip>    restore a backup ZIP
                       NabconsIntranet.exe --reset-admin-password  re-enable 'admin' with the InitialAdminPassword
                       NabconsIntranet.exe --verify-audit          check the audit log hash chain
+                      NabconsIntranet.exe --migrate               back up, then bring the database up to date (safe to repeat)
                     """);
                 return 1;
         }

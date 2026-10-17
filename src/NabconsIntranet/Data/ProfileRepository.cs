@@ -39,7 +39,7 @@ public sealed record ProfileContact(string? Mobile, string? Extension, string? O
 /// My Profile: links accounts to directory rows, applies a user's own contact changes (field by field, audited),
 /// and handles vertical-change requests that an administrator approves.
 /// </summary>
-public sealed class ProfileRepository(Db db, UserRepository users, StaffRepository staff, AuditService audit, IntranetOptions o, Fmt fmt)
+public sealed class ProfileRepository(Db db, UserRepository users, StaffRepository staff, AuditService audit, IntranetOptions o)
 {
     public const string VerticalField = "Vertical";
 

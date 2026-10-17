@@ -1,0 +1,53 @@
+@page
+@model NabconsIntranet.Pages.Admin.ProfileChangesModel
+@{
+    ViewData["Title"] = "Vertical change requests";
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Admin">← Administration</a></p>
+        <h1>Vertical change requests</h1>
+        <p>Requested by staff on My Profile. The vertical controls access to some areas (e.g. Business Leads for the BDU vertical), so changes wait for approval.</p>
+    </div>
+</div>
+<div class="tabs">
+    @foreach (var s in new[] { "Pending", "Approved", "Rejected", "All" })
+    {
+        <a class="@(Model.Status == s ? "active" : "")" href="/Admin/ProfileChanges?status=@s">@s</a>
+    }
+</div>
+<div class="card table-wrap">
+    @if (Model.Items.Count == 0) { <p class="empty">No requests here.</p> }
+    else
+    {
+        <table class="table">
+            <thead><tr><th>Requested</th><th>Person</th><th>From</th><th>To</th><th>Status</th><th>Decision</th></tr></thead>
+            <tbody>
+                @foreach (var r in Model.Items)
+                {
+                    <tr>
+                        <td class="nowrap">@F.DateTime(r.RequestedAt)</td>
+                        <td><strong>@r.DisplayName</strong><div class="muted small mono">@r.Username</div></td>
+                        <td>@(r.OldValue ?? "—")</td>
+                        <td><strong>@(r.NewValue ?? "— (none)")</strong></td>
+                        <td><span class="badge @(r.Status == "Approved" ? "success" : r.Status == "Rejected" ? "danger" : "Submitted")">@r.Status</span></td>
+                        <td>
+                            @if (r.Status == "Pending")
+                            {
+                                <form method="post" asp-page-handler="Decide" asp-route-id="@r.Id" class="decide-form">
+                                    <input type="text" name="remarks" maxlength="300" placeholder="Remarks (required to reject)" aria-label="Remarks" />
+                                    <button class="btn sm success" type="submit" name="approve" value="true" data-confirm="Approve this vertical change?">Approve</button>
+                                    <button class="btn sm danger" type="submit" name="approve" value="false">Reject</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="small">@r.DecidedBy, @F.Date(r.DecidedAt)@(string.IsNullOrEmpty(r.DecisionRemarks) ? "" : ": " + r.DecisionRemarks)</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

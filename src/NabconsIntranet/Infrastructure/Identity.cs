@@ -38,7 +38,8 @@ public static class IdentityBuilder
         }
         // An approved vertical change (it controls Business Leads access), a renamed sign-in or display name
         // takes effect on the next page without signing the user out.
-        if (ctx.Principal!.Vertical() != u.Vertical || ctx.Principal.UserName() != u.Username || ctx.Principal.DisplayName() != u.DisplayName)
+        var p = ctx.Principal!;
+        if (p.Vertical() != u.Vertical || p.UserName() != u.Username || p.DisplayName() != u.DisplayName)
         {
             ctx.ReplacePrincipal(new ClaimsPrincipal(BuildIdentity(u, CookieAuthenticationDefaults.AuthenticationScheme)));
             ctx.ShouldRenew = true;
