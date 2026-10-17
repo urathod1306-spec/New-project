@@ -1,0 +1,134 @@
+@page "{id:long}"
+@model NabconsIntranet.Pages.Leads.DetailsModel
+@{
+    var l = Model.Item;
+    ViewData["Title"] = l.Reference;
+    var today = F.Today.ToString("yyyy-MM-dd");
+    var dueSoon = !LeadStatus.IsClosed(l.Status) && !string.IsNullOrEmpty(l.DueDate) && string.CompareOrdinal(l.DueDate, F.Today.AddDays(7).ToString("yyyy-MM-dd")) <= 0;
+    var overdue = dueSoon && string.CompareOrdinal(l.DueDate, today) < 0;
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="@(Model.CanManage ? "/Leads" : "/Leads/Mine")">← Business Leads</a></p>
+        <h1>@l.Title</h1>
+        <p><strong class="mono">@l.Reference</strong> · <span class="badge @LeadStatus.Css(l.Status)">@l.Status</span> · @l.ClientName</p>
+    </div>
+</div>
+@if (dueSoon)
+{
+    <div class="alert @(overdue ? "danger" : "warning")">@(overdue ? "Overdue:" : "Due soon:") bid / proposal due on <strong>@F.Date(l.DueDate)</strong>.</div>
+}
+<div class="grid two">
+    <div class="stack">
+        <div class="card">
+            <h2>Details</h2>
+            <dl class="meta-grid">
+                <dt>Client / organisation</dt><dd>@l.ClientName</dd>
+                <dt>Client type</dt><dd>@(l.ClientType ?? "—")</dd>
+                <dt>Sector / domain</dt><dd>@(l.Sector ?? "—")</dd>
+                <dt>State / location</dt><dd>@(l.StateLocation ?? "—")</dd>
+                <dt>Source</dt><dd>@(l.Source ?? "—")</dd>
+                <dt>Tender / reference no.</dt><dd>@(l.TenderNumber ?? "—")</dd>
+                <dt>Estimated fee</dt><dd>@(l.EstimatedValueLakh.HasValue ? $"₹ {l.EstimatedValueLakh:0.##} lakh" : "—")</dd>
+                <dt>Bid / proposal due</dt><dd>@(string.IsNullOrEmpty(l.DueDate) ? "—" : F.Date(l.DueDate))</dd>
+                <dt>Submitted by</dt><dd>@l.SubmitterName@(string.IsNullOrEmpty(l.SubmitterVertical) ? "" : $" ({l.SubmitterVertical})"), @F.DateTime(l.CreatedAt)</dd>
+                <dt>Lead owner (BDU)</dt><dd>@(l.OwnerName ?? "not assigned")</dd>
+                @if (l.Status == LeadStatus.Won) { <dt>Awarded</dt><dd>₹ @(l.AwardedValueLakh?.ToString("0.##")) lakh on @F.Date(l.AwardDate)</dd> }
+                @if (LeadStatus.NeedsReason(l.Status)) { <dt>Reason</dt><dd>@l.LossReason@(string.IsNullOrEmpty(l.LossReasonText) ? "" : " — " + l.LossReasonText)</dd> }
+            </dl>
+            <h3 class="mt">Description / scope</h3>
+            <p class="pre">@l.Description</p>
+            @if (!string.IsNullOrEmpty(l.ContactName) || !string.IsNullOrEmpty(l.ContactPhone) || !string.IsNullOrEmpty(l.ContactEmail))
+            {
+                <h3 class="mt">Client contact</h3>
+                <p>@l.ContactName@(string.IsNullOrEmpty(l.ContactDesignation) ? "" : ", " + l.ContactDesignation)
+                    @if (!string.IsNullOrEmpty(l.ContactPhone)) { <br /><a href="tel:@l.ContactPhone">@l.ContactPhone</a> }
+                    @if (!string.IsNullOrEmpty(l.ContactEmail)) { <br /><a href="mailto:@l.ContactEmail">@l.ContactEmail</a> }</p>
+            }
+        </div>
+        <div class="card">
+            <h2>Attachments</h2>
+            @if (Model.Files.Count == 0) { <p class="empty">No files.</p> }
+            <ul class="list">
+                @foreach (var a in Model.Files)
+                {
+                    <li><a href="/Leads/Attachment/@a.Id">@a.OriginalFileName</a> <span class="badge @(a.Side == "BDU" ? "info" : "neutral")">@(a.Side == "BDU" ? "BDU" : "Submitter")</span> <span class="muted small">@Fmt.Size(a.SizeBytes)</span>
+                        <div class="meta">@a.UploadedBy, @F.DateTime(a.UploadedAt)</div></li>
+                }
+            </ul>
+        </div>
+        <div class="card">
+            <h2>Timeline</h2>
+            <p class="muted small">Permanent record — entries cannot be edited or deleted.</p>
+            <ol class="timeline">
+                @foreach (var e in Model.Timeline)
+                {
+                    <li>
+                        <strong>@NabconsIntranet.Pages.Leads.DetailsModel.EventLabel(e)</strong> — @e.ActorName
+                        <div class="when">@F.DateTime(e.Timestamp)</div>
+                        @if (!string.IsNullOrEmpty(e.Detail)) { <div class="small">@e.Detail</div> }
+                        @if (!string.IsNullOrEmpty(e.Remarks)) { <div class="remarks">@e.Remarks</div> }
+                    </li>
+                }
+            </ol>
+        </div>
+    </div>
+
+    <div class="stack">
+        @if (Model.CanManage)
+        {
+            <form method="post" asp-page-handler="Status" asp-route-id="@l.Id" class="card">
+                <h2>Change status</h2>
+                <input type="hidden" name="rowVersion" value="@l.RowVersion" />
+                <div class="field">
+                    <label for="newStatus">New status</label>
+                    <select id="newStatus" name="newStatus" data-status-select required>
+                        @foreach (var s in LeadStatus.All.Where(s => s != l.Status)) { <option value="@s">@s</option> }
+                    </select>
+                </div>
+                <div class="field hidden" data-show-for="Lost|Dropped / Not Pursued">
+                    <label for="lossReason">Reason</label>
+                    <select id="lossReason" name="lossReason"><option value="">— select —</option>@foreach (var r in Model.LossReasons) { <option value="@r">@r</option> }</select>
+                    <input name="lossReasonText" maxlength="500" placeholder="Details (required for Other)" class="mt" aria-label="Reason details" />
+                </div>
+                <div class="form-grid hidden" data-show-for="Won">
+                    <div class="field"><label for="awardedValueLakh">Awarded value (₹ lakh)</label><input id="awardedValueLakh" name="awardedValueLakh" type="number" step="0.01" min="0" /></div>
+                    <div class="field"><label for="awardDate">Award date</label><input id="awardDate" name="awardDate" type="date" /></div>
+                </div>
+                <div class="field">
+                    <label for="remarks">Remarks (required)</label>
+                    <textarea id="remarks" name="remarks" maxlength="2000" required></textarea>
+                </div>
+                <button class="btn primary block" type="submit">Update status</button>
+            </form>
+            <form method="post" asp-page-handler="Owner" asp-route-id="@l.Id" class="card">
+                <h2>Lead owner</h2>
+                <input type="hidden" name="rowVersion" value="@l.RowVersion" />
+                <div class="field">
+                    <label for="ownerUserId">BDU member responsible</label>
+                    <select id="ownerUserId" name="ownerUserId">
+                        <option value="">— not assigned —</option>
+                        @foreach (var m in Model.BduMembers) { <option value="@m.Id" selected="@(m.Id == l.OwnerUserId)">@m.DisplayName</option> }
+                    </select>
+                </div>
+                <button class="btn block" type="submit">Save owner</button>
+            </form>
+        }
+        @if (Model.CanManage || Model.CanFollowUp)
+        {
+            <form method="post" enctype="multipart/form-data" asp-page-handler="Note" asp-route-id="@l.Id" class="card">
+                <h2>@(Model.CanManage ? "Add remark or BDU file" : "Add a follow-up note or file")</h2>
+                <div class="field"><label for="note">@(Model.CanManage ? "Remark" : "Note")</label><textarea id="note" name="note" maxlength="4000"></textarea></div>
+                <div class="field">
+                    <input type="file" name="uploads" multiple accept="@Model.Accept" data-max-mb="@Site.MaxLeadFileMB" aria-label="Attach files" />
+                    <span class="hint">@(Model.CanManage ? "e.g. the submitted proposal. " : "")Up to @Site.MaxLeadFileMB MB per file.</span>
+                </div>
+                <button class="btn block" type="submit">Add</button>
+            </form>
+        }
+        else if (!Model.CanManage)
+        {
+            <div class="card"><h2>Status</h2><p class="muted">This lead is with the BDU. You can add notes while it is “Submitted” or “Under Review”.</p></div>
+        }
+    </div>
+</div>

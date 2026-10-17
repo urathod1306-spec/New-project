@@ -148,3 +148,50 @@ function nabCopy(text, done) {
         row.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(row); } });
     });
 })();
+
+// ---------- business lead form: soft duplicate check before submitting ----------
+(function () {
+    var form = document.getElementById('lead-form');
+    if (!form) return;
+    var confirm = document.getElementById('ConfirmDuplicate'), box = document.getElementById('dup-live'), btn = document.getElementById('lead-submit');
+    var checked = confirm.value === 'true';
+    form.addEventListener('submit', function (e) {
+        if (checked || !form.checkValidity()) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        var q = '&client=' + encodeURIComponent(form.querySelector('[name="Input.ClientName"]').value) +
+                '&title=' + encodeURIComponent(form.querySelector('[name="Input.Title"]').value) +
+                '&tender=' + encodeURIComponent(form.querySelector('[name="Input.TenderNumber"]').value);
+        fetch(form.getAttribute('data-dup-check') + q, { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : []; })
+            .catch(function () { return []; })
+            .then(function (list) {
+                checked = true;
+                if (!list.length) { form.submit(); return; }
+                confirm.value = 'true';
+                box.textContent = '';
+                var h = document.createElement('strong'); h.textContent = 'A similar lead may already exist: ';
+                box.appendChild(h);
+                box.appendChild(document.createTextNode(list.map(function (d) { return d.reference + ' (' + d.status + ', ' + d.submitted + ')'; }).join('; ') +
+                    '. If yours is a different opportunity, click “Submit anyway”.'));
+                box.classList.remove('hidden');
+                btn.textContent = 'Submit anyway';
+                box.scrollIntoView({ block: 'center' });
+            });
+    }, true);
+})();
+
+// ---------- lead status form: show reason / award fields for the chosen status ----------
+document.querySelectorAll('select[data-status-select]').forEach(function (sel) {
+    var form = sel.form;
+    function sync() {
+        form.querySelectorAll('[data-show-for]').forEach(function (box) {
+            var show = box.getAttribute('data-show-for').split('|').indexOf(sel.value) >= 0;
+            box.classList.toggle('hidden', !show);
+            box.querySelectorAll('select, input').forEach(function (i) { if (i.name !== 'lossReasonText') i.required = show; });
+        });
+    }
+    sel.addEventListener('change', sync); sync();
+});
+
+document.querySelectorAll('select[data-autosubmit]').forEach(function (s) { s.addEventListener('change', function () { s.form.submit(); }); });

@@ -1,0 +1,14 @@
+@inject LeadAccess Access
+@{
+    var path = Context.Request.Path.Value ?? "";
+    string A(string p) => string.Equals(path, p, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+}
+<div class="tabs">
+    @if (Access.CanManage(User))
+    {
+        <a class="@A("/Leads")" href="/Leads">Pipeline</a>
+        <a class="@A("/Leads/Dashboard")" href="/Leads/Dashboard">Dashboard</a>
+    }
+    <a class="@A("/Leads/Mine")" href="/Leads/Mine">My leads</a>
+    <a class="@A("/Leads/New")" href="/Leads/New">+ Submit a lead</a>
+</div>
