@@ -387,7 +387,7 @@ public class ENoteUploadTests() : ENoteTestBase(("ENote__MaxFileMB", "1"), ("ENo
     }
 }
 
-public class ENotePdfTests() : ENoteTestBase
+public class ENotePdfTests(Xunit.Abstractions.ITestOutputHelper output) : ENoteTestBase
 {
     [Fact]
     public async Task Pdf_only_in_final_states_cached_and_footer_hash_matches_the_record()
@@ -445,6 +445,7 @@ public class ENotePdfTests() : ENoteTestBase
         var ms = sw.ElapsedMilliseconds;
         var text = System.Text.Encoding.Latin1.GetString(await System.IO.File.ReadAllBytesAsync(path));
         var pages = System.Text.RegularExpressions.Regex.Matches(text, @"/Type\s*/Page[^s]").Count;
+        output.WriteLine($"{pages}-page PDF generated in {ms} ms");
         Assert.True(pages >= 25, $"expected about 30 pages, got {pages}");
         Assert.True(ms < 3000, $"{pages}-page PDF took {ms} ms (budget 3 s)");
     }
@@ -466,6 +467,15 @@ public class ENoteMigrationTests() : ENoteTestBase
         using var zip = ZipFile.OpenRead(backup.FullPath);
         Assert.Contains(zip.Entries, e => e.FullName.StartsWith("documents/enotes/", StringComparison.Ordinal) && e.FullName.EndsWith(".dat", StringComparison.Ordinal));
         Assert.True(App.Get<AuditService>().Verify().ok);
+    }
+
+    [Fact]
+    public void Restarting_never_sets_vertical_codes_on_an_existing_list()
+    {
+        var masters = App.Get<MasterRepository>();
+        foreach (var v in masters.List(MasterTypes.Vertical, false)) masters.SetCode(v.Id, null);
+        App.Get<Seeder>().Run();                                                     // runs at every start
+        Assert.All(masters.List(MasterTypes.Vertical, false), v => Assert.Null(v.Code));
     }
 
     [Fact]

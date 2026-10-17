@@ -53,24 +53,25 @@ public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, Maste
 
     private void SeedMasters()
     {
-        void Ensure(string type, params string[] names)
+        bool Ensure(string type, params string[] names)
         {
-            if (masters.List(type, activeOnly: false).Count > 0) return;
+            if (masters.List(type, activeOnly: false).Count > 0) return false;
             for (int i = 0; i < names.Length; i++) masters.Add(type, names[i], i);
             audit.Log("Master.Seeded", "MasterItems", type, string.Join("; ", names));
+            return true;
         }
-        Ensure(MasterTypes.Vertical, "Agri & Allied", "Climate Change & Sustainability", "Rural Infrastructure", "Financial Inclusion",
+        var newVerticals = Ensure(MasterTypes.Vertical, "Agri & Allied", "Climate Change & Sustainability", "Rural Infrastructure", "Financial Inclusion",
             "Microfinance & Livelihoods", "Watershed & Natural Resources", "IT & Digital", "Finance & Accounts", "HR & Administration", "BDU");
-        // e-Note number codes for the standard verticals, on a brand-new list only (an administrator can change them)
+        // e-Note number codes for the standard verticals: only when the list was created just now (never on an existing database)
         var codes = new Dictionary<string, string>
         {
             ["Agri & Allied"] = "AGRI", ["Climate Change & Sustainability"] = "CCS", ["Rural Infrastructure"] = "RID", ["Financial Inclusion"] = "FI",
             ["Microfinance & Livelihoods"] = "MFL", ["Watershed & Natural Resources"] = "WNR", ["IT & Digital"] = "IT", ["Finance & Accounts"] = "FA",
             ["HR & Administration"] = "HR", ["BDU"] = "BDU",
         };
-        var verticals = masters.List(MasterTypes.Vertical, activeOnly: false);
-        if (verticals.All(v => string.IsNullOrEmpty(v.Code)) && verticals.Count == codes.Count && verticals.All(v => codes.ContainsKey(v.Name)))
-            foreach (var v in verticals) masters.SetCode(v.Id, codes[v.Name]);
+        if (newVerticals)
+            foreach (var v in masters.List(MasterTypes.Vertical, activeOnly: false).Where(v => codes.ContainsKey(v.Name)))
+                masters.SetCode(v.Id, codes[v.Name]);
         var offices = new[] { "Mumbai (Head Office)", "New Delhi", "Lucknow", "Bhopal", "Pune", "Hyderabad", "Bengaluru",
             "Kolkata", "Guwahati", "Chennai", "Jaipur" };
         Ensure(MasterTypes.Location, offices.Concat(StateAndUtCapitals.Where(c =>
