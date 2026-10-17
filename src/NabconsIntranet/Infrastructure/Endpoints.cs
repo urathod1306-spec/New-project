@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text;
 using NabconsIntranet.Data;
 
@@ -39,6 +40,56 @@ public static class Endpoints
             ctx.Response.Headers.Remove("Pragma");
             return Results.File(path, "image/jpeg");
         }).RequireAuthorization();
+
+        // ---- e-Note: attachment download, all attachments as one streamed ZIP, and the "Mark to" type-ahead ----
+        app.MapGet("/ENotes/Attachment/{id:long}", (long id, HttpContext ctx, ENoteRepository notes, ENoteOptions eo, FileStore files, AuditService audit) =>
+        {
+            if (!eo.Enabled) return Results.NotFound();
+            var a = notes.Attachment(id);
+            var n = a != null ? notes.Get(a.NoteId) : null;
+            if (a == null || n == null || !notes.CanView(n, ctx.User)) return Results.NotFound();
+            var s = files.OpenRead(a.StoredPath);
+            if (s == null) return Results.NotFound();
+            audit.Log("ENote.Downloaded", "ENote", n.Id, $"{n.DisplayNumber}: {a.OriginalFileName}");
+            return Results.File(s, a.ContentType, a.OriginalFileName);           // sent as an attachment, with nosniff
+        }).RequireAuthorization();
+
+        app.MapGet("/ENotes/{id:long}/Attachments.zip", async (long id, HttpContext ctx, ENoteRepository notes, ENoteOptions eo, FileStore files, AuditService audit) =>
+        {
+            if (!eo.Enabled) return Results.NotFound();
+            var n = notes.Get(id);
+            if (n == null || !notes.CanView(n, ctx.User)) return Results.NotFound();
+            var list = notes.Attachments(id);
+            if (list.Count == 0) return Results.NotFound();
+            audit.Log("ENote.Downloaded", "ENote", n.Id, $"{n.DisplayNumber}: all attachments ({list.Count} files, ZIP)");
+            var name = new string((n.NoteNumber ?? "draft-" + n.Id).Select(ch => char.IsLetterOrDigit(ch) || ch == '-' ? ch : '_').ToArray());
+            ctx.Response.ContentType = "application/zip";
+            ctx.Response.Headers.ContentDisposition = $"attachment; filename=\"{name}-attachments.zip\"";
+            // Streamed file by file straight to the browser: nothing is built in memory or written to a temp folder.
+            var output = new WriteOnlyAsyncStream(ctx.Response.Body);
+            await using (var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var k = 0;
+                foreach (var a in list)
+                {
+                    await using var src = files.OpenRead(a.StoredPath);
+                    if (src == null) continue;
+                    var entryName = $"{++k:D2} {a.OriginalFileName}" + (a.SupersededById != null ? " (superseded)" : "");
+                    entryName = entryName.Replace('/', '_').Replace('\\', '_');
+                    if (!used.Add(entryName)) entryName = $"{a.Id}-{entryName}";
+                    var entry = zip.CreateEntry(entryName, CompressionLevel.Fastest);
+                    await using var dst = await entry.OpenAsync();
+                    await src.CopyToAsync(dst, ctx.RequestAborted);
+                }
+            }
+            await output.DisposeAsync();      // sends the last buffered block (the ZIP's central directory)
+            return Results.Empty;
+        }).RequireAuthorization();
+
+        app.MapGet("/api/users/lookup", (string? q, HttpContext ctx, ENoteRepository notes) =>
+            Results.Json(notes.Lookup(q, ctx.User.UserId()).Select(u => new { id = u.Id, name = u.Name, designation = u.Designation, vertical = u.Vertical })))
+            .RequireAuthorization();
 
         app.MapGet("/directory/card/{staffId:long}", (long staffId, StaffRepository staff) =>
         {
@@ -82,4 +133,44 @@ public static class Endpoints
             return Results.File(Encoding.UTF8.GetBytes(sb.ToString()), "text/vcard", (file.Length == 0 ? "contact" : file) + ".vcf");
         }).RequireAuthorization();
     }
+}
+
+/// <summary>
+/// Lets ZipArchive write to the response body: ZipArchive writes synchronously, Kestrel only accepts asynchronous writes,
+/// so small writes are buffered and flushed asynchronously in 64 KB blocks.
+/// </summary>
+internal sealed class WriteOnlyAsyncStream(Stream inner) : Stream
+{
+    private readonly MemoryStream _buffer = new();
+    private long _position;
+    public override bool CanRead => false;
+    public override bool CanSeek => false;
+    public override bool CanWrite => true;
+    public override long Length => _position;
+    public override long Position { get => _position; set => throw new NotSupportedException(); }
+    public override void Flush() { }
+    public override async Task FlushAsync(CancellationToken ct) { await Drain(ct); await inner.FlushAsync(ct); }
+    public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count)
+    {
+        _buffer.Write(buffer, offset, count);
+        _position += count;
+        if (_buffer.Length >= 64 * 1024) Drain(CancellationToken.None).GetAwaiter().GetResult();
+    }
+    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+    {
+        _buffer.Write(buffer.Span);
+        _position += buffer.Length;
+        if (_buffer.Length >= 64 * 1024) await Drain(ct);
+    }
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) => WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
+    private async Task Drain(CancellationToken ct)
+    {
+        if (_buffer.Length == 0) return;
+        await inner.WriteAsync(_buffer.GetBuffer().AsMemory(0, (int)_buffer.Length), ct);
+        _buffer.SetLength(0);
+    }
+    public override async ValueTask DisposeAsync() { await Drain(CancellationToken.None); await inner.FlushAsync(); await base.DisposeAsync(); }
 }
