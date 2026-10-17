@@ -8,3 +8,9 @@ src/NabconsIntranet/data/
 src/NabconsIntranet/documents/
 src/NabconsIntranet/logs/
 src/NabconsIntranet/backups/
+tests/e2e/out/
+tests/**/bin/
+tests/**/obj/
+# staff photos and other uploads live in the data folder, never in git
+data/uploads/
+**/data/uploads/

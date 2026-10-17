@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/NabconsIntranet/NabconsIntranet.csproj" />
+  <Project Path="tests/NabconsIntranet.Tests/NabconsIntranet.Tests.csproj" />
+</Solution>
