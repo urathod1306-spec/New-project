@@ -61,3 +61,31 @@
         <a class="btn" href="/Admin/Users">Cancel</a>
     </div>
 </form>
+@if (Model.Existing != null)
+{
+    <div class="grid halves mt">
+        <form method="post" asp-page-handler="Link" asp-route-id="@Model.Id" class="card">
+            <h2>Staff directory entry</h2>
+            <p class="muted small">Links this account to the person's directory entry, so they can edit their own contact details on My Profile.</p>
+            <div class="field">
+                <label for="staffId">Directory entry</label>
+                <select id="staffId" name="staffId">
+                    <option value="">— not linked —</option>
+                    @foreach (var st in Model.StaffOptions) { <option value="@st.StaffId" selected="@(st.StaffId == Model.Existing.StaffId)">@st.FullName (@st.EmployeeCode)@(string.IsNullOrEmpty(st.Designation) ? "" : " — " + st.Designation)</option> }
+                </select>
+            </div>
+            <button class="btn" type="submit">Save link</button>
+        </form>
+        <div class="card">
+            <h2>Photo</h2>
+            @if (Model.HasPhoto)
+            {
+                <img class="avatar-photo xl" src="/photo/@Model.Existing.Id?v=@Model.Existing.PhotoVersion" alt="Photo of @Model.Existing.DisplayName" width="120" height="120" />
+                <form method="post" asp-page-handler="RemovePhoto" asp-route-id="@Model.Id" class="mt">
+                    <button class="btn danger sm" type="submit" data-confirm="Remove this person's photo?">Remove photo</button>
+                </form>
+            }
+            else { <p class="empty">No photo uploaded.</p> }
+        </div>
+    </div>
+}

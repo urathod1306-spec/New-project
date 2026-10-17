@@ -56,6 +56,11 @@ builder.Services.AddSingleton<CircularRepository>();
 builder.Services.AddSingleton<NoticeRepository>();
 builder.Services.AddSingleton<RequestWorkflow>();
 builder.Services.AddSingleton<RegistrationRepository>();
+builder.Services.AddSingleton<ProfileRepository>();
+builder.Services.AddSingleton<PhotoService>();
+builder.Services.AddSingleton<LeadAccess>();
+builder.Services.AddSingleton<LeadRepository>();
+builder.Services.AddSingleton<ILeadNotifier, NoLeadNotifications>();
 builder.Services.AddTransient<Seeder>();
 builder.Services.AddHostedService<BackupScheduler>();
 
@@ -105,6 +110,7 @@ builder.Services.AddRazorPages(o =>
     o.Conventions.AuthorizePage("/Circulars/Edit", Policies.Publisher);
     o.Conventions.AuthorizePage("/Notices/Index", Policies.Publisher);
     o.Conventions.AuthorizePage("/Requests/Inbox", Policies.Approver);
+    // Business Leads pages check permissions themselves (BDU vertical / LeadViewer role / own leads).
     o.Conventions.AllowAnonymousToPage("/Account/Login");
     o.Conventions.AllowAnonymousToPage("/Account/Register");
     o.Conventions.AllowAnonymousToPage("/Account/AccessDenied");
@@ -120,6 +126,7 @@ foreach (var step in app.Services.GetRequiredService<Db>().Initialize())
     app.Services.GetRequiredService<AuditService>().Log("System.Upgraded", "Database", Schema.Version, step, "system");
 }
 app.Services.GetRequiredService<Seeder>().Run();
+app.Services.GetRequiredService<ProfileRepository>().LinkUnlinkedAccounts();
 app.Services.GetRequiredService<AuditService>().Log("System.Started", "System", null,
     $"NABCONS Intranet {typeof(Program).Assembly.GetName().Version} started; auth={options.AuthenticationMode}", "system");
 
@@ -162,6 +169,7 @@ app.Use(async (ctx, next) =>
 });
 
 app.MapRazorPages();
+app.MapIntranetEndpoints();
 
 if (!Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService())
 {

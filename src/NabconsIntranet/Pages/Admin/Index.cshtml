@@ -14,6 +14,10 @@
 {
     <div class="alert warning"><strong>Pilot / demo mode is on.</strong> Synthetic demo data and demo accounts are enabled. Before real use, follow “Going live” in the Administrator Guide (docs/ADMIN-GUIDE.md).</div>
 }
+@if (Model.PendingVerticalChanges > 0)
+{
+    <div class="alert info"><strong>@Model.PendingVerticalChanges vertical change(s)</strong> waiting for approval. <a href="/Admin/ProfileChanges">Review now</a>.</div>
+}
 @if (Model.PendingRegistrations > 0)
 {
     <div class="alert info"><strong>@Model.PendingRegistrations self-registration(s)</strong> waiting for approval. <a href="/Admin/Registrations">Review now</a>.</div>
@@ -30,6 +34,7 @@
     <div class="stat"><div class="n">@Model.AuditEntries</div><div class="l">Audit entries</div></div>
 </div>
 <div class="grid tiles mt">
+    <a class="tile" href="/Admin/ProfileChanges"><span class="ico">🔁</span><span><strong>Vertical changes @if (Model.PendingVerticalChanges > 0) { <span class="badge warning">@Model.PendingVerticalChanges pending</span> }</strong><small>Approve vertical changes requested on My Profile</small></span></a>
     <a class="tile" href="/Admin/Registrations"><span class="ico">🪪</span><span><strong>Self-registrations @if (Model.PendingRegistrations > 0) { <span class="badge warning">@Model.PendingRegistrations pending</span> }</strong><small>Approve or reject staff who registered themselves</small></span></a>
     <a class="tile" href="/Admin/Users"><span class="ico">🔐</span><span><strong>Users &amp; roles</strong><small>Create users, assign roles, reset passwords, unlock</small></span></a>
     <a class="tile" href="/Admin/Staff"><span class="ico">👥</span><span><strong>Staff directory</strong><small>Add, edit or deactivate directory entries</small></span></a>
@@ -51,6 +56,7 @@
         <dt>Documents folder</dt><dd class="mono">@o.DocumentsPath (@Fmt.Size(Model.DocBytes))</dd>
         <dt>Backup folder</dt><dd class="mono">@o.BackupPath @(string.IsNullOrEmpty(o.SecondaryBackupFolder) ? "" : " + copy to " + o.SecondaryBackupFolder)</dd>
         <dt>Daily backup</dt><dd>@o.DailyBackupTime, kept for @o.BackupRetentionDays days. Last: @(Model.LastBackup == null ? "never" : Model.LastBackup.FileName)</dd>
+        <dt>Business Leads</dt><dd>BDU vertical: <strong>@Model.BdVertical</strong> (setting BusinessDevelopmentVerticalId / Name). COO and MD need the <strong>LeadViewer</strong> role.</dd>
         <dt>Uploads</dt><dd>Max @o.MaxUploadMB MB; @string.Join(", ", o.AllowedUploadExtensions)</dd>
         <dt>Logs folder</dt><dd class="mono">@o.LogPath</dd>
     </dl>

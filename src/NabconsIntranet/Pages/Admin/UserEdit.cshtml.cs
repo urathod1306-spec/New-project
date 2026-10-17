@@ -5,7 +5,8 @@ using NabconsIntranet.Infrastructure;
 
 namespace NabconsIntranet.Pages.Admin;
 
-public class UserEditModel(UserRepository users, MasterRepository masters, AuditService audit, IntranetOptions o) : AppPage
+public class UserEditModel(UserRepository users, MasterRepository masters, AuditService audit, IntranetOptions o,
+    ProfileRepository profiles, StaffRepository staff, PhotoService photos) : AppPage
 {
     public sealed class InputModel
     {
@@ -95,6 +96,32 @@ public class UserEditModel(UserRepository users, MasterRepository masters, Audit
         }
         Flash($"User {Existing.Username} updated." + (rolesChanged ? " They will need to sign in again." : ""));
         return RedirectToPage("/Admin/Users");
+    }
+
+    public List<StaffMember> StaffOptions => staff.All();
+    public bool HasPhoto => Existing != null && photos.Exists(Existing.Id);
+
+    public IActionResult OnPostLink(long id, long? staffId)
+    {
+        if (users.Get(id) == null) return NotFound();
+        try
+        {
+            profiles.SetLink(id, staffId is > 0 ? staffId : null, User.UserName());
+            Flash(staffId is > 0 ? "Account linked to the staff directory entry." : "Directory link removed.");
+        }
+        catch (WorkflowException ex) { FlashError(ex.Message); }
+        return RedirectToPage(new { id });
+    }
+
+    public IActionResult OnPostRemovePhoto(long id)
+    {
+        var u = users.Get(id);
+        if (u == null) return NotFound();
+        photos.Delete(id);
+        users.BumpPhotoVersion(id, removed: true);
+        audit.Log("Profile.PhotoRemovedByAdmin", "User", id, $"Photo of {u.Username} removed by administrator");
+        Flash($"Photo of {u.DisplayName} removed.");
+        return RedirectToPage(new { id });
     }
 
     public IActionResult OnPostUnlock(long id)

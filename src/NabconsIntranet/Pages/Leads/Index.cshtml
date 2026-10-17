@@ -1,0 +1,72 @@
+@page
+@model NabconsIntranet.Pages.Leads.IndexModel
+@{
+    ViewData["Title"] = "Lead pipeline";
+    var f = Model.Filter;
+    string SortLink(string key, string label) => $"<a href=\"{System.Net.WebUtility.HtmlEncode(Model.Url(key))}\" class=\"{(f.Sort == key ? "sorted" : "")}\">{label}</a>";
+}
+<div class="page-head">
+    <div>
+        <h1>Business Leads</h1>
+        <p>@Model.Items.Count lead(s). Rows due within 7 days are highlighted; overdue in red.</p>
+    </div>
+    <div class="actions">
+        <a class="btn" href="@Model.Url(export: true)">Export to Excel</a>
+        <a class="btn primary" href="/Leads/New">+ Submit a lead</a>
+    </div>
+</div>
+<partial name="_LeadTabs" />
+<form class="card filters" method="get">
+    <div class="field wide"><label for="q">Search</label><input type="search" id="q" name="q" value="@f.Q" placeholder="Title, client, reference, tender no." /></div>
+    <div class="field">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+            <option value="">All</option>
+            <option value="Open" selected="@(f.Status == "Open")">Open (not closed)</option>
+            @foreach (var s in LeadStatus.All) { <option selected="@(f.Status == s)">@s</option> }
+        </select>
+    </div>
+    <div class="field"><label for="clientType">Client type</label><select id="clientType" name="clientType"><option value="">All</option>@foreach (var x in Model.ClientTypes) { <option selected="@(f.ClientType == x)">@x</option> }</select></div>
+    <div class="field"><label for="sector">Sector</label><select id="sector" name="sector"><option value="">All</option>@foreach (var x in Model.Sectors) { <option selected="@(f.Sector == x)">@x</option> }</select></div>
+    <div class="field">
+        <label for="owner">Owner</label>
+        <select id="owner" name="owner">
+            <option value="">Anyone</option><option value="-1" selected="@(f.OwnerUserId == -1)">Not assigned</option>
+            @foreach (var m in Model.Owners) { <option value="@m.Id" selected="@(f.OwnerUserId == m.Id)">@m.DisplayName</option> }
+        </select>
+    </div>
+    <div class="field"><label for="submitter">Submitted by</label><input id="submitter" name="submitter" value="@f.Submitter" /></div>
+    <div class="field"><label for="fy">Financial year</label><select id="fy" name="fy"><option value="">All</option>@foreach (var y in Model.Years) { <option selected="@(f.FinancialYear == y)">@y</option> }</select></div>
+    <label class="check"><input type="checkbox" name="dueSoon" value="true" checked="@f.DueSoon" /> Due within 7 days / overdue</label>
+    <input type="hidden" name="sort" value="@f.Sort" />
+    <div class="actions"><button class="btn primary" type="submit">Filter</button><a class="btn" href="/Leads">Clear</a></div>
+</form>
+<div class="card table-wrap">
+    @if (Model.Items.Count == 0) { <p class="empty">No leads match.</p> }
+    else
+    {
+        <table class="table">
+            <thead><tr>
+                <th>@Html.Raw(SortLink("ref", "Reference"))</th><th>@Html.Raw(SortLink("client", "Lead / client"))</th><th>@Html.Raw(SortLink("status", "Status"))</th>
+                <th class="hide-sm">Owner</th><th class="hide-sm">Submitted by</th><th class="hide-sm">@Html.Raw(SortLink("value", "Est. ₹ lakh"))</th><th>@Html.Raw(SortLink("due", "Due"))</th><th class="hide-sm">@Html.Raw(SortLink("updated", "Updated"))</th>
+            </tr></thead>
+            <tbody>
+                @foreach (var l in Model.Items)
+                {
+                    var open = !LeadStatus.IsClosed(l.Status) && !string.IsNullOrEmpty(l.DueDate);
+                    var cls = open && string.CompareOrdinal(l.DueDate, Model.Today) < 0 ? "row-overdue" : open && string.CompareOrdinal(l.DueDate, Model.Soon) <= 0 ? "row-due" : "";
+                    <tr class="@cls">
+                        <td class="nowrap ref-cell"><a href="/Leads/Details/@l.Id">@l.Reference</a></td>
+                        <td><a href="/Leads/Details/@l.Id"><strong>@l.Title</strong></a><div class="muted small">@l.ClientName@(string.IsNullOrEmpty(l.ClientType) ? "" : " · " + l.ClientType)@(string.IsNullOrEmpty(l.Sector) ? "" : " · " + l.Sector)</div></td>
+                        <td><span class="badge @LeadStatus.Css(l.Status)">@l.Status</span></td>
+                        <td class="hide-sm">@(l.OwnerName ?? "—")</td>
+                        <td class="hide-sm">@l.SubmitterName<div class="muted small">@l.SubmitterVertical</div></td>
+                        <td class="right hide-sm">@(l.EstimatedValueLakh?.ToString("0.##") ?? "—")</td>
+                        <td class="nowrap">@(string.IsNullOrEmpty(l.DueDate) ? "—" : F.Date(l.DueDate))</td>
+                        <td class="nowrap small hide-sm">@F.DateTime(l.UpdatedAt)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

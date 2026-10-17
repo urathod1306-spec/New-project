@@ -87,6 +87,17 @@ To switch self-registration off, set `"SelfRegistrationEnabled": false` in `apps
 - If two people act on the same request at the same moment, the second is told that it changed and is shown the latest version.
 - *All requests* (administrators and auditors) shows every request with its ageing.
 
+## Profiles, photos and Business Leads (v1.2)
+
+- **Vertical changes:** staff request them on *My Profile*. Approve or reject under *Administration → Vertical changes* (a remark is required to reject). Turn approval off with `"VerticalChangeRequiresApproval": false`.
+- **Linking accounts:** *Users & roles* shows whether each account is linked to a staff-directory entry. Open a **Not linked** account → *Staff directory entry* → choose → *Save link*. Unlinked users see "ask the administrator" on My Profile.
+- **Photos:** remove an unsuitable photo from *Users & roles → Edit → Remove photo*.
+- **Business Leads access:**
+  - BDU members are users whose vertical is **BDU** (or the vertical set in `BusinessDevelopmentVerticalName` / `BusinessDevelopmentVerticalId`).
+  - Give the COO and MD the **LeadViewer** role.
+  - The Administrator role alone does **not** open the pipeline.
+- **Master lists:** lead client types, sectors, sources and lost/dropped reasons are edited under *Master lists*, like the other lists.
+
 ## Audit log
 
 - Records sign-ins (success, failure, lockout), sign-outs, uploads and rejected uploads, publishing, withdrawal, supersession, downloads, every request action, user and role changes, password resets, master-data changes, staff imports and edits, backups and restores.

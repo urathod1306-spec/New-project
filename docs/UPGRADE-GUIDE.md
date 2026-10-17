@@ -44,6 +44,10 @@ Rules followed by every release:
 
 If the new version changed the database, the black window and *Audit log* show "Database upgraded to schema version N", and the safety copy is in `backups\pre-upgrade-schema…db`.
 
+## Running the database upgrade by hand (optional)
+
+With the intranet stopped, open a Command Prompt in the application folder and run `NabconsIntranet.exe --migrate`. It takes a full backup, then applies any database changes, and prints what it did. It is safe to run more than once. Without this step, the same upgrade runs automatically on the next start.
+
 ## If something is wrong: roll back
 
 1. In the installed folder, right-click **`Rollback-Upgrade.bat`** → *Run as administrator*. It puts back the previous program from `previous-version\`. Your data is untouched and still works with the previous program.

@@ -1,0 +1,69 @@
+@page
+@model NabconsIntranet.Pages.Leads.DashboardModel
+@{
+    ViewData["Title"] = "Lead dashboard";
+    int maxStatus = Math.Max(1, Model.ByStatus.Max(r => r.Count));
+}
+<div class="page-head">
+    <div>
+        <h1>Business Leads</h1>
+        <p>Dashboard for @(Model.Fy == "All" ? "all years" : "FY " + Model.Fy) (April–March). Values are estimated fees in ₹ lakh.</p>
+    </div>
+    <form method="get" class="inline-filter">
+        <label for="fy">Financial year</label>
+        <select id="fy" name="fy" data-autosubmit>
+            @foreach (var y in Model.Years) { <option selected="@(Model.Fy == y)">@y</option> }
+            <option value="All" selected="@(Model.Fy == "All")">All years</option>
+        </select>
+        <noscript><button class="btn sm" type="submit">Show</button></noscript>
+    </form>
+</div>
+<partial name="_LeadTabs" />
+<div class="grid stats">
+    <div class="stat"><div class="n">@Model.Total</div><div class="l">Leads</div></div>
+    <div class="stat"><div class="n">₹ @Model.PipelineValue.ToString("0.##")</div><div class="l">Open pipeline (lakh)</div></div>
+    <div class="stat"><div class="n">@Model.Won</div><div class="l">Won (₹ @Model.WonValue.ToString("0.##") lakh awarded)</div></div>
+    <div class="stat"><div class="n">@(Model.Conversion.HasValue ? Model.Conversion.Value.ToString("0") + "%" : "—")</div><div class="l">Conversion: Won ÷ (Won + Lost)</div></div>
+</div>
+<div class="grid halves mt">
+    <div class="card table-wrap">
+        <h2>By status</h2>
+        <table class="table compact">
+            <thead><tr><th>Status</th><th class="right">Leads</th><th></th><th class="right">Est. ₹ lakh</th></tr></thead>
+            <tbody>
+                @foreach (var r in Model.ByStatus)
+                {
+                    <tr><td><a href="/Leads?status=@Uri.EscapeDataString(r.Label)&fy=@(Model.Fy == "All" ? "" : Model.Fy)"><span class="badge @LeadStatus.Css(r.Label)">@r.Label</span></a></td>
+                        <td class="right">@r.Count</td><td class="bar-cell"><progress max="@maxStatus" value="@r.Count" aria-label="@r.Count leads">@r.Count</progress></td>
+                        <td class="right">@r.Value.ToString("0.##")</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card table-wrap">
+        <h2>Upcoming due dates</h2>
+        @if (Model.Upcoming.Count == 0) { <p class="empty">No open leads with a due date.</p> }
+        <ul class="list">
+            @foreach (var l in Model.Upcoming)
+            {
+                <li><strong class="nowrap">@F.Date(l.DueDate)</strong> — <a href="/Leads/Details/@l.Id">@l.Title</a><div class="meta">@l.Reference · @l.ClientName · @l.Status</div></li>
+            }
+        </ul>
+    </div>
+    <div class="card table-wrap">
+        <h2>By source</h2>
+        <table class="table compact">
+            <thead><tr><th>Source</th><th class="right">Leads</th><th class="right">Est. ₹ lakh</th></tr></thead>
+            <tbody>@foreach (var r in Model.BySource) { <tr><td>@r.Label</td><td class="right">@r.Count</td><td class="right">@r.Value.ToString("0.##")</td></tr> }</tbody>
+        </table>
+        @if (Model.BySource.Count == 0) { <p class="empty">No leads yet.</p> }
+    </div>
+    <div class="card table-wrap">
+        <h2>By submitting vertical</h2>
+        <table class="table compact">
+            <thead><tr><th>Vertical</th><th class="right">Leads</th><th class="right">Est. ₹ lakh</th></tr></thead>
+            <tbody>@foreach (var r in Model.ByVertical) { <tr><td>@r.Label</td><td class="right">@r.Count</td><td class="right">@r.Value.ToString("0.##")</td></tr> }</tbody>
+        </table>
+        @if (Model.ByVertical.Count == 0) { <p class="empty">No leads yet.</p> }
+    </div>
+</div>

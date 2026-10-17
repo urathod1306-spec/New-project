@@ -7,6 +7,7 @@
     <div>
         <p class="muted"><a href="/Admin">← Administration</a></p>
         <h1>Users &amp; roles</h1>
+        <p>Accounts marked “Not linked” cannot edit their contact details on My Profile until you link them to their staff directory entry (Edit → Staff directory entry).</p>
         <p>@(Site.IsWindowsAuth ? "Windows mode: users appear here automatically after their first sign-in. Assign roles below." : "Local accounts. Passwords are stored as salted PBKDF2 hashes.")</p>
     </div>
     <div class="actions"><a class="btn primary" href="/Admin/UserEdit">+ Add user</a></div>
@@ -19,7 +20,7 @@
 </div>
 <div class="card table-wrap mt">
     <table class="table">
-        <thead><tr><th>User</th><th>Vertical</th><th>Roles</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead>
+        <thead><tr><th>User</th><th>Vertical</th><th>Roles</th><th>Directory</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead>
         <tbody>
             @foreach (var u in Model.Items)
             {
@@ -27,6 +28,7 @@
                     <td><strong>@u.DisplayName</strong><div class="muted small mono">@u.Username</div></td>
                     <td>@u.Vertical</td>
                     <td><div class="chips">@foreach (var r in u.RoleList) { <span class="chip">@r</span> }</div></td>
+                    <td>@if (u.StaffId != null) { <span class="badge success">Linked</span> } else { <span class="badge warning">Not linked</span> }</td>
                     <td>
                         @if (!u.IsActive) { <span class="badge danger">Deactivated</span> }
                         else if (u.IsLockedOut) { <span class="badge warning">Locked</span> }

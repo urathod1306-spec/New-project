@@ -1,0 +1,72 @@
+@page
+@model NabconsIntranet.Pages.Leads.NewModel
+@{
+    ViewData["Title"] = "Submit a business lead";
+}
+<div class="page-head">
+    <div>
+        <h1>Business Leads</h1>
+        <p>Spotted a consultancy opportunity? Submit it here — the Business Development Unit (BDU) will take it forward.</p>
+    </div>
+</div>
+<partial name="_LeadTabs" />
+
+@if (Model.Duplicates.Count > 0)
+{
+    <div class="alert warning" id="dup-warning">
+        <strong>A similar lead may already exist</strong> (same tender number, or same client with a similar title, in the last 180 days):
+        <ul>@foreach (var d in Model.Duplicates) { <li><strong>@d.Reference</strong> — @d.Status, submitted @F.Date(d.CreatedAt)</li> }</ul>
+        If yours is a different opportunity, re-attach any files below and click <strong>Submit anyway</strong>.
+    </div>
+}
+
+<form method="post" enctype="multipart/form-data" class="card" id="lead-form" data-dup-check="/Leads/New?handler=Check">
+    <partial name="_Errors" />
+    <input type="hidden" name="ConfirmDuplicate" id="ConfirmDuplicate" value="@(Model.Duplicates.Count > 0 ? "true" : "false")" />
+    <h2>Opportunity</h2>
+    <div class="form-grid">
+        <div class="field full"><label asp-for="Input.Title"></label><input asp-for="Input.Title" required /><span asp-validation-for="Input.Title"></span></div>
+        <div class="field"><label asp-for="Input.ClientName"></label><input asp-for="Input.ClientName" required /><span asp-validation-for="Input.ClientName"></span></div>
+        <div class="field">
+            <label asp-for="Input.ClientType"></label>
+            <select asp-for="Input.ClientType"><option value="">— select —</option>@foreach (var x in Model.ClientTypes) { <option value="@x">@x</option> }</select>
+            <span asp-validation-for="Input.ClientType"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Input.Sector"></label>
+            <select asp-for="Input.Sector"><option value="">— select —</option>@foreach (var x in Model.Sectors) { <option value="@x">@x</option> }</select>
+            <span asp-validation-for="Input.Sector"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Input.StateLocation"></label>
+            <input asp-for="Input.StateLocation" list="states" placeholder="Choose or type" />
+            <datalist id="states">@foreach (var st in IndianStates.All) { <option value="@st"></option> }</datalist>
+        </div>
+        <div class="field">
+            <label asp-for="Input.Source"></label>
+            <select asp-for="Input.Source"><option value="">— select —</option>@foreach (var x in Model.Sources) { <option value="@x">@x</option> }</select>
+            <span asp-validation-for="Input.Source"></span>
+        </div>
+        <div class="field"><label asp-for="Input.TenderNumber"></label><input asp-for="Input.TenderNumber" /></div>
+        <div class="field"><label asp-for="Input.EstimatedValueLakh"></label><input asp-for="Input.EstimatedValueLakh" type="number" step="0.01" min="0" /><span asp-validation-for="Input.EstimatedValueLakh"></span></div>
+        <div class="field"><label asp-for="Input.DueDate"></label><input asp-for="Input.DueDate" type="date" /></div>
+        <div class="field full"><label asp-for="Input.Description"></label><textarea asp-for="Input.Description" rows="6" required placeholder="What does the client need? Scope, duration, eligibility, anything BDU should know."></textarea><span asp-validation-for="Input.Description"></span></div>
+    </div>
+    <h2 class="mt">Client contact (optional)</h2>
+    <div class="form-grid">
+        <div class="field"><label asp-for="Input.ContactName"></label><input asp-for="Input.ContactName" /></div>
+        <div class="field"><label asp-for="Input.ContactDesignation"></label><input asp-for="Input.ContactDesignation" /></div>
+        <div class="field"><label asp-for="Input.ContactPhone"></label><input asp-for="Input.ContactPhone" /><span asp-validation-for="Input.ContactPhone"></span></div>
+        <div class="field"><label asp-for="Input.ContactEmail"></label><input asp-for="Input.ContactEmail" type="email" /><span asp-validation-for="Input.ContactEmail"></span></div>
+    </div>
+    <div class="field mt">
+        <label for="Uploads">Attachments (optional)</label>
+        <input type="file" id="Uploads" name="Uploads" multiple accept="@Model.Accept" data-max-mb="@Site.MaxLeadFileMB" />
+        <span class="hint">PDF, Word, Excel, PowerPoint, JPG, PNG or ZIP. Up to @Site.MaxLeadFileMB MB per file, @Site.MaxLeadTotalMB MB in total.</span>
+    </div>
+    <div id="dup-live" class="alert warning hidden" role="alert"></div>
+    <div class="actions mt">
+        <button class="btn primary" type="submit" id="lead-submit">@(Model.Duplicates.Count > 0 ? "Submit anyway" : "Submit lead")</button>
+        <a class="btn" href="/Leads/Mine">Cancel</a>
+    </div>
+</form>

@@ -6,8 +6,8 @@ A ready-to-run intranet for **NABARD Consultancy Services (NABCONS)**, built for
 
 ## Download and run (no coding)
 
-1. **Download** [`release/NABCONS-Intranet-v1.1.1-win-x64.zip`](release/NABCONS-Intranet-v1.1.1-win-x64.zip) (≈ 46 MB). On GitHub, open the file and click **Download raw file**.
-   SHA-256: see [`release/NABCONS-Intranet-v1.1.1-win-x64.zip.sha256`](release/NABCONS-Intranet-v1.1.1-win-x64.zip.sha256).
+1. **Download** [`release/NABCONS-Intranet-v1.2.0-win-x64.zip`](release/NABCONS-Intranet-v1.2.0-win-x64.zip) (≈ 46 MB). On GitHub, open the file and click **Download raw file**.
+   SHA-256: see [`release/NABCONS-Intranet-v1.2.0-win-x64.zip.sha256`](release/NABCONS-Intranet-v1.2.0-win-x64.zip.sha256).
 2. **Transfer** it to the office PC by the IT-approved method. Right-click → *Properties* → *Unblock*, then **extract** it to `C:\NABCONSIntranet\`.
 3. **Double-click `Start-Intranet.bat`.** Keep the black window open. It shows the address to use.
 4. **Open** `http://localhost:8080` on that PC, or `http://<PC-name>:8080` from colleagues' PCs. If they cannot connect, right-click `Open-Firewall-Port.bat` → *Run as administrator*.
@@ -38,6 +38,9 @@ When the pilot is accepted, follow **Going live** in the [Administrator Guide](d
 | **Audit log** | Append-only, hash-chained (tamper-evident), searchable, CSV export, one-click integrity check |
 | **Backup & restore** | Automatic daily ZIP backup with checksum, retention, optional copy to a LAN share, checksum-verified restore |
 | **Self-registration** | Staff register with their 10-digit mobile number (details pre-filled from the directory, masked); an administrator approves, which creates the account and fills in the staff directory |
+| **My Profile** | Staff keep their own mobile, extension, e-mail and office up to date; vertical changes approved by the administrator; every change audited |
+| **Photos & contact cards** | Staff photos (metadata removed); click a name in the directory for a card with call/e-mail/copy and *Save contact* (.vcf) |
+| **Business Leads** | Anyone submits opportunities (`NCS/BD/<FY>/0001`); BDU, COO and MD work the pipeline, dashboard and Excel export; append-only timeline |
 | **Sign-in** | Local accounts (salted PBKDF2 hashes, lockout, password policy) **or** Windows Authentication / Active Directory with AD-group role mapping |
 
 | Circulars | Approval with full history |
@@ -52,6 +55,9 @@ When the pilot is accepted, follow **Going live** in the [Administrator Guide](d
 |---|---|
 | [`README-FIRST.txt`](deploy/windows/README-FIRST.txt) | One-page quick start (also inside the ZIP) |
 | [Deployment Guide](docs/DEPLOYMENT-GUIDE.md) | Office PC, Windows service, firewall, HTTPS, Windows Authentication, IIS |
+| [Setup Guide 1.2](SETUP_GUIDE.md) | Upgrading to 1.2.0: `--migrate`, new settings, LeadViewer role for COO/MD, BDU vertical, linking accounts, where photos are stored |
+| [Testing checklist 1.2](TESTING_CHECKLIST.md) | Manual test script for the office machine |
+| [Changelog](CHANGELOG.md) | What changed in each version |
 | [Upgrade Guide](docs/UPGRADE-GUIDE.md) | Installing a new version over a live intranet **without losing any data**, and rolling back |
 | [Administrator Guide](docs/ADMIN-GUIDE.md) | Going live, users and roles, CSV import, circulars, workflow, audit, backup and restore |
 | [IT & Security Note](docs/IT-SECURITY-NOTE.md) | One-page architecture note and validation checklist for NABARD IT clearance |

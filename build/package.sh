@@ -18,6 +18,7 @@ for f in "$ROOT"/deploy/windows/*; do
 done
 mkdir -p "$STAGE/docs" "$STAGE/sample-data"
 for f in "$ROOT"/docs/*.md; do sed 's/\r$//; s/$/\r/' "$f" > "$STAGE/docs/$(basename "$f")"; done
+for f in "$ROOT"/SETUP_GUIDE.md "$ROOT"/TESTING_CHECKLIST.md "$ROOT"/CHANGELOG.md; do sed 's/\r$//; s/$/\r/' "$f" > "$STAGE/docs/$(basename "$f")"; done
 cp "$ROOT"/deploy/sample-data/* "$STAGE/sample-data/"
 sed -i 's/\r$//; s/$/\r/' "$STAGE/appsettings.json"
 

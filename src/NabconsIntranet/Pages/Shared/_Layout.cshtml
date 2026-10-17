@@ -1,9 +1,16 @@
 @inject RequestWorkflow Workflow
 @inject RegistrationRepository Registrations
+@inject ProfileRepository Profiles
+@inject UserRepository Users
+@inject LeadAccess LeadAccess
+@inject LeadRepository Leads
 @{
     var signedIn = User.Identity?.IsAuthenticated == true && User.UserId() > 0;
     var inbox = signedIn && User.IsApprover() ? Workflow.InboxCount(User.UserId()) : 0;
-    var pendingRegs = signedIn && User.IsAdmin() ? Registrations.PendingCount() : 0;
+    var pendingRegs = signedIn && User.IsAdmin() ? Registrations.PendingCount() + Profiles.PendingCount() : 0;
+    var me = signedIn ? Users.Get(User.UserId()) : null;
+    var leadManager = signedIn && LeadAccess.CanManage(User);
+    var newLeads = leadManager ? Leads.CountSubmitted() : 0;
     var path = Context.Request.Path.Value ?? "/";
     string Active(string prefix) => (prefix == "/" ? path == "/" : path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ? "active" : "";
     var title = ViewData["Title"] as string;
@@ -35,13 +42,14 @@
                     <button type="submit" aria-label="Search">Search</button>
                 </form>
                 <details class="usermenu">
-                    <summary><span class="avatar sm">@Fmt.Initials(User.DisplayName())</span><span class="uname">@User.DisplayName()</span></summary>
+                    <summary>@if (me?.PhotoVersion > 0) { <img class="avatar-photo sm" src="/photo/@me.Id?thumb=true&v=@me.PhotoVersion" alt="" width="32" height="32" /> } else { <span class="avatar sm">@Fmt.Initials(User.DisplayName())</span> }<span class="uname">@User.DisplayName()</span></summary>
                     <div class="menu">
                         <div class="menu-head">
                             <strong>@User.DisplayName()</strong>
                             <small>@User.UserName()</small>
                             <div class="chips">@foreach (var r in User.RoleNames()) { <span class="chip">@r</span> }</div>
                         </div>
+                        <a href="/Profile">My Profile</a>
                         @if (!Site.IsWindowsAuth)
                         {
                             <a href="/Account/ChangePassword">Change password</a>
@@ -68,6 +76,7 @@
                         <li><a class="@Active("/Directory")" href="/Directory">Staff Directory</a></li>
                         <li><a class="@Active("/Circulars")" href="/Circulars">Circulars</a></li>
                         <li><a class="@(path.StartsWith("/Requests") && !path.StartsWith("/Requests/Inbox") ? "active" : "")" href="/Requests">My Requests</a></li>
+                        <li><a class="@Active("/Leads")" href="@(leadManager ? "/Leads" : "/Leads/Mine")">Business Leads @if (newLeads > 0) { <span class="count" title="Leads still in Submitted">@newLeads</span> }</a></li>
                         @if (User.IsApprover())
                         {
                             <li><a class="@Active("/Requests/Inbox")" href="/Requests/Inbox">Approval Inbox @if (inbox > 0) { <span class="count">@inbox</span> }</a></li>

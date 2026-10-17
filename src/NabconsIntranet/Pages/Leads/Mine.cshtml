@@ -1,0 +1,37 @@
+@page
+@model NabconsIntranet.Pages.Leads.MineModel
+@{
+    ViewData["Title"] = "My leads";
+}
+<div class="page-head">
+    <div>
+        <h1>Business Leads</h1>
+        <p>Leads you have submitted and where they stand.</p>
+    </div>
+    <div class="actions"><a class="btn primary" href="/Leads/New">+ Submit a lead</a></div>
+</div>
+<partial name="_LeadTabs" />
+<div class="card table-wrap">
+    @if (Model.Items.Count == 0)
+    {
+        <p class="empty">You have not submitted any leads yet. <a href="/Leads/New">Submit your first lead</a>.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead><tr><th>Reference</th><th>Lead</th><th>Status</th><th>Due</th><th>Last update</th></tr></thead>
+            <tbody>
+                @foreach (var l in Model.Items)
+                {
+                    <tr>
+                        <td class="nowrap"><a href="/Leads/Details/@l.Id">@l.Reference</a></td>
+                        <td><a href="/Leads/Details/@l.Id"><strong>@l.Title</strong></a><div class="muted small">@l.ClientName</div></td>
+                        <td><span class="badge @LeadStatus.Css(l.Status)">@l.Status</span></td>
+                        <td class="nowrap">@F.Date(l.DueDate)</td>
+                        <td class="nowrap">@F.DateTime(l.UpdatedAt)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

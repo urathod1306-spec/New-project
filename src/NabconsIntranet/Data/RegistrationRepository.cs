@@ -101,6 +101,7 @@ public sealed class RegistrationRepository(Db db, StaffRepository staff, UserRep
             Roles = Infrastructure.Roles.Join(roles), PasswordHash = r.PasswordHash, MustChangePassword = false, IsActive = true,
         }, actor);
 
+        long? linkStaffId = null;
         if (updateDirectory)
         {
             var existing = r.StaffId != null ? staff.Get(r.StaffId.Value) : null;
@@ -113,6 +114,7 @@ public sealed class RegistrationRepository(Db db, StaffRepository staff, UserRep
                 if (!string.IsNullOrEmpty(r.OfficialEmail)) existing.OfficialEmail = r.OfficialEmail;
                 existing.ActiveTo = null; // a registered, approved person is current staff
                 staff.Upsert(existing, actor);
+                linkStaffId = existing.StaffId;
             }
             else if (!string.IsNullOrWhiteSpace(employeeCodeForNew))
             {
@@ -124,6 +126,9 @@ public sealed class RegistrationRepository(Db db, StaffRepository staff, UserRep
                 }, actor);
             }
         }
+        if (linkStaffId == null && !string.IsNullOrWhiteSpace(employeeCodeForNew)) linkStaffId = staff.GetByCode(employeeCodeForNew.Trim())?.StaffId;
+        if (linkStaffId != null && db.Scalar<long>("SELECT COUNT(*) FROM Users WHERE StaffId = @linkStaffId", new { linkStaffId }) == 0)
+            db.Exec("UPDATE Users SET StaffId = @linkStaffId WHERE Id = @userId", new { linkStaffId, userId });
 
         var n = db.Exec("""
             UPDATE RegistrationRequests SET Status = 'Approved', DecidedBy = @actor, DecidedAt = @now, CreatedUserId = @userId, PasswordHash = NULL

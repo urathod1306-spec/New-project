@@ -8,7 +8,7 @@ namespace NabconsIntranet.Infrastructure;
 /// When SeedDemoData is true (default for the pilot) it also loads clearly-marked SYNTHETIC
 /// staff, circulars and requests so the system can be demonstrated immediately.
 /// </summary>
-public sealed class Seeder(IntranetOptions o, UserRepository users, MasterRepository masters, StaffRepository staff,
+public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, MasterRepository masters, StaffRepository staff,
     CircularRepository circulars, NoticeRepository notices, RequestWorkflow workflow, FileStore files, AuditService audit, Fmt fmt,
     ILogger<Seeder> log)
 {
@@ -22,6 +22,8 @@ public sealed class Seeder(IntranetOptions o, UserRepository users, MasterReposi
         ("approver2", "Anita Deshmukh", "Staff,Approver", "Finance & Accounts", "Approver - Sanctioning Authority"),
         ("staff", "Vikram Singh", "Staff", "Rural Infrastructure", "Staff - browse and submit requests"),
         ("auditor", "Meera Nair", "Staff,Auditor", "Finance & Accounts", "Auditor - read-only audit history"),
+        ("bdu", "Rohan Kapoor", "Staff", "BDU", "BDU vertical - business lead pipeline"),
+        ("coo", "Kavita Rao", "Staff,LeadViewer", "HR & Administration", "LeadViewer (COO) - sees all business leads"),
     };
 
     /// <summary>Capitals of all 28 states and 8 union territories (Chandigarh serves Punjab, Haryana and the UT; J&amp;K has Srinagar and Jammu).</summary>
@@ -58,7 +60,7 @@ public sealed class Seeder(IntranetOptions o, UserRepository users, MasterReposi
             audit.Log("Master.Seeded", "MasterItems", type, string.Join("; ", names));
         }
         Ensure(MasterTypes.Vertical, "Agri & Allied", "Climate Change & Sustainability", "Rural Infrastructure", "Financial Inclusion",
-            "Microfinance & Livelihoods", "Watershed & Natural Resources", "IT & Digital", "Finance & Accounts", "HR & Administration");
+            "Microfinance & Livelihoods", "Watershed & Natural Resources", "IT & Digital", "Finance & Accounts", "HR & Administration", "BDU");
         var offices = new[] { "Mumbai (Head Office)", "New Delhi", "Lucknow", "Bhopal", "Pune", "Hyderabad", "Bengaluru",
             "Kolkata", "Guwahati", "Chennai", "Jaipur" };
         Ensure(MasterTypes.Location, offices.Concat(StateAndUtCapitals.Where(c =>
@@ -139,6 +141,7 @@ public sealed class Seeder(IntranetOptions o, UserRepository users, MasterReposi
             ("Rekha Menon", "HR Officer", "HR & Administration", "Mumbai (Head Office)"),
             ("Gaurav Tiwari", "Consultant", "Microfinance & Livelihoods", "Bhopal"),
             ("Ishita Banerjee", "Project Associate", "Climate Change & Sustainability", "Kolkata"),
+            ("Rohan Kapoor", "Manager - Business Development", "BDU", "Mumbai (Head Office)"),
         };
         for (int i = 0; i < people.Length; i++)
         {
@@ -159,6 +162,13 @@ public sealed class Seeder(IntranetOptions o, UserRepository users, MasterReposi
             }, "system (demo seed)");
         }
         audit.Log("Staff.Imported", "Staff", null, $"{people.Length} synthetic staff rows loaded (demo seed)");
+        // link demo accounts to their (synthetic) directory entries so My Profile works out of the box
+        foreach (var d in DemoUsers)
+        {
+            var u = users.GetByUsername(d.user);
+            var s = staff.All().FirstOrDefault(x => x.FullName == d.name);
+            if (u != null && s != null && u.StaffId == null) db.Exec("UPDATE Users SET StaffId = @sid WHERE Id = @uid", new { sid = s.StaffId, uid = u.Id });
+        }
 
         // --- 10 synthetic circulars across 3 categories ---
         var y = fmt.Today.Year;

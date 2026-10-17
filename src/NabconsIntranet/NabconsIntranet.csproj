@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>NabconsIntranet</RootNamespace>
     <AssemblyName>NabconsIntranet</AssemblyName>
-    <Version>1.1.1</Version>
+    <Version>1.2.0</Version>
     <Product>NABCONS Intranet</Product>
     <Company>NABARD Consultancy Services</Company>
     <InvariantGlobalization>false</InvariantGlobalization>
@@ -26,13 +26,21 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>none</DebugType>
     <PublishTrimmed>false</PublishTrimmed>
+    <!-- Bundle the latest patched .NET runtime (security fixes), whatever SDK patch builds the package. -->
+    <RuntimeFrameworkVersion>10.0.13</RuntimeFrameworkVersion>
   </PropertyGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <KnownFrameworkReference Update="Microsoft.AspNetCore.App" LatestRuntimeFrameworkVersion="10.0.13" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Versions are pinned deliberately (software bill of materials: docs/SBOM.md). -->
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="10.0.12" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.13" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.153.1" />
   </ItemGroup>
 
 </Project>
