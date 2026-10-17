@@ -55,6 +55,20 @@ public sealed class Fmt
         };
     }
 
+    /// <summary>"just now", "5 min ago", "3 h ago", "yesterday", "4 days ago", then the date.</summary>
+    public string Relative(string? isoUtc)
+    {
+        if (string.IsNullOrEmpty(isoUtc) || !System.DateTime.TryParse(isoUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var d)) return "";
+        var ago = System.DateTime.UtcNow - d;
+        if (ago.TotalMinutes < 1) return "just now";
+        if (ago.TotalMinutes < 60) return $"{(int)ago.TotalMinutes} min ago";
+        if (ago.TotalHours < 24) return $"{(int)ago.TotalHours} h ago";
+        var days = DateOnly.FromDateTime(LocalNow).DayNumber - DateOnly.FromDateTime(d + _offset).DayNumber;
+        if (days <= 1) return "yesterday";
+        if (days < 7) return $"{days} days ago";
+        return (d + _offset).ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
+    }
+
     public double DaysSince(string? isoUtc)
     {
         if (string.IsNullOrEmpty(isoUtc) || !System.DateTime.TryParse(isoUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var d)) return 0;

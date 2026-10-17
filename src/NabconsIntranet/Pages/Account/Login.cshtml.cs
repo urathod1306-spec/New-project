@@ -79,6 +79,7 @@ public class LoginModel(UserRepository users, RegistrationRepository registratio
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, new AuthenticationProperties { IsPersistent = false });
         audit.Log("Login.Success", "User", u.Id, null, u.Username);
         if (u.MustChangePassword) return Redirect("/Account/ChangePassword");
-        return LocalRedirect(Url.IsLocalUrl(returnUrl) ? returnUrl! : "/");
+        if (Url.IsLocalUrl(returnUrl) && returnUrl != "/") return LocalRedirect(returnUrl!);
+        return LocalRedirect(u.OpenDeskAfterSignIn ? "/Desk" : "/");
     }
 }

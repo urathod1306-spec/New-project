@@ -92,6 +92,14 @@ public class IndexModel(UserRepository users, ProfileRepository profiles, Master
         return RedirectToPage();
     }
 
+    public IActionResult OnPostPreferences(bool openDesk)
+    {
+        if (!Load()) return Redirect("/Account/Login");
+        users.SetOpenDeskAfterSignIn(Me.Id, openDesk);
+        Flash(openDesk ? "My Desk will open after you sign in." : "The home page will open after you sign in.");
+        return RedirectToPage();
+    }
+
     public IActionResult OnPostVertical()
     {
         if (!Load()) return Redirect("/Account/Login");

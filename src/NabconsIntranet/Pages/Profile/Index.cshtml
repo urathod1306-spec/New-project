@@ -159,6 +159,15 @@
         </div>
 
         <div class="card">
+            <h2>Preferences</h2>
+            <form method="post" asp-page-handler="Preferences">
+                <label class="check"><input type="checkbox" name="openDesk" value="true" checked="@me.OpenDeskAfterSignIn" /> Open My Desk after sign-in</label>
+                <p class="hint muted small">My Desk lists everything waiting for you: e-Notes, requests, approvals and leads.</p>
+                <button class="btn sm" type="submit">Save preference</button>
+            </form>
+        </div>
+
+        <div class="card">
             <h2>Recent changes</h2>
             @if (Model.History.Count == 0) { <p class="empty">No changes yet.</p> }
             <ul class="list">
