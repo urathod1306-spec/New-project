@@ -53,12 +53,42 @@ Run on the isolated test PC with the demo data (password for all demo accounts: 
 
 ## Performance (v1.3)
 
-Measured with the automated benchmark at the volumes in the brief: `NABCONS_BENCH=1 dotnet test tests/NabconsIntranet.Tests --filter PerformanceTests`. The run seeds the data into a throw-away database, then times each page on a development container (4 vCPU). The office PC will be somewhat slower, but the margins are large.
+### Budgets at the brief's volume
+Run with `NABCONS_BENCH=1 dotnet test tests/NabconsIntranet.Tests --filter PerformanceTests`.
+- **Data:** the run seeds 500 users, 20,000 e-Notes, 200,000 movements, 40,000 comments and 300,000 notifications into a throw-away database (217 MB), then runs the nightly housekeeping once.
+- **What is timed:** each page, as a full HTTP round trip inside the server process.
+- **Machine:** development container with 4 vCPU. A 7th-gen Core i5 will be somewhat slower, but the margins are large.
 
-| Measure | Volume | p50 | p95 | Budget |
-|---|---|---|---|---|
-| Badge poll, nothing changed (`304`) | 500 users, 300,000 notifications | 0.7 ms | 1.4 ms | < 20 ms |
-| Badge counts after a change (database read) | same | 0.2 ms | 0.3 ms | < 20 ms |
-| My Desk page | same | 2.6 ms | 6.1 ms | < 250 ms |
-| Notifications page (page 3) | same | 3.2 ms | 5.4 ms | — |
-| Daily housekeeping | 168,000 old notifications removed | 7.8 s (in batches of 5,000) | | outside office hours |
+| Measure | p50 | p95 | Budget |
+|---|---|---|---|
+| Badge poll, nothing changed (`304`) | 0.9 ms | 1.4 ms | < 20 ms |
+| Badge counts after a change (database read) | 0.1 ms | 0.2 ms | < 20 ms |
+| My Desk | 2.8 ms | 5.0 ms | < 250 ms |
+| Note view (10 movements, 2 comments) | 2.8 ms | 8.0 ms | < 300 ms |
+| Archival PDF, 29 pages, Hindi + English (`Thirty_page_note_renders_within_budget`) | 0.28 s (first generation) | | < 3 s |
+| My e-Notes: Pending with me / Seen by me (page 2) | 3.2 / 4.5 ms | 5.7 / 5.3 ms | — |
+| Approved notes, full-text search | 28.8 ms | 41.0 ms | — |
+| Register: all 20,000 (page 1) / filtered + search | 3.6 / 24.9 ms | 5.2 / 32.9 ms | — |
+| Register Excel export, 20,000 rows | 1.2 s | | — |
+| Mark to (write, including audit entry) | 1.3 ms | 32.7 ms | — |
+
+### Load check: 50 virtual users for 10 minutes
+Run with `bash tests/LoadTest/run-load.sh 10 50`.
+- **Setup:** a fresh copy of the published app with the benchmark volume above.
+- **Each user:** signs in, then mixes My Desk, note views, *Mark to* posts, full-text searches and the Notifications page, with 1–4 s think time, plus the 60 s badge poll.
+- **Machine:** the same 4-vCPU container, with the load generator running on the same machine.
+
+| Operation | Requests | p50 | p95 | Max | Errors |
+|---|---|---|---|---|---|
+| My Desk | 4,235 | 2.9 ms | 5.1 ms | 1.2 s* | 0 |
+| Note view | 4,491 | 2.5 ms | 4.9 ms | 0.3 s* | 0 |
+| List: Seen by me | 3,552 | 4.9 ms | 7.7 ms | 1.2 s* | 0 |
+| Mark to (POST) | 939 | 3.1 ms | 14.6 ms | 0.6 s* | 0 |
+| Search approved notes | 1,140 | 30.8 ms | 42.3 ms | 1.2 s* | 0 |
+| Notifications page | 1,161 | 2.8 ms | 4.6 ms | 0.3 s* | 0 |
+| Badge poll | 483 | 1.4 ms | 2.6 ms | 0.1 s | 0 |
+| Sign-in (password hashing, 50 at once) | 50 | 1.19 s | 1.43 s | 1.44 s | 0 |
+
+**Totals:** 16,051 requests (26.6 per second), no errors. The server used 180 MB of memory and averaged 17 % CPU across 4 cores.
+
+\* The maximum values all fall in the first seconds, when all 50 users sign in at once and the slow password hash (210,000 rounds, by design) holds the CPU. After that, every operation stays within its p95.

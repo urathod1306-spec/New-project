@@ -68,6 +68,7 @@
 ### Changed
 - New packages for the PDF: SkiaSharp.HarfBuzz 4.153.1 and HarfBuzzSharp 14.2.1.301 (MIT). Noto Sans and Noto Sans Devanagari fonts (SIL OFL 1.1) are embedded.
 - The upload request size limit now allows several e-Note attachments in one request.
+- Backups taken within the same second (e.g. `--migrate` run twice quickly, or a double click on *Create backup now*) no longer fail; the second gets a `-2` suffix.
 - Signing in now opens **My Desk** unless the preference is switched off. Before, it opened the home page.
 - The internal notification hook for leads, empty since 1.2.0, is replaced by in-app notifications.
 
