@@ -1,0 +1,61 @@
+@page "/ENotes/{id:long}/Print"
+@model NabconsIntranet.Pages.ENotes.PrintModel
+@{
+    Layout = null;
+    var n = Model.Note;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@n.DisplayNumber · @Site.SiteTitle</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="print-page">
+<main class="print-sheet">
+    <div class="print-actions"><button type="button" class="btn primary" data-print>Print</button> <a class="btn" href="/ENotes/@n.Id">Back to the note</a></div>
+    <header class="ps-head">
+        <img src="~/img/nabcons-logo.png" alt="" width="56" height="56" />
+        <div><strong>@Site.OrganisationName</strong><span>e-Note</span></div>
+    </header>
+    <h1>@n.Subject</h1>
+    <dl class="meta-grid">
+        <dt>Note number</dt><dd>@n.NoteNumber</dd>
+        <dt>Category</dt><dd>@n.Category</dd>
+        <dt>Initiated by</dt><dd>@n.InitiatorName@(n.InitiatorDesignation != null ? ", " + n.InitiatorDesignation : "") · @n.InitiatorVertical</dd>
+        <dt>Submitted</dt><dd>@F.DateTime(n.SubmittedAt)</dd>
+        <dt>State</dt><dd>@n.FinalLabel@(n.IsConfidential ? " · Confidential" : "")</dd>
+    </dl>
+    <h2>Note@(Model.Body != null ? $" (text version {Model.Body.Version})" : "")</h2>
+    <ol class="note-paras">@foreach (var p in Model.Paragraphs) { <li><span class="pre">@p</span></li> }</ol>
+    <h2>Note-sheet</h2>
+    <ol class="note-sheet">
+        @foreach (var e in Model.Sheet)
+        {
+            <li class="ns-entry">
+                @if (e.Kind == "Movement") { <div class="ns-action">@NabconsIntranet.Pages.ENotes.ViewModel.MovementText(e)</div> }
+                @if (!string.IsNullOrWhiteSpace(e.Text)) { <div class="ns-text pre">@e.Text</div> }
+                <div class="ns-sign"><strong>@e.Name</strong>@if (!string.IsNullOrEmpty(e.Designation)) { <span>@e.Designation</span> }<time>@F.DateTime(e.Timestamp)</time></div>
+            </li>
+        }
+    </ol>
+    @if (n.DecidedAt != null)
+    {
+        <h2>Decision</h2>
+        <p><strong>@n.Outcome</strong> by @n.DecidedByName@(n.DecidedByDesignation != null ? ", " + n.DecidedByDesignation : "") on @F.DateTime(n.DecidedAt)</p>
+        <p class="pre">@n.DecisionRemarks</p>
+    }
+    <h2>Attachment schedule</h2>
+    @if (Model.Attachments.Count == 0) { <p>No attachments.</p> }
+    <ol class="ps-files">
+        @foreach (var a in Model.Attachments)
+        {
+            <li>@a.OriginalFileName@(a.SupersededById != null ? " (superseded)" : "") — @a.UploadedByName, @(a.Stage ?? "—"), @Fmt.Size(a.SizeBytes)<br /><span class="mono">SHA-256 @a.Sha256</span></li>
+        }
+    </ol>
+    <footer class="ps-foot">System-generated record from NABCONS Intranet — not digitally signed · printed @F.DateTime(DateTime.UtcNow.ToString("o"))</footer>
+</main>
+<script src="~/js/site.js" asp-append-version="true"></script>
+</body>
+</html>

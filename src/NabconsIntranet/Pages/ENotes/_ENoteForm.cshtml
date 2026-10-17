@@ -1,0 +1,43 @@
+@model NabconsIntranet.Pages.ENotes.ENoteFormView
+@{ var f = Model.Form; }
+@if (Model.Error != null) { <div class="alert danger" role="alert">@Model.Error</div> }
+<div class="field">
+    <label for="Subject">Subject</label>
+    <input id="Subject" name="Subject" type="text" value="@f.Subject" maxlength="300" required />
+</div>
+<div class="field">
+    <label for="Category">Category</label>
+    <select id="Category" name="Category" required>
+        <option value="">— select —</option>
+        @foreach (var c in Model.Categories) { <option selected="@(f.Category == c)">@c</option> }
+    </select>
+</div>
+<div class="field">
+    <label for="Body">Note</label>
+    <textarea id="Body" name="Body" rows="16" maxlength="@Model.MaxBodyChars" required data-count="body-count" class="note-text">@f.Body</textarea>
+    <span class="hint">Plain text. Leave a blank line between paragraphs — they are numbered automatically (1, 2, 3 …). Hindi and English are both fine.
+        <span id="body-count" aria-live="polite"></span> Maximum @Model.MaxBodyChars.ToString("N0") characters.</span>
+</div>
+@if (!Model.ConfidentialLocked)
+{
+    <label class="check"><input type="checkbox" name="Confidential" value="true" checked="@f.Confidential" /> Confidential — even after approval, only the people the note passes through can see it</label>
+}
+else if (f.Confidential)
+{
+    <p class="muted small">This note is marked <strong>confidential</strong> (fixed after the first submission).</p>
+}
+@if (Model.ShowDeclaration)
+{
+    <div class="declaration mt">
+        <label class="check"><input type="checkbox" name="Declaration" value="true" checked="@f.Declaration" required /> I confirm this note is <strong>not</strong> a disciplinary, vigilance or complaint matter.</label>
+        <p class="hint muted small">Disciplinary, vigilance and complaint matters stay on the physical file and must not be raised as e-Notes.</p>
+    </div>
+}
+@if (Model.ShowFiles)
+{
+    <div class="field mt">
+        <label for="Uploads">Attachments (optional)</label>
+        <input id="Uploads" name="Uploads" type="file" multiple accept="@Model.Accept" data-max-mb="@Model.MaxFileMB" />
+        <span class="hint">PDF for reference documents; Word for draft letters so they stay editable. Also Excel, PowerPoint, JPG/PNG, TXT, CSV — up to @Model.MaxFileMB MB each.</span>
+    </div>
+}

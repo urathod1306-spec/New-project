@@ -1,0 +1,23 @@
+@model (NabconsIntranet.Data.ENoteFilter Filter, List<string> Categories, List<string> Verticals, bool ShowHolder, string Action)
+@{ var f = Model.Filter; }
+<form class="filters" method="get" action="@Model.Action" role="search">
+    @if (Model.Action == "/ENotes") { <input type="hidden" name="tab" value="@f.Tab" /> }
+    <div class="field wide"><label for="q">Search</label><input id="q" name="q" type="search" value="@f.Q" maxlength="200" placeholder="Number, subject or words in the note" /></div>
+    <div class="field"><label for="state">State</label>
+        <select id="state" name="state"><option value="">Any</option>
+            @foreach (var s in ENoteStates.All) { <option value="@s" selected="@(f.State == s)">@ENoteStates.Label(s)</option> }
+        </select></div>
+    <div class="field"><label for="category">Category</label>
+        <select id="category" name="category"><option value="">Any</option>
+            @foreach (var c in Model.Categories) { <option selected="@(f.Category == c)">@c</option> }
+        </select></div>
+    <div class="field"><label for="vertical">Vertical (initiator)</label>
+        <select id="vertical" name="vertical"><option value="">Any</option>
+            @foreach (var v in Model.Verticals) { <option selected="@(f.Vertical == v)">@v</option> }
+        </select></div>
+    <div class="field"><label for="from">From</label><input id="from" name="from" type="date" value="@f.From?.ToString("yyyy-MM-dd")" /></div>
+    <div class="field"><label for="to">To</label><input id="to" name="to" type="date" value="@f.To?.ToString("yyyy-MM-dd")" /></div>
+    <div class="field"><label for="initiator">Initiator</label><input id="initiator" name="initiator" type="text" value="@f.Initiator" maxlength="100" /></div>
+    @if (Model.ShowHolder) { <div class="field"><label for="holder">Current holder</label><input id="holder" name="holder" type="text" value="@f.Holder" maxlength="100" /></div> }
+    <div class="actions"><button class="btn primary" type="submit">Search</button><a class="btn" href="@Model.Action@(Model.Action == "/ENotes" ? "?tab=" + f.Tab : "")">Clear</a></div>
+</form>

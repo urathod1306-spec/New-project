@@ -264,3 +264,71 @@ document.querySelectorAll('select[data-autosubmit]').forEach(function (s) { s.ad
         (i < 0 ? summary : all[i]).focus();
     });
 })();
+
+// ---------- e-Note: "Mark to" type-ahead (the form also works without it: the typed name is resolved on the server) ----------
+document.querySelectorAll('input[data-user-lookup]').forEach(function (input) {
+    var hidden = document.getElementById(input.getAttribute('data-user-lookup'));
+    var list = document.getElementById(input.getAttribute('aria-controls'));
+    var chosen = document.getElementById('toChosen'), hint = chosen ? chosen.textContent : '';
+    var items = [], active = -1, timer = null, seq = 0;
+    if (!hidden || !list) return;
+    function close() { list.classList.add('hidden'); input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); }
+    function render() {
+        list.textContent = '';
+        items.forEach(function (u, i) {
+            var li = document.createElement('li');
+            li.id = 'lookup-' + u.id; li.setAttribute('role', 'option'); li.setAttribute('aria-selected', i === active ? 'true' : 'false');
+            if (i === active) li.className = 'active';
+            var s = document.createElement('strong'); s.textContent = u.name; li.appendChild(s);
+            var m = document.createElement('span'); m.className = 'muted small'; m.textContent = [u.designation, u.vertical].filter(Boolean).join(' · '); li.appendChild(m);
+            li.addEventListener('mousedown', function (e) { e.preventDefault(); pick(i); });
+            list.appendChild(li);
+        });
+        if (!items.length) { var none = document.createElement('li'); none.className = 'muted small'; none.textContent = 'No active colleague matches.'; list.appendChild(none); }
+        list.classList.remove('hidden'); input.setAttribute('aria-expanded', 'true');
+        if (active >= 0) input.setAttribute('aria-activedescendant', 'lookup-' + items[active].id); else input.removeAttribute('aria-activedescendant');
+    }
+    function pick(i) {
+        var u = items[i]; if (!u) return;
+        hidden.value = u.id; input.value = u.name;
+        if (chosen) chosen.textContent = 'Selected: ' + u.name + (u.designation ? ' — ' + u.designation : '') + (u.vertical ? ', ' + u.vertical : '');
+        close();
+    }
+    input.addEventListener('input', function () {
+        hidden.value = ''; if (chosen) chosen.textContent = hint;
+        clearTimeout(timer);
+        var q = input.value.trim();
+        if (q.length < 2) { close(); return; }
+        timer = setTimeout(function () {
+            var mine = ++seq;
+            fetch('/api/users/lookup?q=' + encodeURIComponent(q), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : []; })
+                .then(function (d) { if (mine !== seq) return; items = d; active = d.length ? 0 : -1; render(); })
+                .catch(function () { /* the server resolves the typed name instead */ });
+        }, 200);
+    });
+    input.addEventListener('keydown', function (e) {
+        if (list.classList.contains('hidden')) return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(items.length - 1, active + 1); render(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(0, active - 1); render(); }
+        else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); pick(active); }
+        else if (e.key === 'Escape') { e.preventDefault(); close(); }
+    });
+    input.addEventListener('blur', function () { setTimeout(close, 150); });
+});
+
+// ---------- character counter for long text fields ----------
+document.querySelectorAll('textarea[data-count]').forEach(function (t) {
+    var out = document.getElementById(t.getAttribute('data-count'));
+    if (!out) return;
+    function sync() { out.textContent = t.value.length.toLocaleString('en-IN') + ' characters.'; }
+    t.addEventListener('input', sync); sync();
+});
+
+// ---------- copy a value shown on the page (e.g. an attachment's SHA-256) ----------
+document.querySelectorAll('[data-copy-text]').forEach(function (b) {
+    b.addEventListener('click', function () {
+        var label = b.textContent;
+        nabCopy(b.getAttribute('data-copy-text'), function (ok) { b.textContent = ok ? 'Copied' : 'Select and press Ctrl+C'; setTimeout(function () { b.textContent = label; }, 2000); });
+    });
+});

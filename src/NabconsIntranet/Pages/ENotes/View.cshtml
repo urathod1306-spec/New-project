@@ -1,0 +1,215 @@
+@page "/ENotes/{id:long}"
+@model NabconsIntranet.Pages.ENotes.ViewModel
+@{
+    var n = Model.Note;
+    var can = Model.Can;
+    ViewData["Title"] = n.DisplayNumber;
+    var current = Model.Attachments.Where(a => a.SupersededById == null && a.UploadedByUserId == User.UserId()).ToList();
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/ENotes">← My e-Notes</a></p>
+        <h1 class="enote-title">@n.Subject</h1>
+        <p><strong class="mono-num">@n.DisplayNumber</strong> · <span class="badge @ENoteStates.Css(n.State)">@n.FinalLabel</span>
+            @if (n.IsConfidential) { <span class="badge warning">Confidential</span> } · @n.Category</p>
+    </div>
+    <div class="actions">
+        @if (can.CanEdit) { <a class="btn" href="/ENotes/@n.Id/Edit">@(n.WasSubmitted ? "Revise the note" : "Edit draft")</a> }
+        @if (n.WasSubmitted) { <a class="btn" href="/ENotes/@n.Id/Print">Print view</a> }
+        @if (can.CanPdf) { <a class="btn primary" href="/ENotes/@n.Id/Pdf">Download PDF for archival</a> }
+    </div>
+</div>
+@if (ViewData["NowError"] is string nowErr) { <div class="alert danger" role="alert">@nowErr</div> }
+
+<div class="card enote-head">
+    <dl class="meta-grid">
+        <dt>Initiated by</dt><dd>@n.InitiatorName@(n.InitiatorDesignation != null ? ", " + n.InitiatorDesignation : "") <span class="muted">· @n.InitiatorVertical</span></dd>
+        <dt>Created / submitted</dt><dd>@F.DateTime(n.CreatedAt)@(n.SubmittedAt != null ? " · submitted " + F.DateTime(n.SubmittedAt) : " · not yet submitted")</dd>
+        @if (n.CurrentHolderName != null && !ENoteStates.IsDecided(n.State))
+        {
+            <dt>Now with</dt><dd><strong>@n.CurrentHolderName</strong> @(F.DaysSince(n.HeldSince) < 1 ? "since today" : "for " + Model.Days(n.HeldSince))@(Model.Sender != null ? " · sent by " + Model.Sender : "")</dd>
+        }
+        @if (n.DecidedAt != null)
+        {
+            <dt>@n.Outcome by</dt><dd>@n.DecidedByName@(n.DecidedByDesignation != null ? ", " + n.DecidedByDesignation : "") · @F.DateTime(n.DecidedAt)</dd>
+        }
+    </dl>
+</div>
+
+@if (n.State == ENoteStates.Draft && can.IsInitiator)
+{
+    <div class="alert info">This is your <strong>draft</strong>. Only you can see it. Check the text and attachments, then use <strong>Submit and mark to</strong> below. The note number is given when you submit.</div>
+}
+@if (n.State == ENoteStates.Returned && can.IsInitiator)
+{
+    <div class="alert warning">The note was <strong>returned to you</strong>. Revise the text if needed (<a href="/ENotes/@n.Id/Edit">Revise the note</a>), then mark it onward again. @if (Model.UnsentChanges) { <strong>You have revisions not yet sent.</strong> }</div>
+}
+@if (ENoteStates.CanCloseFrom(n.State) && can.IsInitiator)
+{
+    <div class="alert success">The note is <strong>@n.FinalLabel.ToLowerInvariant()</strong>. Download the PDF for archival, then <strong>close / file</strong> it below.</div>
+}
+
+<div class="grid two enote-grid">
+    <div class="stack">
+        <section class="card note-sheet-body" aria-labelledby="note-text">
+            <div class="card-head">
+                <h2 id="note-text">Note</h2>
+                @if (Model.Versions.Count > 1)
+                {
+                    <form method="get" class="inline-filter">
+                        <label for="v">Version</label>
+                        <select id="v" name="v" data-autosubmit>
+                            @foreach (var ver in Model.Versions) { <option value="@ver.Version" selected="@(Model.Shown?.Version == ver.Version)">@ver.Version — @F.DateTime(ver.CreatedAt)@(ver == Model.Versions[^1] ? " (latest)" : "")</option> }
+                        </select>
+                        <noscript><button class="btn sm" type="submit">Show</button></noscript>
+                    </form>
+                }
+            </div>
+            @if (Model.Paragraphs.Count == 0) { <p class="empty">No text yet.</p> }
+            <ol class="note-paras">
+                @foreach (var p in Model.Paragraphs) { <li><span class="pre">@p</span></li> }
+            </ol>
+            @if (Model.Shown != null && n.State != ENoteStates.Draft)
+            {
+                <p class="muted small">Text version @Model.Shown.Version of @Model.Versions.Count · saved by @Model.Shown.CreatedBy, @F.DateTime(Model.Shown.CreatedAt) · <span title="SHA-256 @Model.Shown.Sha256">SHA-256 @(Model.Shown.Sha256.Length > 12 ? Model.Shown.Sha256[..12] + "…" : Model.Shown.Sha256)</span></p>
+            }
+        </section>
+
+        <section class="card" aria-labelledby="sheet-h">
+            <h2 id="sheet-h">Note-sheet</h2>
+            <ol class="note-sheet">
+                @foreach (var e in Model.Sheet)
+                {
+                    <li class="ns-entry @(e.Kind == "Comment" ? "ns-comment" : "ns-move") ns-@(e.Action?.ToLowerInvariant())">
+                        @if (e.Kind == "Movement") { <div class="ns-action">@NabconsIntranet.Pages.ENotes.ViewModel.MovementText(e)</div> }
+                        @if (!string.IsNullOrWhiteSpace(e.Text)) { <div class="ns-text pre">@e.Text</div> }
+                        <div class="ns-sign"><strong>@e.Name</strong>@if (!string.IsNullOrEmpty(e.Designation)) { <span>@e.Designation</span> }<time>@F.DateTime(e.Timestamp)</time></div>
+                    </li>
+                }
+            </ol>
+        </section>
+    </div>
+
+    <div class="stack">
+        @if (can.CanMark || can.CanComment || can.CanSendBack || can.CanDecide || can.CanAttach)
+        {
+            <section class="card action-panel" aria-labelledby="act-h">
+                <h2 id="act-h">@(n.State == ENoteStates.Draft ? "Submit" : "Your action")</h2>
+                @if (can.CanMark)
+                {
+                    <form method="post" asp-page-handler="Mark" class="mark-form">
+                        <input type="hidden" name="rowVersion" value="@n.RowVersion" />
+                        <div class="field lookup">
+                            <label for="toQuery">@(n.State == ENoteStates.Draft ? "Submit and mark to" : "Mark to")</label>
+                            <input id="toQuery" name="toQuery" type="text" autocomplete="off" value="@Model.MarkQuery" maxlength="100" required
+                                   data-user-lookup="toUserId" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="toList" placeholder="Type 2 or more letters of a name" />
+                            @if (Model.Candidates is not { Count: > 0 }) { <input type="hidden" id="toUserId" name="toUserId" value="" /> }
+                            <ul id="toList" class="lookup-list hidden" role="listbox" aria-label="Matching people"></ul>
+                            <span class="hint" id="toChosen" aria-live="polite">Any active colleague — follow the usual office hierarchy.</span>
+                        </div>
+                        @if (Model.Candidates is { Count: > 0 } cands)
+                        {
+                            <fieldset class="candidates"><legend>Several people match “@Model.MarkQuery” — choose one:</legend>
+                                @foreach (var c in cands) { <label class="check"><input type="radio" name="toUserId" value="@c.Id" required /> @c.Name <span class="muted small">@c.Designation · @c.Vertical</span></label> }
+                            </fieldset>
+                        }
+                        <div class="field">
+                            <label for="markRemarks">Remarks @(can.IsInitiator ? "(optional)" : "")</label>
+                            <textarea id="markRemarks" name="remarks" rows="3" maxlength="2000" @(can.IsInitiator ? "" : "required")>@Model.MarkRemarks</textarea>
+                        </div>
+                        <button class="btn primary" type="submit">@(n.State == ENoteStates.Draft ? "Submit and mark" : "Mark to")</button>
+                    </form>
+                }
+                @if (can.CanSendBack || can.CanDecide)
+                {
+                    <form method="post" class="decide-panel mt">
+                        <input type="hidden" name="rowVersion" value="@n.RowVersion" />
+                        <div class="field">
+                            <label for="decRemarks">Remarks / decision</label>
+                            <textarea id="decRemarks" name="remarks" rows="3" maxlength="2000" required></textarea>
+                            <span class="hint">Required for each of these actions.</span>
+                        </div>
+                        <div class="actions">
+                            @if (can.CanSendBack) { <button class="btn" type="submit" asp-page-handler="SendBack" title="Back to the person who marked it to you">Send back@(Model.Sender != null ? " to " + Model.Sender : "")</button> }
+                            @if (can.CanReturn) { <button class="btn warning" type="submit" asp-page-handler="Return">Return to initiator</button> }
+                            @if (can.CanDecide)
+                            {
+                                <button class="btn success" type="submit" asp-page-handler="Approve" data-confirm="Approve this note as the competent authority?">Approve</button>
+                                <button class="btn danger" type="submit" asp-page-handler="Reject" data-confirm="Reject this note?">Reject</button>
+                            }
+                        </div>
+                    </form>
+                }
+                @if (can.CanComment)
+                {
+                    <form method="post" asp-page-handler="Comment" class="mt">
+                        <input type="hidden" name="rowVersion" value="@n.RowVersion" />
+                        <div class="field"><label for="commentText">Add a comment (stays with you)</label><textarea id="commentText" name="text" rows="3" maxlength="4000" required></textarea></div>
+                        <button class="btn" type="submit">Add comment</button>
+                    </form>
+                }
+            </section>
+        }
+
+        <section class="card" aria-labelledby="att-h">
+            <div class="card-head"><h2 id="att-h">Attachments</h2>@if (Model.Attachments.Count > 0) { <a class="btn sm" href="/ENotes/@n.Id/Attachments.zip">Download all (ZIP)</a> }</div>
+            @if (Model.Attachments.Count == 0) { <p class="empty">No attachments.</p> }
+            <ul class="list att-list">
+                @foreach (var a in Model.Attachments)
+                {
+                    <li class="@(a.SupersededById != null ? "superseded" : "")">
+                        <a href="/ENotes/Attachment/@a.Id"><strong>@a.OriginalFileName</strong></a> @if (a.SupersededById != null) { <span class="badge neutral">Superseded</span> }
+                        <div class="meta">@a.UploadedByName · @(a.Stage ?? "—") · @Fmt.Size(a.SizeBytes) · @F.DateTime(a.UploadedAt)</div>
+                        <div class="meta"><span class="mono" title="SHA-256 @a.Sha256">SHA-256 @(a.Sha256.Length > 16 ? a.Sha256[..16] + "…" : a.Sha256)</span> <button type="button" class="linkbtn small" data-copy-text="@a.Sha256">Copy hash</button></div>
+                        @if (can.CanRemoveDraftFiles)
+                        {
+                            <form method="post" asp-page-handler="RemoveFile" asp-route-attachmentId="@a.Id" class="inline-form"><button class="btn sm" type="submit" data-confirm="Remove this attachment from the draft?">Remove</button></form>
+                        }
+                    </li>
+                }
+            </ul>
+            @if (can.CanAttach)
+            {
+                <form method="post" asp-page-handler="Attach" enctype="multipart/form-data" class="mt">
+                    <div class="field">
+                        <label for="uploads">Add attachment(s)</label>
+                        <input id="uploads" name="uploads" type="file" multiple accept="@string.Join(",", Model.Options.AllowedExtensions)" data-max-mb="@Model.Options.MaxFileMB" required />
+                        <span class="hint">@Model.FileCount of @Model.Options.MaxFilesPerNote files · @Fmt.Size(Model.FileBytes) of @Model.Options.MaxNoteTotalMB MB used · up to @Model.Options.MaxFileMB MB per file.
+                            @(n.WasSubmitted ? "Once added, attachments cannot be removed — add a newer version instead." : "")</span>
+                    </div>
+                    @if (n.WasSubmitted && current.Count > 0)
+                    {
+                        <div class="field"><label for="replacesId">This file replaces (optional)</label>
+                            <select id="replacesId" name="replacesId"><option value="">— nothing, it is a new file —</option>
+                                @foreach (var a in current) { <option value="@a.Id">@a.OriginalFileName</option> }
+                            </select><span class="hint">Both stay visible; the older one is marked “superseded”.</span></div>
+                    }
+                    <button class="btn" type="submit">Attach</button>
+                </form>
+            }
+        </section>
+
+        @if (can.CanWithdraw || can.CanClose)
+        {
+            <section class="card" aria-labelledby="init-h">
+                <h2 id="init-h">Initiator</h2>
+                @if (can.CanClose)
+                {
+                    <form method="post" asp-page-handler="Close">
+                        <input type="hidden" name="rowVersion" value="@n.RowVersion" />
+                        <p class="small muted">Closing files the note: it becomes read-only permanently. Download the PDF first if you need it for the physical file.</p>
+                        <button class="btn primary" type="submit" data-confirm="Close and file this note? It cannot be changed afterwards.">Close / file the note</button>
+                    </form>
+                }
+                @if (can.CanWithdraw)
+                {
+                    <form method="post" asp-page-handler="Withdraw" class="mt">
+                        <input type="hidden" name="rowVersion" value="@n.RowVersion" />
+                        <div class="field"><label for="reason">Withdraw — reason</label><textarea id="reason" name="reason" rows="2" maxlength="2000" required></textarea></div>
+                        <button class="btn danger" type="submit" data-confirm="Withdraw this note?">Withdraw the note</button>
+                    </form>
+                }
+            </section>
+        }
+    </div>
+</div>
