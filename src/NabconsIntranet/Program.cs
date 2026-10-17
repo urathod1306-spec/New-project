@@ -30,6 +30,8 @@ builder.Host.UseWindowsService(o => o.ServiceName = "NABCONSIntranet");
 var options = builder.Configuration.GetSection("Intranet").Get<IntranetOptions>() ?? new IntranetOptions();
 options.Resolve(builder.Environment.ContentRootPath);
 builder.Services.AddSingleton(options);
+var notificationOptions = builder.Configuration.GetSection("Notifications").Get<NotificationOptions>() ?? new NotificationOptions();
+builder.Services.AddSingleton(notificationOptions);
 builder.Logging.AddProvider(new FileLoggerProvider(options.LogPath));
 
 builder.WebHost.ConfigureKestrel(k =>
@@ -60,7 +62,10 @@ builder.Services.AddSingleton<ProfileRepository>();
 builder.Services.AddSingleton<PhotoService>();
 builder.Services.AddSingleton<LeadAccess>();
 builder.Services.AddSingleton<LeadRepository>();
-builder.Services.AddSingleton<ILeadNotifier, NoLeadNotifications>();
+builder.Services.AddSingleton<ChangeTracker>();
+builder.Services.AddSingleton<INotificationService, NotificationService>();
+builder.Services.AddSingleton<DeskService>();
+builder.Services.AddSingleton<HousekeepingService>();
 builder.Services.AddTransient<Seeder>();
 builder.Services.AddHostedService<BackupScheduler>();
 
@@ -83,6 +88,25 @@ else
         c.Cookie.SameSite = SameSiteMode.Strict;
         c.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         c.Events.OnValidatePrincipal = IdentityBuilder.ValidateCookie;
+        // The badge poll must never keep a session alive: the 30-minute idle timeout counts real use only.
+        c.Events.OnCheckSlidingExpiration = ctx =>
+        {
+            if (Endpoints.IsPoll(ctx.HttpContext.Request)) ctx.ShouldRenew = false;
+            return Task.CompletedTask;
+        };
+        // Small JSON endpoints answer 401/403 instead of redirecting to the sign-in page.
+        c.Events.OnRedirectToLogin = ctx =>
+        {
+            if (Endpoints.IsApi(ctx.Request)) ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            else ctx.Response.Redirect(ctx.RedirectUri);
+            return Task.CompletedTask;
+        };
+        c.Events.OnRedirectToAccessDenied = ctx =>
+        {
+            if (Endpoints.IsApi(ctx.Request)) ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+            else ctx.Response.Redirect(ctx.RedirectUri);
+            return Task.CompletedTask;
+        };
     });
 }
 

@@ -69,6 +69,8 @@ public sealed class UserRepository(Db db)
     public void BumpPhotoVersion(long id, bool removed = false) => db.Exec("UPDATE Users SET PhotoVersion = @v WHERE Id = @id",
         new { id, v = removed ? 0 : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
 
+    public void SetOpenDeskAfterSignIn(long id, bool on) => db.Exec("UPDATE Users SET OpenDeskAfterSignIn = @on WHERE Id = @id", new { id, on });
+
     public long CountActiveAdmins() =>
         db.Scalar<long>("SELECT COUNT(*) FROM Users WHERE IsActive = 1 AND (',' || Roles || ',') LIKE '%,Administrator,%'");
 }

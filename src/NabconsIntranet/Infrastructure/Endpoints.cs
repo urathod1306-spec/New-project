@@ -6,8 +6,29 @@ namespace NabconsIntranet.Infrastructure;
 /// <summary>Small authenticated endpoints: staff photos, directory contact cards (JSON) and vCards.</summary>
 public static class Endpoints
 {
+    public const string SummaryPath = "/api/notifications/summary";
+
+    public static bool IsPoll(HttpRequest r) => r.Path.Equals(SummaryPath, StringComparison.OrdinalIgnoreCase);
+    public static bool IsApi(HttpRequest r) => r.Path.StartsWithSegments("/api");
+
     public static void MapIntranetEndpoints(this WebApplication app)
     {
+        // Badge poll: tiny JSON, answered from memory when nothing has changed (ETag / 304).
+        app.MapGet(SummaryPath, (HttpContext ctx, DeskService desk) =>
+        {
+            var c = desk.Counts(ctx.User);
+            var etag = "\"" + c.Token + "\"";
+            ctx.Response.Headers.CacheControl = "private, no-cache";
+            ctx.Response.Headers.Remove("Pragma");
+            ctx.Response.Headers.ETag = etag;
+            if (ctx.Request.Headers.IfNoneMatch.ToString() == etag) return Results.StatusCode(StatusCodes.Status304NotModified);
+            return Results.Json(new
+            {
+                unread = c.Unread, desk = c.Total, inbox = c.Inbox, admin = c.AdminPending, leads = c.NewLeads,
+                enotes = c.ENotesPending, token = c.Token,
+            });
+        }).RequireAuthorization();
+
         // Photos are served only to signed-in users, from data\uploads\photos (never from wwwroot).
         app.MapGet("/photo/{userId:long}", (long userId, bool? thumb, long? v, HttpContext ctx, PhotoService photos) =>
         {

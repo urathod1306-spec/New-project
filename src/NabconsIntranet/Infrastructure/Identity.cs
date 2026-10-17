@@ -42,7 +42,7 @@ public static class IdentityBuilder
         if (p.Vertical() != u.Vertical || p.UserName() != u.Username || p.DisplayName() != u.DisplayName)
         {
             ctx.ReplacePrincipal(new ClaimsPrincipal(BuildIdentity(u, CookieAuthenticationDefaults.AuthenticationScheme)));
-            ctx.ShouldRenew = true;
+            ctx.ShouldRenew = !Endpoints.IsPoll(ctx.HttpContext.Request);   // the badge poll never extends a session
         }
     }
 }

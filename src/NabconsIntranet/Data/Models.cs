@@ -15,6 +15,8 @@ public sealed class AppUser
     public bool IsActive { get; set; } = true;
     public long? StaffId { get; set; }
     public long PhotoVersion { get; set; }
+    /// <summary>Preference: go to My Desk after signing in (default on).</summary>
+    public bool OpenDeskAfterSignIn { get; set; } = true;
     public string SecurityStamp { get; set; } = "";
     public string? LastLoginAt { get; set; }
     public string CreatedAt { get; set; } = "";
