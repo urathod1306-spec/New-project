@@ -1,5 +1,35 @@
 # Changelog — NABCONS Intranet
 
+## 1.3.0 — in development (do not install yet)
+Database schema 4 → 5 (additive). Built in two phases; the 1.3.0 package is produced only when both are complete.
+
+### Phase 1 — My Desk and in-app notifications
+- **Notification bell** in the top bar:
+  - shows the unread count (99+ above 99) and a drop-down of the latest 10, with *Mark all read* and *View all*;
+  - fully keyboard-usable (Enter opens, arrow keys move, Esc closes);
+  - full **Notifications** page (`/Notifications`), with unread/all and module filters and pagination. Opening a notification marks it read.
+- **What triggers a notification:**
+  - Requests: assigned to the reviewer or sanctioning authority; the submitter is told when the request is recommended, approved, returned or rejected.
+  - Administrators: a self-registration or vertical change is waiting. The requester is told when a vertical change is decided.
+  - Business Leads: BDU members are told of each new lead. The submitter is told of status changes and owner assignment, and the new owner is told the lead is theirs.
+- Nobody is notified about their own action. Each notification is written in the same database transaction as the action that causes it.
+- **My Desk** (`/Desk`, with a "My Desk (n)" badge) brings your work into one page:
+  - requests awaiting your action and your requests returned to you;
+  - for administrators: registrations and vertical/profile changes waiting;
+  - for BDU members and LeadViewers: leads in *Submitted* and your assigned leads due within 7 days or overdue;
+  - recent notifications.
+- New preference on My Profile: **Open My Desk after sign-in** (on by default).
+- **Live badges** refresh with one small request every 60 s (`Notifications:PollSeconds`, minimum 30):
+  - the request pauses while the tab is hidden, backs off after errors, and gets "304 Not Modified" when nothing changed;
+  - the poll never extends the 30-minute idle timeout;
+  - no WebSockets, Server-Sent Events or other long-lived connections are used.
+- **Daily housekeeping** runs after the daily backup. It removes read notifications older than 90 days and unread ones older than 365 days (configurable). The audit log is not affected.
+- Badge counts (Approval Inbox, Administration, Business Leads) now come from one cached query instead of several queries on every page.
+
+### Changed
+- Signing in now opens **My Desk** unless the preference is switched off. Before, it opened the home page.
+- The internal notification hook for leads, empty since 1.2.0, is replaced by in-app notifications.
+
 ## 1.2.0 — 2026-10-17
 **Upgrade note:** database schema 3 → 4 (additive only). See `SETUP_GUIDE.md` for the upgrade command. Existing data is not changed.
 

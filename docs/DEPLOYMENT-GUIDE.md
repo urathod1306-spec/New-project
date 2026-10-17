@@ -92,7 +92,12 @@ Edit with Notepad, save, then restart the intranet (close and reopen the window,
 | `AllowedUploadExtensions` | pdf, docx, xlsx, … | Allowed file types. File content is also checked. |
 | `SessionTimeoutMinutes` | `30` | Idle sign-out (local accounts) |
 | `MaxFailedLogins` / `LockoutMinutes` | `5` / `15` | Account lockout |
+| `Notifications:PollSeconds` (v1.3) | `60` | How often open pages refresh the bell and badges (one small request; minimum 30). The request pauses while the browser tab is hidden and never extends a session. |
+| `Notifications:RetainReadDays` (v1.3) | `90` | Read notifications older than this are removed by the daily housekeeping (after the daily backup) |
+| `Notifications:RetainUnreadDays` (v1.3) | `365` | Unread notifications older than this are removed |
 | `DataFolder`, `DocumentsFolder`, `BackupFolder`, `LogFolder` | relative | May be absolute paths, e.g. `D:\\NABCONSData\\documents` |
+
+The `Notifications` section (and, from 1.3, `ENote`) sits at the top level of `appsettings.json`, next to `"Intranet"`. If a section or setting is missing, the default above applies.
 
 ## 6. HTTPS (recommended before wider LAN use)
 

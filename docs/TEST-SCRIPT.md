@@ -34,4 +34,22 @@ Run on the isolated test PC with the demo data (password for all demo accounts: 
 | 29 | Approval | Admin → Self-registrations → review → approve | Changed fields highlighted; account created; directory entry updated or added (provisional REG-code if none) ✔ | |
 | 30 | Sign-in | Sign in with the mobile number (also try "+91 98…") before and after approval | Before: "awaiting approval"; after: signed in ✔ | |
 | 31 | Rejection / duplicates | Reject one with a reason; register the same number twice | Rejected applicant told not approved; duplicate blocked ✔ | |
+| 32 | Notifications (v1.3) | As `staff`, submit a request to approver1. As `approver1`, keep any page open for up to a minute | Bell count rises without reloading; Approval Inbox badge too; the drop-down shows the new item as unread ✔ | |
+| 33 | Notification privacy | As `staff`, open `/Notifications/Open/<n>` with the number of one of approver1's notifications | "Page not found"; approver1's notification stays unread ✔ | |
+| 34 | Mark all read | Bell → *Mark all read*, and on the Notifications page | Badge and list cleared ✔ | |
+| 35 | My Desk by role | Sign in as `staff`, `approver1`, `admin`, `bdu` and open *My Desk* | Each sees only the sections for their role or items; sign-in opens My Desk unless switched off in *My Profile → Preferences* ✔ | |
+| 36 | Session timeout with polling | Sign in, leave the page open and untouched for 35 minutes | Signed out as before; the poll does not keep the session alive ✔ (automated with a 1-minute session) | |
+| 37 | Keyboard | Tab to the bell, Enter, arrow keys, Esc | Opens, moves through items, closes and returns focus to the bell ✔ | |
 | 26 | No egress | With an outbound "block all" firewall rule for `NabconsIntranet.exe`, use every page | Everything works; no blocked-connection events | |
+
+## Performance (v1.3)
+
+Measured with the automated benchmark at the volumes in the brief: `NABCONS_BENCH=1 dotnet test tests/NabconsIntranet.Tests --filter PerformanceTests`. The run seeds the data into a throw-away database, then times each page on a development container (4 vCPU). The office PC will be somewhat slower, but the margins are large.
+
+| Measure | Volume | p50 | p95 | Budget |
+|---|---|---|---|---|
+| Badge poll, nothing changed (`304`) | 500 users, 300,000 notifications | 0.7 ms | 1.4 ms | < 20 ms |
+| Badge counts after a change (database read) | same | 0.2 ms | 0.3 ms | < 20 ms |
+| My Desk page | same | 2.6 ms | 6.1 ms | < 250 ms |
+| Notifications page (page 3) | same | 3.2 ms | 5.4 ms | — |
+| Daily housekeeping | 168,000 old notifications removed | 7.8 s (in batches of 5,000) | | outside office hours |
