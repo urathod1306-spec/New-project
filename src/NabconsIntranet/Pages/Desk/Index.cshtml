@@ -5,6 +5,8 @@
     var v = Model.View;
     var c = v.Counts;
     string Days(string? iso) { var d = F.DaysSince(iso); return d < 1 ? "today" : d == 1 ? "1 day" : $"{d:0} days"; }
+    string Ago(string? iso) { var d = F.DaysSince(iso); return d < 1 ? "today" : d == 1 ? "1 day ago" : $"{d:0} days ago"; }
+    string For(string? iso) { var d = F.DaysSince(iso); return d < 1 ? "since today" : d == 1 ? "for 1 day" : $"for {d:0} days"; }
 }
 <div class="page-head">
     <div>
@@ -14,6 +16,70 @@
 </div>
 
 <div class="desk-grid">
+    @if (v.ShowENotes)
+    {
+        <section class="card desk-card" aria-labelledby="d-enotes">
+            <div class="card-head"><h2 id="d-enotes">e-Notes pending with me <span class="badge @(v.ENotesPending.Count > 0 ? "info" : "neutral")">@v.ENotesPending.Count@(v.ENotesPending.Count == 10 ? "+" : "")</span></h2><a href="/ENotes">My e-Notes ›</a></div>
+            @if (v.ENotesPending.Count == 0) { <p class="empty">No e-Note is waiting for you.</p> }
+            else
+            {
+                <ul class="list">
+                    @foreach (var n in v.ENotesPending)
+                    {
+                        var d = F.DaysSince(n.HeldSince);
+                        <li><a href="/ENotes/@n.Id"><strong>@n.Subject</strong></a> @if (d >= 7) { <span class="badge danger">@d days</span> }
+                            <div class="meta">@n.DisplayNumber · from @(n.SenderName ?? n.InitiatorName) · with you @For(n.HeldSince)</div></li>
+                    }
+                </ul>
+            }
+        </section>
+        @if (v.ENotesReturned.Count + v.ENotesDrafts.Count + v.ENotesMoving.Count + v.ENotesToClose.Count > 0)
+        {
+            <section class="card desk-card" aria-labelledby="d-mynotes">
+                <div class="card-head"><h2 id="d-mynotes">My e-Notes</h2><a href="/ENotes?tab=initiated">All ›</a></div>
+                @if (v.ENotesReturned.Count > 0)
+                {
+                    <h3 class="desk-sub">Returned to me <span class="badge warning">@v.ENotesReturned.Count</span></h3>
+                    <ul class="list">
+                        @foreach (var n in v.ENotesReturned)
+                        {
+                            <li><a href="/ENotes/@n.Id"><strong>@n.Subject</strong></a><div class="meta">@n.DisplayNumber · returned by @(n.SenderName ?? "—") · @Ago(n.HeldSince)</div></li>
+                        }
+                    </ul>
+                }
+                @if (v.ENotesToClose.Count > 0)
+                {
+                    <h3 class="desk-sub">@(v.ENotesToClose.All(x => x.State == ENoteStates.Approved) ? "Approved — awaiting my closure" : "Decided — awaiting my closure") <span class="badge success">@v.ENotesToClose.Count</span></h3>
+                    <ul class="list">
+                        @foreach (var n in v.ENotesToClose)
+                        {
+                            <li><a href="/ENotes/@n.Id"><strong>@n.Subject</strong></a> <span class="badge @ENoteStates.Css(n.State)">@ENoteStates.Label(n.State)</span><div class="meta">@n.DisplayNumber · download the PDF, then close / file it</div></li>
+                        }
+                    </ul>
+                }
+                @if (v.ENotesMoving.Count > 0)
+                {
+                    <h3 class="desk-sub">In movement</h3>
+                    <ul class="list">
+                        @foreach (var n in v.ENotesMoving)
+                        {
+                            <li><a href="/ENotes/@n.Id"><strong>@n.Subject</strong></a><div class="meta">@n.DisplayNumber · with @n.CurrentHolderName @For(n.HeldSince)</div></li>
+                        }
+                    </ul>
+                }
+                @if (v.ENotesDrafts.Count > 0)
+                {
+                    <h3 class="desk-sub">Drafts</h3>
+                    <ul class="list">
+                        @foreach (var n in v.ENotesDrafts)
+                        {
+                            <li><a href="/ENotes/@n.Id"><strong>@n.Subject</strong></a><div class="meta">last saved @F.Relative(n.UpdatedAt)</div></li>
+                        }
+                    </ul>
+                }
+            </section>
+        }
+    }
     @if (v.ShowInbox)
     {
         <section class="card desk-card" aria-labelledby="d-inbox">
@@ -38,7 +104,7 @@
             <ul class="list">
                 @foreach (var r in v.Returned)
                 {
-                    <li><a href="/Requests/Details/@r.Id"><strong>@r.Subject</strong></a><div class="meta">@r.RequestNumber · returned @Days(r.UpdatedAt) ago</div></li>
+                    <li><a href="/Requests/Details/@r.Id"><strong>@r.Subject</strong></a><div class="meta">@r.RequestNumber · returned @Ago(r.UpdatedAt)</div></li>
                 }
             </ul>
         </section>

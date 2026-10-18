@@ -1,0 +1,52 @@
+@page
+@model NabconsIntranet.Pages.ENotes.IndexModel
+@{
+    ViewData["Title"] = "My e-Notes";
+    var f = Model.Filter;
+}
+<div class="page-head">
+    <div>
+        <h1>My e-Notes</h1>
+        <p>Digital note-sheets. Mark a note to any colleague, following the usual office hierarchy; only the person holding a note can act on it.</p>
+    </div>
+    <div class="actions">
+        @if (ENoteRepository.CanSeeRegister(User)) { <a class="btn" href="/ENotes/Register">e-Note register</a> }
+        <a class="btn primary" href="/ENotes/New">+ New e-Note</a>
+    </div>
+</div>
+<nav class="tabs" aria-label="e-Note lists">
+    @foreach (var (key, label) in ENoteRepository.Tabs)
+    {
+        if (key == "approved" && !ViewContext.HttpContext.RequestServices.GetRequiredService<ENoteOptions>().AllStaffSeeApproved) { continue; }
+        <a class="@(f.Tab == key ? "active" : "")" href="/ENotes?tab=@key" aria-current="@(f.Tab == key ? "page" : null)">@label</a>
+    }
+</nav>
+<partial name="_ENoteFilters" model='(f, Model.Categories, Model.Verticals, false, "/ENotes")' />
+<div class="card table-wrap">
+    <p class="muted small">@Model.Result.Total note(s)</p>
+    @if (Model.Result.Items.Count == 0)
+    {
+        <p class="empty">@(f.Tab switch { "pending" => "No e-Note is waiting for you.", "drafts" => "You have no drafts.", "approved" => "No approved notes match.", _ => "No notes match." })</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead><tr><th>Number</th><th>Subject</th><th>State</th><th class="hide-sm">Initiator</th><th>@(f.Tab == "pending" ? "From" : "With")</th><th class="hide-sm">@(f.Tab == "pending" ? "With me" : "Updated")</th></tr></thead>
+            <tbody>
+                @foreach (var n in Model.Result.Items)
+                {
+                    var held = F.DaysSince(n.HeldSince);
+                    <tr class="@(f.Tab == "pending" && held >= 7 ? "row-overdue" : "")">
+                        <td class="nowrap ref-cell"><a href="/ENotes/@n.Id">@n.DisplayNumber</a></td>
+                        <td><a href="/ENotes/@n.Id"><strong>@n.Subject</strong></a>@if (n.IsConfidential) { <span class="badge warning">Confidential</span> }<div class="muted small">@n.Category</div></td>
+                        <td><span class="badge @ENoteStates.Css(n.State)">@ENoteStates.Label(n.State)</span></td>
+                        <td class="hide-sm">@n.InitiatorName<div class="muted small">@n.InitiatorVertical</div></td>
+                        <td>@(f.Tab == "pending" ? n.SenderName ?? n.InitiatorName : n.CurrentHolderName ?? "—")</td>
+                        <td class="nowrap hide-sm">@(f.Tab == "pending" ? (held < 1 ? "today" : held + " day(s)") : F.Relative(n.UpdatedAt))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, Model.PageUrl)" />
+    }
+</div>

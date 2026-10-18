@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>NabconsIntranet</RootNamespace>
     <AssemblyName>NabconsIntranet</AssemblyName>
-    <Version>1.3.0-dev</Version>
+    <Version>1.3.0</Version>
     <Product>NABCONS Intranet</Product>
     <Company>NABARD Consultancy Services</Company>
     <InvariantGlobalization>false</InvariantGlobalization>
@@ -41,6 +41,17 @@
     <PackageReference Include="SkiaSharp" Version="4.153.1" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
     <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.153.1" />
+    <!-- e-Note PDF: correct shaping of Hindi (Devanagari) and English text. MIT, offline. -->
+    <PackageReference Include="SkiaSharp.HarfBuzz" Version="4.153.1" />
+    <PackageReference Include="HarfBuzzSharp" Version="14.2.1.301" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Win32" Version="14.2.1.301" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.2.1.301" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Fonts for the e-Note PDF (SIL Open Font License 1.1, see Resources/Fonts/OFL.txt), embedded in the program
+         and in each PDF, so nothing depends on fonts installed on the server. -->
+    <EmbeddedResource Include="Resources/Fonts/*.ttf" LogicalName="Fonts.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

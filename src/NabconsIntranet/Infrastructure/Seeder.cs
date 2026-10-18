@@ -10,7 +10,7 @@ namespace NabconsIntranet.Infrastructure;
 /// </summary>
 public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, MasterRepository masters, StaffRepository staff,
     CircularRepository circulars, NoticeRepository notices, RequestWorkflow workflow, FileStore files, AuditService audit, Fmt fmt,
-    ILogger<Seeder> log)
+    ENoteWorkflow enotes, ILogger<Seeder> log)
 {
     public const string DemoPassword = "Nabcons@2026";
 
@@ -53,14 +53,25 @@ public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, Maste
 
     private void SeedMasters()
     {
-        void Ensure(string type, params string[] names)
+        bool Ensure(string type, params string[] names)
         {
-            if (masters.List(type, activeOnly: false).Count > 0) return;
+            if (masters.List(type, activeOnly: false).Count > 0) return false;
             for (int i = 0; i < names.Length; i++) masters.Add(type, names[i], i);
             audit.Log("Master.Seeded", "MasterItems", type, string.Join("; ", names));
+            return true;
         }
-        Ensure(MasterTypes.Vertical, "Agri & Allied", "Climate Change & Sustainability", "Rural Infrastructure", "Financial Inclusion",
+        var newVerticals = Ensure(MasterTypes.Vertical, "Agri & Allied", "Climate Change & Sustainability", "Rural Infrastructure", "Financial Inclusion",
             "Microfinance & Livelihoods", "Watershed & Natural Resources", "IT & Digital", "Finance & Accounts", "HR & Administration", "BDU");
+        // e-Note number codes for the standard verticals: only when the list was created just now (never on an existing database)
+        var codes = new Dictionary<string, string>
+        {
+            ["Agri & Allied"] = "AGRI", ["Climate Change & Sustainability"] = "CCS", ["Rural Infrastructure"] = "RID", ["Financial Inclusion"] = "FI",
+            ["Microfinance & Livelihoods"] = "MFL", ["Watershed & Natural Resources"] = "WNR", ["IT & Digital"] = "IT", ["Finance & Accounts"] = "FA",
+            ["HR & Administration"] = "HR", ["BDU"] = "BDU",
+        };
+        if (newVerticals)
+            foreach (var v in masters.List(MasterTypes.Vertical, activeOnly: false).Where(v => codes.ContainsKey(v.Name)))
+                masters.SetCode(v.Id, codes[v.Name]);
         var offices = new[] { "Mumbai (Head Office)", "New Delhi", "Lucknow", "Bhopal", "Pune", "Hyderabad", "Bengaluru",
             "Kolkata", "Guwahati", "Chennai", "Jaipur" };
         Ensure(MasterTypes.Location, offices.Concat(StateAndUtCapitals.Where(c =>
@@ -293,6 +304,32 @@ public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, Maste
 
         NewReq("Additional monitor for data analysis work", "IT Equipment / Access", 9500,
             "A second monitor would help with spreadsheet-heavy monitoring and evaluation work.");
+
+        // --- sample e-Notes: one approved after moving through the chain, one pending with approver1, one draft ---
+        var coo = Principal("coo");
+        void As(ClaimsPrincipal p) => AuditService.AmbientActor.Value = p.UserName();
+        long Rv(long id) => db.Scalar<long>("SELECT RowVersion FROM ENotes WHERE Id = @id", new { id });
+        As(staffP);
+        var e1 = enotes.Create(new ENoteWorkflow.DraftInput("Hiring of a vehicle for the Rajasthan watershed evaluation survey", "Projects & assignments",
+            "The evaluation of the watershed programme in 12 districts of Rajasthan requires field visits over 18 working days.\n\n" +
+            "Quotations were obtained from three empanelled operators. The lowest rate is ₹ 2,850 per day including the driver and fuel up to 120 km.\n\n" +
+            "क्षेत्र भ्रमण के लिए वाहन की आवश्यकता है। व्यय परियोजना बजट के अंतर्गत है।\n\n" +
+            "Approval is requested for hiring the vehicle from the lowest bidder for 18 days at a total cost not exceeding ₹ 51,300.", false, true), staffP);
+        enotes.MarkTo(e1, reviewer, "Please examine.", Rv(e1), staffP);
+        As(r1);
+        enotes.Comment(e1, "Rates verified against the empanelment list. Budget head has sufficient balance.", Rv(e1), r1);
+        enotes.MarkTo(e1, coo.UserId(), "Recommended for approval.", Rv(e1), r1);
+        As(coo);
+        enotes.Decide(e1, true, "Approved. Ensure the logbook is maintained and certified by the team leader.", Rv(e1), coo);
+
+        As(staffP);
+        var e2 = enotes.Create(new ENoteWorkflow.DraftInput("Renewal of the annual maintenance contract for office photocopiers", "Procurement",
+            "The AMC for the two photocopiers at Head Office expires on 31 March.\n\nThe vendor has offered renewal at the same rate as last year. Renewal for one year is proposed.",
+            false, true), staffP);
+        enotes.MarkTo(e2, reviewer, null, Rv(e2), staffP);
+
+        enotes.Create(new ENoteWorkflow.DraftInput("Proposal for an internal workshop on GIS tools", "General administration",
+            "A one-day internal workshop on GIS tools is proposed for the project teams.", false, true), staffP);
         AuditService.AmbientActor.Value = "system (first-run setup)";
     }
 }

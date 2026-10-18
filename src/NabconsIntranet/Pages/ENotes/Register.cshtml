@@ -1,0 +1,42 @@
+@page
+@model NabconsIntranet.Pages.ENotes.RegisterModel
+@{
+    ViewData["Title"] = "e-Note register";
+    var f = Model.Filter;
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/ENotes">← My e-Notes</a></p>
+        <h1>e-Note register</h1>
+        <p>Every submitted e-Note with its ageing — <strong>metadata only</strong>. The text, note-sheet and attachments are visible only to the people the note passed through (and to all staff once approved, unless confidential).</p>
+    </div>
+    <div class="actions"><a class="btn" href="/ENotes/Register@(NabconsIntranet.Pages.ENotes.ENotePage.Query(f, 1, includeTab: false) is var qs && qs.Length > 0 ? qs + "&handler=Export" : "?handler=Export")">Export to Excel</a></div>
+</div>
+<partial name="_ENoteFilters" model='(f, Model.Categories, Model.Verticals, true, "/ENotes/Register")' />
+<div class="card table-wrap">
+    <p class="muted small">@Model.Result.Total note(s)</p>
+    @if (Model.Result.Items.Count == 0) { <p class="empty">No notes match.</p> }
+    else
+    {
+        <table class="table">
+            <thead><tr><th>Number</th><th>Subject</th><th>State</th><th class="hide-sm">Initiator</th><th>Current holder</th><th class="right">Days with holder</th><th class="right hide-sm">Total days</th><th class="hide-sm">Submitted</th></tr></thead>
+            <tbody>
+                @foreach (var n in Model.Result.Items)
+                {
+                    var held = Model.HeldDays(n);
+                    <tr class="@(held >= 7 ? "row-overdue" : "")">
+                        <td class="nowrap ref-cell">@n.NoteNumber</td>
+                        <td>@NabconsIntranet.Pages.ENotes.RegisterModel.SubjectFor(n)@if (n.IsConfidential) { <span class="badge warning">Confidential</span> }<div class="muted small">@n.Category</div></td>
+                        <td><span class="badge @ENoteStates.Css(n.State)">@ENoteStates.Label(n.State)</span>@if (n.State == ENoteStates.Closed && n.Outcome != null) { <div class="muted small">@n.Outcome</div> }</td>
+                        <td class="hide-sm">@n.InitiatorName<div class="muted small">@n.InitiatorVertical</div></td>
+                        <td>@(ENoteStates.Pending.Contains(n.State) ? n.CurrentHolderName : "—")</td>
+                        <td class="right">@(ENoteStates.Pending.Contains(n.State) ? held.ToString("0") : "—")</td>
+                        <td class="right hide-sm">@Model.TotalDays(n).ToString("0")</td>
+                        <td class="nowrap hide-sm">@F.Date(n.SubmittedAt)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, Model.PageUrl)" />
+    }
+</div>

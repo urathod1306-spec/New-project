@@ -1,4 +1,39 @@
-# NABCONS Intranet 1.2.0 — Manual testing checklist (office machine, before merging)
+# NABCONS Intranet — Manual testing checklist (office machine)
+
+## 1.3.0: My Desk, notifications, e-Note
+Use at least four accounts: an **initiator**, two officers **A** and **B**, and an approving authority **C**. Add an **unrelated staff member** and the **auditor**.
+
+### Upgrade
+- [ ] `NabconsIntranet.exe --migrate` → "schema version 5"; run again → "already up to date". *Audit → Verify integrity* passes.
+- [ ] Old users, circulars, requests and leads are all still there; version 1.3.0 in *System information*.
+
+### My Desk and notifications
+- [ ] Signing in opens My Desk. *My Profile → Preferences* can switch this off.
+- [ ] A submits a request to an approver. The approver, with any page open, sees the bell count rise within about a minute, without reloading.
+- [ ] Bell: Enter opens, arrow keys move, Esc closes. *Mark all read* clears it. Opening an item marks it read.
+- [ ] Leave a page untouched for 35 minutes: you are signed out as before (the badge refresh does not keep you signed in).
+
+### e-Note
+- [ ] *Master lists → Verticals*: set codes (e.g. HR, RID).
+- [ ] Initiator: *e-Notes → New e-Note* with two attachments (a PDF and a Word file), tick the declaration → *Save draft*. Only the initiator sees it.
+- [ ] *Submit and mark to* A (type 2 letters, pick from the list). The number appears, e.g. `NCS/EN/RID/2026-27/0001`. A gets a notification.
+- [ ] A: comment, attach a file, *Mark to* B with remarks. Marking without remarks is refused.
+- [ ] B: *Send back* → it returns to A. A: *Mark to* C. C: *Return to initiator* with remarks.
+- [ ] Initiator: *Revise the note*, change the text, mark it to C again. The version picker shows versions 1 and 2.
+- [ ] C: *Approve* with remarks. The initiator and everyone in the chain are notified.
+- [ ] The initiator cannot approve or reject; nobody but the holder sees action buttons.
+- [ ] Two browser tabs as C: act in one, then the other → "This note has changed".
+- [ ] Initiator: My Desk shows *Approved — awaiting my closure* → *Download PDF for archival*: check the Hindi text, page x of y and the footer → *Close / file*.
+- [ ] Unrelated staff: the note appears under *Approved notes*. A note ticked **Confidential** does not, and its address gives "Page not found".
+- [ ] Auditor / Administrator: *e-Note register* lists notes with days held and *Export to Excel*, but opening a note they were not part of gives "Page not found".
+- [ ] A 12 MB attachment, or a `.exe` renamed to `.pdf`, is refused.
+- [ ] *Download all (ZIP)* contains every attachment. *Print view* prints cleanly.
+- [ ] Phone: the note page and lists are usable, without horizontal scrolling.
+- [ ] *Administration → Backup → Create backup now*: the ZIP contains `documents/enotes/…`.
+
+---
+
+# 1.2.0 checklist
 
 Test on a **copy** first (see `docs/UPGRADE-GUIDE.md` → "Trying a new version safely"), or outside office hours. Tick each line.
 

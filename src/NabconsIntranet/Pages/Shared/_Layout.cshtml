@@ -2,6 +2,7 @@
 @inject LeadAccess LeadAccess
 @inject DeskService Desk
 @inject NotificationOptions NotifyOptions
+@inject ENoteOptions ENoteSettings
 @{
     var signedIn = User.Identity?.IsAuthenticated == true && User.UserId() > 0;
     // All badge numbers come from one cached query (see DeskService); the page script refreshes them with a small poll.
@@ -13,6 +14,7 @@
     var newLeads = counts?.NewLeads ?? 0;
     var unread = counts?.Unread ?? 0;
     var deskTotal = counts?.Total ?? 0;
+    var enotesPending = counts?.ENotesPending ?? 0;
     string Hide(long n) => n > 0 ? "" : "hidden";
     var path = Context.Request.Path.Value ?? "/";
     string Active(string prefix) => (prefix == "/" ? path == "/" : path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ? "active" : "";
@@ -94,6 +96,10 @@
                     <ul>
                         <li><a class="@Active("/")" href="/">Home</a></li>
                         <li><a class="@Active("/Desk")" href="/Desk">My Desk <span class="count @Hide(deskTotal)" data-badge="desk" title="Items waiting for your action">@DeskCounts.Badge(deskTotal)</span></a></li>
+                        @if (ENoteSettings.Enabled)
+                        {
+                            <li><a class="@Active("/ENotes")" href="/ENotes">e-Notes <span class="count @Hide(enotesPending)" data-badge="enotes" title="e-Notes pending with you">@DeskCounts.Badge(enotesPending)</span></a></li>
+                        }
                         <li><a class="@Active("/Directory")" href="/Directory">Staff Directory</a></li>
                         <li><a class="@Active("/Circulars")" href="/Circulars">Circulars</a></li>
                         <li><a class="@(path.StartsWith("/Requests") && !path.StartsWith("/Requests/Inbox") ? "active" : "")" href="/Requests">My Requests</a></li>

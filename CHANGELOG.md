@@ -1,7 +1,46 @@
 # Changelog — NABCONS Intranet
 
-## 1.3.0 — in development (do not install yet)
-Database schema 4 → 5 (additive). Built in two phases; the 1.3.0 package is produced only when both are complete.
+## 1.3.0 — 2026-10-17
+**Upgrade note:** database schema 4 → 5 (additive only; `NabconsIntranet.exe --migrate` takes a backup first). New settings sections `Notifications` and `ENote` are optional. Defaults apply when absent. One new DLL is shipped: `libHarfBuzzSharp.dll` (text shaping for the PDF; see the IT Security Note).
+
+### Phase 2 — e-Note (digital note-sheet)
+- **No fixed hierarchy.** The initiator drafts a note, then marks it to any active colleague, following the usual office hierarchy. Whoever holds the note can:
+  - comment and attach files;
+  - mark it onward to anyone, including someone earlier in the chain;
+  - send it back to the person who sent it, or return it to the initiator;
+  - as competent authority, **approve** or **reject** it. The initiator never decides.
+- One holder at a time; only the holder acts. If two people act at once, the second sees "This note has changed".
+- **States:**
+  - Draft → In movement ⇄ Returned to initiator → Approved / Rejected / Withdrawn → Closed.
+  - The initiator can withdraw any time before a decision. Closing files the note read-only for ever.
+- **Numbers:**
+  - `NCS/EN/<vertical code or GEN>/<FY>/<serial>`, given at the first submission.
+  - Each vertical code has its own serial, restarting every April.
+  - Set the codes under *Master lists → Verticals*.
+- **Text:**
+  - Plain text, paragraphs numbered automatically, up to 50,000 characters.
+  - Once submitted, the text changes only after a return, and every submitted text is kept as a numbered version.
+- **Record-keeping:**
+  - The note-sheet (comments and movements, with each person's name and designation at that moment) is append-only, enforced by database triggers.
+  - Attachments are append-only once submitted; an uploader can mark their own file "superseded".
+- **Visibility:**
+  - Until approval, only the initiator and the people the note passed through can see it.
+  - Approved notes are visible to all staff unless marked **Confidential** (setting `ENote:ApprovedVisibility`).
+  - Administrators and Auditors see **metadata only**, through the **e-Note register** (ageing, filters, Excel export).
+  - A declaration at creation excludes disciplinary, vigilance and complaint matters.
+- **Attachments:**
+  - PDF, Word, Excel, PowerPoint, JPG/PNG, TXT, CSV; content signature checked.
+  - Limits: 10 MB per file, 100 MB and 50 files per note, with a remaining-quota hint.
+  - *Download all (ZIP)*, streamed.
+- **Archival PDF**, for the initiator once a note is decided:
+  - Generated on the server with bundled fonts (English and Hindi), with page x of y and the record's SHA-256 in every footer.
+  - Generated once per final state and stored in `documents\enotes\pdf`.
+  - There is also a print-friendly view.
+- **e-Note notifications and My Desk sections:**
+  - received, sent back, returned, approved/rejected (initiator and all participants), withdrawn, comments/attachments (initiator only);
+  - a daily reminder to holders of notes pending more than 7 days.
+- Every action is in the hash-chained audit log (`ENote.*`). Views are recorded once per user per note per day.
+- The daily housekeeping also keeps the database's query statistics current (`PRAGMA optimize`) and reports, but never deletes, stored files with no record.
 
 ### Phase 1 — My Desk and in-app notifications
 - **Notification bell** in the top bar:
@@ -27,6 +66,9 @@ Database schema 4 → 5 (additive). Built in two phases; the 1.3.0 package is pr
 - Badge counts (Approval Inbox, Administration, Business Leads) now come from one cached query instead of several queries on every page.
 
 ### Changed
+- New packages for the PDF: SkiaSharp.HarfBuzz 4.153.1 and HarfBuzzSharp 14.2.1.301 (MIT). Noto Sans and Noto Sans Devanagari fonts (SIL OFL 1.1) are embedded.
+- The upload request size limit now allows several e-Note attachments in one request.
+- Backups taken within the same second (e.g. `--migrate` run twice quickly, or a double click on *Create backup now*) no longer fail; the second gets a `-2` suffix.
 - Signing in now opens **My Desk** unless the preference is switched off. Before, it opened the home page.
 - The internal notification hook for leads, empty since 1.2.0, is replaced by in-app notifications.
 

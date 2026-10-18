@@ -1,0 +1,17 @@
+@page "/ENotes/{id:long}/Edit"
+@model NabconsIntranet.Pages.ENotes.EditModel
+@{
+    ViewData["Title"] = "Edit " + Model.Note.DisplayNumber;
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/ENotes/@Model.Note.Id">← Back to the note</a></p>
+        <h1>@(Model.Note.WasSubmitted ? "Revise returned note" : "Edit draft") <span class="muted">@Model.Note.DisplayNumber</span></h1>
+        <p>@(Model.Note.WasSubmitted ? "The note was returned to you. Your revision is saved as a new numbered version when you re-submit it; earlier versions stay on record." : "Drafts can be changed freely until you mark them to someone.")</p>
+    </div>
+</div>
+<form method="post" class="card enote-form">
+    <input type="hidden" name="RowVersion" value="@Model.View.Form.RowVersion" />
+    <partial name="_ENoteForm" model="Model.View" />
+    <div class="actions mt"><button class="btn primary" type="submit">Save</button><a class="btn" href="/ENotes/@Model.Note.Id">Cancel</a></div>
+</form>

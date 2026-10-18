@@ -22,6 +22,8 @@ public sealed class HousekeepingService(Db db, NotificationOptions no, AuditServ
         var read = DeleteInBatches("ReadAt IS NOT NULL AND CreatedAt < @cut", readCut);
         var unread = DeleteInBatches("ReadAt IS NULL AND CreatedAt < @cut", unreadCut);
         var notes = new List<string>();
+        // keeps the query planner's statistics current as the tables grow (cheap; SQLite only re-analyses what changed)
+        try { db.Exec("PRAGMA optimize;"); } catch (Exception ex) { log.LogWarning(ex, "PRAGMA optimize failed"); }
         foreach (var step in ExtraSteps)
         {
             try { notes.AddRange(step()); }

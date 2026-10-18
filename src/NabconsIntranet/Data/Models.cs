@@ -34,6 +34,8 @@ public sealed class MasterItem
     public string Name { get; set; } = "";
     public long SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
+    /// <summary>Verticals: short code used in e-Note numbers (NCS/EN/&lt;code&gt;/…); empty = GEN.</summary>
+    public string? Code { get; set; }
 }
 
 public static class MasterTypes
@@ -46,6 +48,7 @@ public static class MasterTypes
     public const string LeadSector = "LeadSector";
     public const string LeadSource = "LeadSource";
     public const string LeadLossReason = "LeadLossReason";
+    public const string ENoteCategory = "ENoteCategory";
 
     public static readonly Dictionary<string, string> Labels = new()
     {
@@ -57,6 +60,7 @@ public static class MasterTypes
         [LeadSector] = "Lead sectors / domains",
         [LeadSource] = "Lead sources",
         [LeadLossReason] = "Lead lost / dropped reasons",
+        [ENoteCategory] = "e-Note categories",
     };
 }
 

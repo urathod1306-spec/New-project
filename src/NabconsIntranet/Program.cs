@@ -32,16 +32,21 @@ options.Resolve(builder.Environment.ContentRootPath);
 builder.Services.AddSingleton(options);
 var notificationOptions = builder.Configuration.GetSection("Notifications").Get<NotificationOptions>() ?? new NotificationOptions();
 builder.Services.AddSingleton(notificationOptions);
+var enoteOptions = builder.Configuration.GetSection("ENote").Get<ENoteOptions>() ?? new ENoteOptions();
+enoteOptions.Resolve();
+builder.Services.AddSingleton(enoteOptions);
+// One request may carry several attachments: allow the larger of the circular and e-Note limits.
+var maxBody = Math.Max(options.MaxUploadBytes * 5, enoteOptions.MaxFileBytes * 10) + 1024 * 1024;
 builder.Logging.AddProvider(new FileLoggerProvider(options.LogPath));
 
 builder.WebHost.ConfigureKestrel(k =>
 {
     k.AddServerHeader = false;
-    k.Limits.MaxRequestBodySize = options.MaxUploadBytes * 5 + 1024 * 1024;
+    k.Limits.MaxRequestBodySize = maxBody;
 });
 builder.Services.Configure<FormOptions>(f =>
 {
-    f.MultipartBodyLengthLimit = options.MaxUploadBytes * 5 + 1024 * 1024;
+    f.MultipartBodyLengthLimit = maxBody;
     f.ValueCountLimit = 2048;
 });
 
@@ -66,6 +71,9 @@ builder.Services.AddSingleton<ChangeTracker>();
 builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddSingleton<DeskService>();
 builder.Services.AddSingleton<HousekeepingService>();
+builder.Services.AddSingleton<ENoteRepository>();
+builder.Services.AddSingleton<ENoteWorkflow>();
+builder.Services.AddSingleton<ENotePdfService>();
 builder.Services.AddTransient<Seeder>();
 builder.Services.AddHostedService<BackupScheduler>();
 
@@ -134,6 +142,7 @@ builder.Services.AddRazorPages(o =>
     o.Conventions.AuthorizePage("/Circulars/Edit", Policies.Publisher);
     o.Conventions.AuthorizePage("/Notices/Index", Policies.Publisher);
     o.Conventions.AuthorizePage("/Requests/Inbox", Policies.Approver);
+    o.Conventions.AuthorizePage("/ENotes/Register", Policies.AuditView);   // metadata only (Administrators and Auditors)
     // Business Leads pages check permissions themselves (BDU vertical / LeadViewer role / own leads).
     o.Conventions.AllowAnonymousToPage("/Account/Login");
     o.Conventions.AllowAnonymousToPage("/Account/Register");
@@ -151,6 +160,12 @@ foreach (var step in app.Services.GetRequiredService<Db>().Initialize())
 }
 app.Services.GetRequiredService<Seeder>().Run();
 app.Services.GetRequiredService<ProfileRepository>().LinkUnlinkedAccounts();
+{
+    var housekeeping = app.Services.GetRequiredService<HousekeepingService>();
+    var enoteWorkflow = app.Services.GetRequiredService<ENoteWorkflow>();
+    if (enoteOptions.Enabled) housekeeping.ExtraSteps.Add(enoteWorkflow.AgeingAlerts);
+    housekeeping.ExtraSteps.Add(enoteWorkflow.OrphanFiles);
+}
 app.Services.GetRequiredService<AuditService>().Log("System.Started", "System", null,
     $"NABCONS Intranet {typeof(Program).Assembly.GetName().Version} started; auth={options.AuthenticationMode}", "system");
 

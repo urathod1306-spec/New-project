@@ -19,12 +19,21 @@
 <div class="grid two">
     <div class="card table-wrap">
         <table class="table">
-            <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Name</th>@if (Model.Type == MasterTypes.Vertical) { <th>e-Note code</th> }<th>Status</th><th></th></tr></thead>
             <tbody>
                 @foreach (var m in Model.Items)
                 {
                     <tr>
                         <td>@m.Name</td>
+                        @if (Model.Type == MasterTypes.Vertical)
+                        {
+                            <td>
+                                <form method="post" asp-page-handler="Code" asp-route-id="@m.Id" class="decide-form">
+                                    <input type="text" name="code" value="@m.Code" maxlength="8" placeholder="GEN" aria-label="e-Note code for @m.Name" class="code-input" />
+                                    <button class="btn sm" type="submit">Save</button>
+                                </form>
+                            </td>
+                        }
                         <td>@if (m.IsActive) { <span class="badge success">Active</span> } else { <span class="badge neutral">Inactive</span> }</td>
                         <td class="right">
                             <form method="post" asp-page-handler="Toggle" asp-route-id="@m.Id" class="inline-form">
@@ -40,5 +49,9 @@
         <h2>Add to @MasterTypes.Labels[Model.Type].ToLowerInvariant()</h2>
         <div class="field"><label for="name">Name</label><input type="text" id="name" name="name" maxlength="100" required /></div>
         <button class="btn primary" type="submit">Add</button>
+        @if (Model.Type == MasterTypes.Vertical)
+        {
+            <p class="hint muted small mt">The <strong>e-Note code</strong> (2–8 letters or digits) goes into e-Note numbers, e.g. NCS/EN/<strong>HR</strong>/2026-27/0001. Verticals without a code use GEN. A change applies only to notes numbered afterwards.</p>
+        }
     </form>
 </div>

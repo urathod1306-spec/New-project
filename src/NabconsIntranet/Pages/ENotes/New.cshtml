@@ -1,0 +1,16 @@
+@page
+@model NabconsIntranet.Pages.ENotes.NewModel
+@{
+    ViewData["Title"] = "New e-Note";
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/ENotes">← My e-Notes</a></p>
+        <h1>New e-Note</h1>
+        <p>Write the note and save it as a draft. You can change it freely until you mark it to someone; the note number is given at that point.</p>
+    </div>
+</div>
+<form method="post" enctype="multipart/form-data" class="card enote-form">
+    <partial name="_ENoteForm" model="Model.View" />
+    <div class="actions mt"><button class="btn primary" type="submit">Save draft</button><a class="btn" href="/ENotes">Cancel</a></div>
+</form>

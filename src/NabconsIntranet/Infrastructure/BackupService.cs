@@ -31,6 +31,9 @@ public sealed class BackupService
         try
         {
             var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            // two backups in the same second (e.g. --migrate run twice) get "-2", "-3"… instead of failing
+            for (var k = 2; File.Exists(Path.Combine(_o.BackupPath, Prefix + stamp + ".zip")) || Directory.Exists(Path.Combine(_o.BackupPath, "_work-" + stamp)); k++)
+                stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + k;
             var work = Path.Combine(_o.BackupPath, "_work-" + stamp);
             Directory.CreateDirectory(work);
             var zipPath = Path.Combine(_o.BackupPath, Prefix + stamp + ".zip");

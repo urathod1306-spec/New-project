@@ -26,6 +26,8 @@ public sealed class MasterRepository(Db db)
 
     public void SetActive(long id, bool active) => db.Exec("UPDATE MasterItems SET IsActive = @active WHERE Id = @id", new { id, active });
 
+    public void SetCode(long id, string? code) => db.Exec("UPDATE MasterItems SET Code = @code WHERE Id = @id", new { id, code });
+
     public void Rename(long id, string name) => db.Exec("UPDATE MasterItems SET Name = @name WHERE Id = @id", new { id, name = name.Trim() });
 }
 

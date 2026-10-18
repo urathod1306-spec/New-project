@@ -1,4 +1,33 @@
-# NABCONS Intranet 1.2.0 — Setup Guide (upgrade from 1.1.x)
+# NABCONS Intranet — Setup Guide
+
+## Upgrading to 1.3.0 (from 1.2.x): My Desk, notifications and e-Note
+
+1. **Same steps as before:**
+   1. Download `release/NABCONS-Intranet-v1.3.0-win-x64.zip` and check its SHA-256.
+   2. Extract it to a new folder.
+   3. Right-click `Upgrade-Existing-Intranet.bat` → *Run as administrator*.
+   4. If you prefer, upgrade the database first by hand: with the intranet stopped, run `NabconsIntranet.exe --migrate` in the live folder.
+
+   Either way the database goes from **schema 4 to 5**, after a full backup and a database safety copy. Nothing existing is changed.
+2. **Allow-listing:** the package has one new DLL, `libHarfBuzzSharp.dll` (PDF text shaping). If IT allow-lists programs (AppLocker/WDAC), approve it together with the new `NabconsIntranet.exe`. Checksums are in `SHA256SUMS.txt`.
+3. **Check:** *Administration → System information* shows version **1.3.0**, schema **5**.
+4. **Set the e-Note number codes:**
+   - Go to *Administration → Master lists → Verticals* and give each vertical a short **e-Note code** (e.g. HR, FA, RID, BDU).
+   - Without a code, notes are numbered `NCS/EN/GEN/…`.
+   - Review *Master lists → e-Note categories*.
+5. **Optional settings** (defaults apply if you add nothing; see `docs/DEPLOYMENT-GUIDE.md` section 5):
+   - `"Notifications"`: how often badges refresh (60 s) and how long notifications are kept;
+   - `"ENote"`: who sees approved notes (`AllStaff`), attachment limits (10 MB per file / 100 MB per note) and the ageing reminder (7 days).
+6. **Tell staff:**
+   - Signing in now opens **My Desk** (each person can switch this off under *My Profile → Preferences*).
+   - `docs/STAFF-GUIDE.md` has a one-page guide to e-Notes.
+7. **Backups:** e-Note attachments and PDFs are under `documents\enotes`, which is already in every backup ZIP. Nothing to change.
+
+Roll back with `Rollback-Upgrade.bat`; version 1.2.0 runs on the upgraded database (tested).
+
+---
+
+# Upgrading to 1.2.0 (from 1.1.x)
 
 > The intranet is one Windows program (`NabconsIntranet.exe`) with everything bundled. **Nothing needs to be installed and nothing is downloaded** — there is no Python, pip or Pillow. Photo processing uses the bundled `libSkiaSharp.dll`, which ships in the ZIP next to the program.
 
