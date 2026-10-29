@@ -6,8 +6,8 @@ A ready-to-run intranet for **NABARD Consultancy Services (NABCONS)**, built for
 
 ## Download and run (no coding)
 
-1. **Download** [`release/NABCONS-Intranet-v1.3.0-win-x64.zip`](release/NABCONS-Intranet-v1.3.0-win-x64.zip) (≈ 53 MB). On GitHub, open the file and click **Download raw file**.
-   SHA-256: see [`release/NABCONS-Intranet-v1.3.0-win-x64.zip.sha256`](release/NABCONS-Intranet-v1.3.0-win-x64.zip.sha256).
+1. **Download** [`release/NABCONS-Intranet-v1.4.0-win-x64.zip`](release/NABCONS-Intranet-v1.4.0-win-x64.zip) (≈ 53 MB). On GitHub, open the file and click **Download raw file**.
+   SHA-256: see [`release/NABCONS-Intranet-v1.4.0-win-x64.zip.sha256`](release/NABCONS-Intranet-v1.4.0-win-x64.zip.sha256).
 2. **Transfer** it to the office PC by the IT-approved method. Right-click → *Properties* → *Unblock*, then **extract** it to `C:\NABCONSIntranet\`.
 3. **Double-click `Start-Intranet.bat`.** Keep the black window open. It shows the address to use.
 4. **Open** `http://localhost:8080` on that PC, or `http://<PC-name>:8080` from colleagues' PCs. If they cannot connect, right-click `Open-Firewall-Port.bat` → *Run as administrator*.
@@ -38,6 +38,7 @@ When the pilot is accepted, follow **Going live** in the [Administrator Guide](d
 | **Audit log** | Append-only, hash-chained (tamper-evident), searchable, CSV export, one-click integrity check |
 | **Backup & restore** | Automatic daily ZIP backup with checksum, retention, optional copy to a LAN share, checksum-verified restore |
 | **e-Note** (v1.3) | Digital note-sheet: draft, then mark to any colleague following the office hierarchy; comments, attachments, send back, return to initiator, approve or reject; numbered text versions; append-only note-sheet; approved notes visible to all staff (unless confidential); archival PDF in English and Hindi; register with ageing for Administrators and Auditors (metadata only) |
+| **Message Board** (v1.4) | Everyone posts messages and photos on their own tab; administrators pin up to 3 posts and remove posts; latest posts on the home page |
 | **My Desk & notifications** (v1.3) | One page with everything waiting for you; in-app bell with live badges (a small poll, no WebSockets) |
 | **Self-registration** | Staff register with their 10-digit mobile number (details pre-filled from the directory, masked); an administrator approves, which creates the account and fills in the staff directory |
 | **My Profile** | Staff keep their own mobile, extension, e-mail and office up to date; vertical changes approved by the administrator; every change audited |

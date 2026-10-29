@@ -1,5 +1,17 @@
 # NABCONS Intranet — Manual testing checklist (office machine)
 
+## 1.4.0: Message Board
+- [ ] Upgrade → *System information* shows 1.4.0 / schema 6; old data intact; e-Notes still switched off if you had switched them off.
+- [ ] As an ordinary user: *Message Board* → write a message, add 2 photos → *Post*. Both photos are shown upright; the post also appears on the home page.
+- [ ] A colleague with any page open sees a number next to *Message Board*, which clears once they open it.
+- [ ] A photo over 5 MB, a 5th photo, or a renamed `.exe` is refused.
+- [ ] As an administrator: pin 3 posts; a 4th is refused until one is unpinned. Remove a post with a reason; it disappears for everyone, and *Audit* shows `Board.Removed`.
+- [ ] An ordinary user sees *Remove* only on their own posts, and no *Pin*.
+- [ ] Phone: the board is readable, without horizontal scrolling.
+
+---
+
+
 ## 1.3.0: My Desk, notifications, e-Note
 Use at least four accounts: an **initiator**, two officers **A** and **B**, and an approving authority **C**. Add an **unrelated staff member** and the **auditor**.
 

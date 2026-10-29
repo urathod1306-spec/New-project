@@ -49,6 +49,9 @@ Run on the isolated test PC with the demo data (password for all demo accounts: 
 | 44 | Uploads | Attach a 12 MB file, a renamed `.exe`, a 51st file | Each refused with a clear message; nothing left on disk ✔ | |
 | 45 | Archival PDF | Initiator → *Download PDF for archival* on an approved note; open in a PDF reader; check Hindi text | Fonts embedded; numbered paragraphs; note-sheet; decision; attachment schedule with SHA-256; footer "not digitally signed", page x of y, record SHA-256 ✔ | |
 | 46 | Phone / keyboard | Use a note with the keyboard only (type-ahead with arrows + Enter), and at phone width | Works; no horizontal scrolling ✔ | |
+| 47 | Message Board (v1.4) | As `staff`, post a message with two photos (one taken sideways on a phone) | Post appears with both photos, upright; shown on the home page; other users see a badge on *Message Board* until they open it ✔ | |
+| 48 | Board limits | Post an empty message; 2,001 characters; 5 photos; a 6 MB photo; a renamed `.exe` as `.jpg` | Each refused with a clear message; nothing stored ✔ | |
+| 49 | Pin / remove | As `admin`, pin 3 posts, try a 4th; remove a post with a reason; as `staff`, try to pin | 4th refused ("Unpin one first"); removed post and its photos gone for everyone, `Board.Removed` in the audit log; staff see no Pin button ✔ | |
 | 26 | No egress | With an outbound "block all" firewall rule for `NabconsIntranet.exe`, use every page | Everything works; no blocked-connection events | |
 
 ## Performance (v1.3)

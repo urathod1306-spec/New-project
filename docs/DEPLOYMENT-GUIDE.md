@@ -17,11 +17,11 @@ This guide covers the office-PC pilot (no installation) and the later move to a 
 ## 2. Get the package
 
 1. On an approved internet-connected machine, open the GitHub repository and download
-   `release/NABCONS-Intranet-v1.3.0-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
+   `release/NABCONS-Intranet-v1.4.0-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
 2. Transfer the ZIP into the NABARD LAN **only by the IT-approved method** (approved media or transfer gateway), with malware scanning and a change ticket.
 3. On the office PC, check the checksum in PowerShell:
    ```powershell
-   Get-FileHash .\NABCONS-Intranet-v1.3.0-win-x64.zip -Algorithm SHA256
+   Get-FileHash .\NABCONS-Intranet-v1.4.0-win-x64.zip -Algorithm SHA256
    ```
    It must match the `.sha256` file. Inside the ZIP, `SHA256SUMS.txt` lists the checksum of every file, which helps with allow-listing.
 4. Right-click the ZIP → **Properties** → tick **Unblock** if shown → OK. Then extract it to `C:\NABCONSIntranet\`.
@@ -102,9 +102,13 @@ Edit with Notepad, save, then restart the intranet (close and reopen the window,
 | `ENote:AgeingAlertDays` | `7` | A holder gets a daily reminder for notes pending with them longer than this |
 | `ENote:NumberPrefix` | `NCS/EN` | First part of e-Note numbers (`NCS/EN/<vertical code>/<FY>/<serial>`) |
 | `ENote:AllowedExtensions` | pdf, docx, doc, xlsx, xls, pptx, jpg, png, txt, csv | Attachment types (content is also checked) |
+| `MessageBoard:Enabled` (v1.4) | `true` | `false` hides the Message Board tab and home-page card (posts are kept) |
+| `MessageBoard:MaxChars` / `MaxPhotosPerPost` / `MaxPhotoMB` | `2000` / `4` / `5` | Limits for one post |
+| `MessageBoard:MaxPinned` | `3` | How many posts administrators can pin at once |
+| `MessageBoard:PostsPerHour` | `10` | Flood guard: posts per person per hour |
 | `DataFolder`, `DocumentsFolder`, `BackupFolder`, `LogFolder` | relative | May be absolute paths, e.g. `D:\\NABCONSData\\documents` |
 
-The `Notifications` section (and, from 1.3, `ENote`) sits at the top level of `appsettings.json`, next to `"Intranet"`. If a section or setting is missing, the default above applies.
+The `Notifications`, `ENote` and (from 1.4) `MessageBoard` sections sit at the top level of `appsettings.json`, next to `"Intranet"`. If a section or setting is missing, the default above applies.
 
 ## 6. HTTPS (recommended before wider LAN use)
 
