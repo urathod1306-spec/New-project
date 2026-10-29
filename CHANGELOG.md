@@ -1,5 +1,20 @@
 # Changelog — NABCONS Intranet
 
+## 1.4.0 — 2026-10-29
+**Upgrade note:** database schema 5 → 6 (additive only; `NabconsIntranet.exe --migrate` takes a backup first). The new `MessageBoard` settings section is optional; defaults apply when it is absent.
+
+### Added
+- **Message Board**: a new tab in the main menu.
+  - Every signed-in user can post a message, with up to 4 photos, as a separate post.
+  - **Administrators** can pin up to **3** posts to the top and remove any post. Authors can remove their own posts.
+  - Messages are plain text (up to 2,000 characters; line breaks kept).
+  - Photos: JPEG, PNG or WebP, up to 5 MB each. Each is checked to be a real image, turned upright, resized (1,600 px, with a 480 px preview) and saved again without location or camera data, under `data\uploads\board`. Photos are shown only to signed-in users.
+  - The **home page** shows a *Message board* card (pinned posts first, then the newest). The **menu badge** counts new posts by others since your last visit and refreshes with the existing badge check.
+  - Removing a post hides it and deletes its photos. The post record stays for the audit trail: a database trigger prevents deleting it.
+  - Every post, pin, unpin and removal is in the audit log (`Board.*`).
+  - A flood guard limits each person to 10 posts an hour (configurable).
+  - Switch the whole board off with `"MessageBoard": { "Enabled": false }`.
+
 ## 1.3.0 — 2026-10-17
 **Upgrade note:** database schema 4 → 5 (additive only; `NabconsIntranet.exe --migrate` takes a backup first). New settings sections `Notifications` and `ENote` are optional. Defaults apply when absent. One new DLL is shipped: `libHarfBuzzSharp.dll` (text shaping for the PDF; see the IT Security Note).
 

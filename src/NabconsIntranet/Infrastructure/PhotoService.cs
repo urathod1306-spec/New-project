@@ -19,11 +19,25 @@ public sealed class PhotoService(IntranetOptions o)
     /// <summary>Validates and processes an upload. Throws UploadRejectedException with a user-readable reason.</summary>
     public void Save(long userId, Stream upload, long length)
     {
+        using var oriented = DecodeUpright(upload, length, o.MaxPhotoMB);
+        using var square = CropSquare(oriented);
+
+        Directory.CreateDirectory(o.PhotosPath);
+        WriteJpeg(square, Size, PhotoPath(userId, false));
+        WriteJpeg(square, ThumbSize, PhotoPath(userId, true));
+    }
+
+    /// <summary>
+    /// Reads an uploaded image (real JPEG, PNG or WebP content only, within the size and pixel limits) and returns it
+    /// upright according to its EXIF orientation. Throws UploadRejectedException with a user-readable reason.
+    /// </summary>
+    public static SKBitmap DecodeUpright(Stream upload, long length, int maxMB)
+    {
         if (length <= 0) throw new UploadRejectedException("The file is empty.");
-        if (length > o.MaxPhotoMB * 1024L * 1024L) throw new UploadRejectedException($"The photo is larger than {o.MaxPhotoMB} MB.");
+        if (length > maxMB * 1024L * 1024L) throw new UploadRejectedException($"The photo is larger than {maxMB} MB.");
         using var ms = new MemoryStream();
         upload.CopyTo(ms);
-        if (ms.Length > o.MaxPhotoMB * 1024L * 1024L) throw new UploadRejectedException($"The photo is larger than {o.MaxPhotoMB} MB.");
+        if (ms.Length > maxMB * 1024L * 1024L) throw new UploadRejectedException($"The photo is larger than {maxMB} MB.");
         ms.Position = 0;
 
         using var data = SKData.Create(ms);
@@ -35,12 +49,25 @@ public sealed class PhotoService(IntranetOptions o)
 
         using var decoded = SKBitmap.Decode(codec, codec.Info.WithColorType(SKColorType.Rgba8888).WithAlphaType(SKAlphaType.Premul))
             ?? throw new UploadRejectedException("The image could not be read.");
-        using var oriented = Orient(decoded, codec.EncodedOrigin);
-        using var square = CropSquare(oriented);
+        return Orient(decoded, codec.EncodedOrigin);
+    }
 
-        Directory.CreateDirectory(o.PhotosPath);
-        WriteJpeg(square, Size, PhotoPath(userId, false));
-        WriteJpeg(square, ThumbSize, PhotoPath(userId, true));
+    /// <summary>Writes a fresh JPEG (no metadata) scaled down to fit within maxSide × maxSide, keeping the proportions.</summary>
+    public static (int width, int height) WriteFitted(SKBitmap src, int maxSide, string path)
+    {
+        var scale = Math.Min(1.0, maxSide / (double)Math.Max(src.Width, src.Height));
+        int w = Math.Max(1, (int)Math.Round(src.Width * scale)), h = Math.Max(1, (int)Math.Round(src.Height * scale));
+        using var surface = SKSurface.Create(new SKImageInfo(w, h, SKColorType.Rgba8888, SKAlphaType.Premul));
+        surface.Canvas.Clear(SKColors.White);
+        using (var img = SKImage.FromBitmap(src))
+            surface.Canvas.DrawImage(img, new SKRect(0, 0, w, h), new SKSamplingOptions(SKCubicResampler.Mitchell));
+        using var snapshot = surface.Snapshot();
+        using var jpeg = snapshot.Encode(SKEncodedImageFormat.Jpeg, Quality);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var tmp = path + ".tmp";
+        using (var fs = File.Create(tmp)) jpeg.SaveTo(fs);
+        File.Move(tmp, path, overwrite: true);
+        return (w, h);
     }
 
     public void Delete(long userId)

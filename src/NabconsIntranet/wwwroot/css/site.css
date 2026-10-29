@@ -387,3 +387,33 @@ th a.sorted { color: var(--brand-dark); text-decoration: underline; }
 .note-sheet-body .inline-filter { min-width: 0; max-width: 100%; }
 .note-sheet-body .inline-filter select { max-width: 230px; min-width: 0; }
 .mono-num { word-break: break-all; }
+
+/* ---------- message board (v1.4) ---------- */
+.board-layout { display: grid; grid-template-columns: minmax(280px, 360px) 1fr; gap: 16px; align-items: start; }
+.composer { position: sticky; top: 12px; }
+.offscreen-label { position: absolute; left: -9999px; }
+.board-feed > * + * { margin-top: 14px; }
+.feed-h { font-size: .95rem; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin: 6px 0 0; }
+.post { padding: 14px 16px; }
+.post.pinned { border-left: 4px solid var(--warning); }
+.post-head { display: flex; align-items: center; gap: 10px; }
+.post-who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.post-when { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+.post-body { margin: 10px 0 0; word-break: break-word; }
+.post-photos { display: grid; gap: 6px; margin-top: 10px; grid-template-columns: repeat(2, 1fr); }
+.post-photos.n1 { grid-template-columns: 1fr; }
+.post-photos a { display: block; border-radius: 8px; overflow: hidden; background: var(--bg); }
+.post-photos img { display: block; width: 100%; height: 220px; object-fit: cover; }
+.post-photos.n1 img { height: auto; max-height: 460px; object-fit: contain; }
+.post-photos a:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.post-actions { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.post-remove summary { list-style: none; cursor: pointer; }
+.post-remove summary::-webkit-details-marker { display: none; }
+.post-remove[open] form { margin-top: 6px; }
+.post.compact { box-shadow: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 10px 0; }
+.post.compact.pinned { border-left: 0; }
+.post.compact .post-photos img { height: 140px; }
+.photo-previews { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.photo-previews img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
+@media (max-width: 900px) { .board-layout { grid-template-columns: 1fr; } .composer { position: static; } }
+@media (max-width: 600px) { .post-photos img { height: 150px; } }

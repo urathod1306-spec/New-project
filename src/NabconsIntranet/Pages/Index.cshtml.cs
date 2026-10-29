@@ -5,7 +5,7 @@ using NabconsIntranet.Infrastructure;
 namespace NabconsIntranet.Pages;
 
 public class IndexModel(CircularRepository circulars, NoticeRepository notices, RequestWorkflow workflow, StaffRepository staff,
-    UserRepository users, IntranetOptions o) : AppPage
+    UserRepository users, IntranetOptions o, BoardRepository board) : AppPage
 {
     public List<Circular> Latest { get; private set; } = new();
     public List<Notice> Notices { get; private set; } = new();
@@ -13,6 +13,8 @@ public class IndexModel(CircularRepository circulars, NoticeRepository notices, 
     public long OpenRequests { get; private set; }
     public long StaffCount { get; private set; }
     public long CircularCount { get; private set; }
+    public List<BoardPost> BoardPosts { get; private set; } = new();
+    public bool BoardEnabled => board.Options.Enabled;
 
     public const string DeskShownCookie = "NABCONS.DeskShown";
 
@@ -30,6 +32,7 @@ public class IndexModel(CircularRepository circulars, NoticeRepository notices, 
         OpenRequests = workflow.Mine(User.UserId()).Count(r => r.State != RequestStates.Closed);
         StaffCount = staff.Count();
         CircularCount = circulars.CountPublished();
+        if (board.Options.Enabled) BoardPosts = board.Highlights(3);
         return Page();
     }
 }

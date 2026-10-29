@@ -35,8 +35,10 @@ builder.Services.AddSingleton(notificationOptions);
 var enoteOptions = builder.Configuration.GetSection("ENote").Get<ENoteOptions>() ?? new ENoteOptions();
 enoteOptions.Resolve();
 builder.Services.AddSingleton(enoteOptions);
+var boardOptions = builder.Configuration.GetSection("MessageBoard").Get<BoardOptions>() ?? new BoardOptions();
+builder.Services.AddSingleton(boardOptions);
 // One request may carry several attachments: allow the larger of the circular and e-Note limits.
-var maxBody = Math.Max(options.MaxUploadBytes * 5, enoteOptions.MaxFileBytes * 10) + 1024 * 1024;
+var maxBody = Math.Max(Math.Max(options.MaxUploadBytes * 5, enoteOptions.MaxFileBytes * 10), boardOptions.MaxPhotoMB * 1024L * 1024L * boardOptions.MaxPhotosPerPost) + 1024 * 1024;
 builder.Logging.AddProvider(new FileLoggerProvider(options.LogPath));
 
 builder.WebHost.ConfigureKestrel(k =>
@@ -74,6 +76,7 @@ builder.Services.AddSingleton<HousekeepingService>();
 builder.Services.AddSingleton<ENoteRepository>();
 builder.Services.AddSingleton<ENoteWorkflow>();
 builder.Services.AddSingleton<ENotePdfService>();
+builder.Services.AddSingleton<BoardRepository>();
 builder.Services.AddTransient<Seeder>();
 builder.Services.AddHostedService<BackupScheduler>();
 

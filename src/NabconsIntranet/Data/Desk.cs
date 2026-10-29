@@ -8,7 +8,7 @@ namespace NabconsIntranet.Data;
 
 /// <summary>The numbers behind every badge (bell, My Desk, Approval Inbox, Administration, Business Leads, e-Notes).</summary>
 public sealed record DeskCounts(long Unread, long Inbox, long RequestsReturned, long Registrations, long VerticalChanges,
-    long NewLeads, long MyLeadsDue, long ENotesPending, long ENotesMine)
+    long NewLeads, long MyLeadsDue, long ENotesPending, long ENotesMine, long BoardNew = 0)
 {
     public long AdminPending => Registrations + VerticalChanges;
     /// <summary>Items waiting for the user's action (the "My Desk (n)" badge).</summary>
@@ -87,7 +87,7 @@ public sealed class DeskView
 /// The signed-in user's work queue across modules. Counts come from one indexed query and are cached in memory;
 /// the cache entry is dropped as soon as a relevant write bumps the user's or the queue's change marker.
 /// </summary>
-public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, INotificationService notifications, Fmt fmt, ENoteOptions enote)
+public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, INotificationService notifications, Fmt fmt, ENoteOptions enote, BoardOptions board)
 {
     private sealed record Entry(DeskCounts Counts, string Roles, long Seq, long ComputedTicks);
     private readonly ConcurrentDictionary<long, Entry> _cache = new();
@@ -99,6 +99,7 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
         if (u.IsAdmin()) yield return ChangeTracker.AdminQueue;
         if (leads.CanManage(u)) yield return ChangeTracker.LeadQueue;
         yield return ChangeTracker.ENoteQueue;
+        yield return ChangeTracker.BoardQueue;
     }
 
     private string RoleKey(ClaimsPrincipal u) => $"{u.IsAdmin()}|{u.IsApprover()}|{leads.CanManage(u)}|{u.Vertical()}";
@@ -130,6 +131,7 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
         public long MyLeadsDue { get; set; }
         public long ENotesPending { get; set; }
         public long ENotesMine { get; set; }
+        public long BoardNew { get; set; }
     }
 
     private DeskCounts Compute(ClaimsPrincipal u)
@@ -144,10 +146,12 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
               CASE WHEN @manager = 1 THEN (SELECT COUNT(*) FROM Leads WHERE Status = '{LeadStatus.Submitted}') ELSE 0 END AS NewLeads,
               (SELECT COUNT(*) FROM Leads WHERE OwnerUserId = @uid AND Status NOT IN ({OpenExcluded}) AND DueDate IS NOT NULL AND DueDate <> '' AND DueDate <= @soon) AS MyLeadsDue,
               CASE WHEN @enote = 1 THEN (SELECT COUNT(*) FROM ENotes WHERE CurrentHolderUserId = @uid AND State IN ('{ENoteStates.InMovement}', '{ENoteStates.Returned}')) ELSE 0 END AS ENotesPending,
-              CASE WHEN @enote = 1 THEN (SELECT COUNT(*) FROM ENotes WHERE CurrentHolderUserId = @uid AND InitiatorUserId = @uid AND State IN ('{ENoteStates.Approved}', '{ENoteStates.Rejected}', '{ENoteStates.Withdrawn}')) ELSE 0 END AS ENotesMine
+              CASE WHEN @enote = 1 THEN (SELECT COUNT(*) FROM ENotes WHERE CurrentHolderUserId = @uid AND InitiatorUserId = @uid AND State IN ('{ENoteStates.Approved}', '{ENoteStates.Rejected}', '{ENoteStates.Withdrawn}')) ELSE 0 END AS ENotesMine,
+              CASE WHEN @board = 1 THEN (SELECT COUNT(*) FROM BoardPosts WHERE IsDeleted = 0 AND AuthorUserId <> @uid AND CreatedAt > @boardFloor
+                   AND CreatedAt > COALESCE((SELECT BoardSeenAt FROM Users WHERE Id = @uid), @boardFloor)) ELSE 0 END AS BoardNew
             """, Args(u)).First();
-        var c = new DeskCounts(r.Unread, r.Inbox, r.Returned, r.Registrations, r.VerticalChanges, r.NewLeads, r.MyLeadsDue, r.ENotesPending, r.ENotesMine);
-        return c with { Token = Hash($"{tracker.Boot}|{u.UserId()}|{c.Unread}|{c.Total}|{c.Inbox}|{c.AdminPending}|{c.NewLeads}|{c.ENotesPending}|{c.ENotesMine}") };
+        var c = new DeskCounts(r.Unread, r.Inbox, r.Returned, r.Registrations, r.VerticalChanges, r.NewLeads, r.MyLeadsDue, r.ENotesPending, r.ENotesMine, r.BoardNew);
+        return c with { Token = Hash($"{tracker.Boot}|{u.UserId()}|{c.Unread}|{c.Total}|{c.Inbox}|{c.AdminPending}|{c.NewLeads}|{c.ENotesPending}|{c.ENotesMine}|{c.BoardNew}") };
     }
 
     private static readonly string OpenExcluded = string.Join(", ", LeadStatus.Closed.Select(s => "'" + s.Replace("'", "''") + "'"));
@@ -156,6 +160,7 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
     {
         uid = u.UserId(), approver = u.IsApprover(), admin = u.IsAdmin(), manager = leads.CanManage(u),
         soon = fmt.Today.AddDays(7).ToString("yyyy-MM-dd"), enote = enote.Enabled,
+        board = board.Enabled, boardFloor = DateTime.UtcNow.AddDays(-30).ToString("o"),
     };
 
     private const string ENoteRowSelect = """

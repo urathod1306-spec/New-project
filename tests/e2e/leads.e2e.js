@@ -15,7 +15,8 @@ const B = process.env.BASE_URL || 'http://127.0.0.1:8080', IMG = process.argv[2]
   await fill(st, { Title: 'Impact evaluation of watershed programme', ClientName: 'State Rural Livelihood Mission', ClientType: 'State Govt', Sector: 'Watershed & Natural Resources',
     StateLocation: 'Rajasthan', Source: 'Tender portal', TenderNumber: 'SRLM/2026/EV/14', EstimatedValueLakh: '45.5', Description: 'Third-party evaluation across 12 districts.' });
   const due = new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10); await st.fill('#Input_DueDate', due);
-  await st.setInputFiles('#Uploads', [IMG + '/notreal.pdf']); await st.click('#lead-submit'); await st.waitForLoadState('networkidle');
+  await st.setInputFiles('#Uploads', [IMG + '/notreal.pdf']); await st.click('#lead-submit');
+  await st.waitForSelector('text=does not match a genuine .pdf', { timeout: 15000 }).catch(() => {});
   ck((await st.content()).includes('does not match a genuine .pdf'), 'disguised attachment rejected, no lead created');
   await st.setInputFiles('#Uploads', [IMG + '/proposal.pdf']); await st.click('#lead-submit'); await st.waitForLoadState('networkidle');
   const msg = await st.locator('.alert.success').textContent(); const ref = (msg.match(/NCS\/BD\/\d{4}-\d{2}\/\d{4}/) || [''])[0];

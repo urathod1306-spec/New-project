@@ -79,6 +79,17 @@
                 </div>
             }
         </div>
+        @if (Model.BoardEnabled)
+        {
+            <div class="card">
+                <div class="card-head">
+                    <h2>Message board</h2>
+                    <a href="/Board">View all →</a>
+                </div>
+                @if (Model.BoardPosts.Count == 0) { <p class="empty">No posts yet. <a href="/Board">Post the first message</a>.</p> }
+                @foreach (var p in Model.BoardPosts) { <partial name="/Pages/Board/_Post.cshtml" model="(p, 1, true)" /> }
+            </div>
+        }
         <div class="card">
             <h2>Find a colleague</h2>
             <form method="get" action="/Directory">

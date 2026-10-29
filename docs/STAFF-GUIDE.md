@@ -1,5 +1,13 @@
 # NABCONS Intranet — Quick guide for staff
 
+## Message Board
+Open **Message Board** in the top menu to share news, greetings and photos with colleagues.
+- **To post:** write your message, optionally add up to 4 photos (JPEG, PNG or WebP, up to 5 MB each), then click **Post**. Location and camera details are removed from photos automatically.
+- **Pinned posts** (up to 3, chosen by the administrators) stay at the top. The newest posts follow, and also appear on the home page.
+- The number next to *Message Board* shows new posts since your last visit.
+- **Removing:** you can remove your own posts (*Remove* → *Remove post*). Administrators can remove any post.
+- Please keep posts official and courteous. Do not post personal, confidential or client information.
+
 ## My Desk
 **My Desk** (top menu) lists everything waiting for you, oldest first:
 - requests you must review or sanction, and your requests returned to you;

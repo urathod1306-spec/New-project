@@ -123,6 +123,16 @@ To switch self-registration off, set `"SelfRegistrationEnabled": false` in `apps
 - **Daily housekeeping** (after the scheduled backup) sends ageing reminders and reports any stored e-Note file that has no database record. It never deletes files; see the log.
 - **Switching off:** set `"ENote": { "Enabled": false }`. The data stays and returns when it is switched back on.
 
+## Message Board (v1.4)
+
+- **Everyone can post.** Signed-in staff post messages with up to 4 photos on the *Message Board* tab. The home page shows the pinned posts and the newest ones.
+- **Pinning.** Administrators see **📌 Pin** on each post. At most 3 posts can be pinned at a time (`MessageBoard:MaxPinned`); unpin one to pin another. Pinned posts stay at the top until unpinned.
+- **Removing.** Administrators can remove any post: *Remove*, optionally give a reason, then *Remove post*. Authors can remove their own.
+  - The post disappears for everyone and its photos are deleted.
+  - The text, author, time and reason stay in the database and the audit log (`Board.Removed`), so there is a record of what was taken down.
+- **Photos** are re-encoded without location or camera data and stored under `data\uploads\board`, which is included in every backup.
+- **Switching off:** `"MessageBoard": { "Enabled": false }` in `appsettings.json`, then restart. Posts are kept.
+
 ## Audit log
 
 - Records sign-ins (success, failure, lockout), sign-outs, uploads and rejected uploads, publishing, withdrawal, supersession, downloads, every request action, user and role changes, password resets, master-data changes, staff imports and edits, backups and restores.

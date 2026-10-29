@@ -1,5 +1,17 @@
 # NABCONS Intranet — Setup Guide
 
+## Upgrading to 1.4.0 (from 1.3.x): Message Board
+
+1. Download `release/NABCONS-Intranet-v1.4.0-win-x64.zip` and check its SHA-256. Extract it to a new folder, then right-click `Upgrade-Existing-Intranet.bat` → *Run as administrator*. If you prefer, upgrade the database first by hand: with the intranet stopped, run `NabconsIntranet.exe --migrate`. The database goes from schema 5 to 6 after a full backup. Nothing existing is changed, and your settings (including e-Notes switched off) are kept.
+2. Check *Administration → System information*: version 1.4.0, schema 6.
+3. The **Message Board** tab appears for everyone. Optional settings are in the `"MessageBoard"` section (see `docs/DEPLOYMENT-GUIDE.md`). Board photos are stored in `data\uploads\board` and are in every backup ZIP.
+4. Tell staff: see the *Message Board* section of `docs/STAFF-GUIDE.md`.
+
+Roll back with `Rollback-Upgrade.bat`; version 1.3.0 runs on the upgraded database.
+
+---
+
+
 ## Upgrading to 1.3.0 (from 1.2.x): My Desk, notifications and e-Note
 
 1. **Same steps as before:**

@@ -10,7 +10,7 @@ namespace NabconsIntranet.Infrastructure;
 /// </summary>
 public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, MasterRepository masters, StaffRepository staff,
     CircularRepository circulars, NoticeRepository notices, RequestWorkflow workflow, FileStore files, AuditService audit, Fmt fmt,
-    ENoteWorkflow enotes, ILogger<Seeder> log)
+    ENoteWorkflow enotes, BoardRepository board, ILogger<Seeder> log)
 {
     public const string DemoPassword = "Nabcons@2026";
 
@@ -330,6 +330,16 @@ public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, Maste
 
         enotes.Create(new ENoteWorkflow.DraftInput("Proposal for an internal workshop on GIS tools", "General administration",
             "A one-day internal workshop on GIS tools is proposed for the project teams.", false, true), staffP);
+
+        // --- sample message-board posts (one pinned by the administrator) ---
+        var adminP = Principal("admin");
+        As(adminP);
+        var welcome = board.Create("Welcome to the new Message Board!\n\nShare news, greetings and photos with colleagues across NABCONS. Please keep posts official and courteous.",
+            Array.Empty<IFormFile>(), adminP);
+        board.SetPinned(welcome, true, adminP);
+        As(staffP);
+        board.Create("The Rajasthan watershed evaluation team completed its field visits this week. Thanks to everyone who supported the survey!",
+            Array.Empty<IFormFile>(), staffP);
         AuditService.AmbientActor.Value = "system (first-run setup)";
     }
 }
