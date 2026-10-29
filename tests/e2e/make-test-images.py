@@ -13,6 +13,8 @@ open(os.path.join(out, 'evil.jpg'), 'wb').write(b'MZ\x90\x00' + os.urandom(5000)
 open(os.path.join(out, 'fake.png'), 'wb').write(b'GIF89a' + os.urandom(2000))
 open(os.path.join(out, 'proposal.pdf'), 'wb').write(b'%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n')
 open(os.path.join(out, 'notreal.pdf'), 'wb').write(b'MZ' + os.urandom(3000))
+land = Image.new('RGB', (1200, 800), (40, 120, 80)); ImageDraw.Draw(land).ellipse([300, 150, 900, 650], fill=(240, 200, 60))
+land.save(os.path.join(out, 'landscape.png'))
 import zipfile
 with zipfile.ZipFile(os.path.join(out, 'scope.docx'), 'w') as z:   # minimal Word-like package (ZIP signature)
     z.writestr('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')

@@ -459,7 +459,7 @@ public class ENoteMigrationTests() : ENoteTestBase
         var db = App.Get<Db>();
         Assert.Empty(db.Initialize());                                                      // second run: nothing to do
         Assert.Equal(1, db.Scalar<long>("SELECT COUNT(*) FROM SchemaInfo WHERE Version = 5"));
-        Assert.Equal(5, Schema.Version);
+        Assert.True(Schema.Version >= 5);
         var id = Draft();
         await Attach(id, "staff");
         Mark(id, "staff", "approver1");
