@@ -64,6 +64,7 @@ public sealed class ChangeTracker
     public const string AdminQueue = "t:admin";
     public const string LeadQueue = "t:leads";
     public const string ENoteQueue = "t:enotes";
+    public const string BoardQueue = "t:board";
 
     private long _seq;
     private readonly ConcurrentDictionary<string, (long Seq, long Ticks)> _keys = new();

@@ -26,7 +26,7 @@ public static class Endpoints
             return Results.Json(new
             {
                 unread = c.Unread, desk = c.Total, inbox = c.Inbox, admin = c.AdminPending, leads = c.NewLeads,
-                enotes = c.ENotesPending, token = c.Token,
+                enotes = c.ENotesPending, board = c.BoardNew, token = c.Token,
             });
         }).RequireAuthorization();
 
@@ -90,6 +90,20 @@ public static class Endpoints
         app.MapGet("/api/users/lookup", (string? q, HttpContext ctx, ENoteRepository notes) =>
             Results.Json(notes.Lookup(q, ctx.User.UserId()).Select(u => new { id = u.Id, name = u.Name, designation = u.Designation, vertical = u.Vertical })))
             .RequireAuthorization();
+
+        // ---- message board photos: signed-in users only; never for a removed post ----
+        app.MapGet("/board/photo/{id:long}", (long id, bool? thumb, HttpContext ctx, BoardRepository board) =>
+        {
+            if (!board.Options.Enabled) return Results.NotFound();
+            var ph = board.Photo(id);
+            var post = ph != null ? board.Get(ph.PostId) : null;
+            if (ph == null || post == null || post.IsDeleted) return Results.NotFound();
+            var path = board.PhotoPath(ph, thumb == true);
+            if (path.Length == 0 || !File.Exists(path)) return Results.NotFound();
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            ctx.Response.Headers.Remove("Pragma");
+            return Results.File(path, "image/jpeg");
+        }).RequireAuthorization();
 
         app.MapGet("/directory/card/{staffId:long}", (long staffId, StaffRepository staff) =>
         {

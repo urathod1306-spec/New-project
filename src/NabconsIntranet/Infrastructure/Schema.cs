@@ -402,6 +402,44 @@ public static class Schema
             SELECT 'ENoteCategory', m.Name, m.Ord, 1 FROM m
             WHERE NOT EXISTS (SELECT 1 FROM MasterItems x WHERE x.Type = 'ENoteCategory' AND x.Name = m.Name COLLATE NOCASE);
             """),
+        // v1.4.0: message board (posts with photos, pinned by administrators). Additive only.
+        (6, "Message board (v1.4.0)", """
+            ALTER TABLE Users ADD COLUMN BoardSeenAt TEXT;
+
+            CREATE TABLE IF NOT EXISTS BoardPosts (
+                Id INTEGER PRIMARY KEY,
+                AuthorUserId INTEGER NOT NULL REFERENCES Users(Id),
+                AuthorName TEXT NOT NULL,
+                AuthorDesignation TEXT,
+                AuthorVertical TEXT,
+                Body TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                IsPinned INTEGER NOT NULL DEFAULT 0,
+                PinnedAt TEXT,
+                PinnedBy TEXT,
+                IsDeleted INTEGER NOT NULL DEFAULT 0,
+                DeletedAt TEXT,
+                DeletedBy TEXT,
+                DeleteReason TEXT
+            );
+            CREATE INDEX IF NOT EXISTS IX_BoardPosts_List ON BoardPosts(IsDeleted, IsPinned, CreatedAt DESC);
+            CREATE INDEX IF NOT EXISTS IX_BoardPosts_Author ON BoardPosts(AuthorUserId, CreatedAt);
+
+            CREATE TABLE IF NOT EXISTS BoardPhotos (
+                Id INTEGER PRIMARY KEY,
+                PostId INTEGER NOT NULL REFERENCES BoardPosts(Id),
+                FileName TEXT NOT NULL,
+                Width INTEGER NOT NULL,
+                Height INTEGER NOT NULL,
+                SizeBytes INTEGER NOT NULL,
+                Sha256 TEXT NOT NULL,
+                SortOrder INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS IX_BoardPhotos_Post ON BoardPhotos(PostId, SortOrder);
+            -- posts are removed by hiding them (the record stays for the audit trail); rows are never deleted
+            CREATE TRIGGER IF NOT EXISTS BoardPosts_no_delete BEFORE DELETE ON BoardPosts
+            BEGIN SELECT RAISE(ABORT, 'Message board posts are hidden, not deleted'); END;
+            """),
     };
 
     public const string Sql = """
