@@ -1,0 +1,58 @@
+@model (NabconsIntranet.Data.BoardPost Post, int Page, bool Compact)
+@inject BoardRepository Board
+@{
+    var p = Model.Post;
+    var canDelete = !Model.Compact && Board.CanDelete(p, User);
+    var admin = !Model.Compact && User.IsAdmin();
+}
+<article class="card post @(p.IsPinned ? "pinned" : "") @(Model.Compact ? "compact" : "")" aria-label="Post by @p.AuthorName">
+    <header class="post-head">
+        @if (p.AuthorPhotoVersion > 0) { <img class="avatar-photo" src="/photo/@p.AuthorUserId?thumb=true&v=@p.AuthorPhotoVersion" alt="" width="38" height="38" /> }
+        else { <span class="avatar">@Fmt.Initials(p.AuthorName)</span> }
+        <div class="post-who">
+            <strong>@p.AuthorName</strong>
+            <span class="muted small">@string.Join(" · ", new[] { p.AuthorDesignation, p.AuthorVertical }.Where(x => !string.IsNullOrWhiteSpace(x)))</span>
+        </div>
+        <div class="post-when">
+            @if (p.IsPinned) { <span class="badge warning" title="Pinned by @p.PinnedBy">📌 Pinned</span> }
+            <time class="muted small" title="@F.DateTime(p.CreatedAt)">@F.Relative(p.CreatedAt)</time>
+        </div>
+    </header>
+    @if (!string.IsNullOrEmpty(p.Body)) { <div class="post-body pre">@(Model.Compact && p.Body.Length > 220 ? p.Body[..219] + "…" : p.Body)</div> }
+    @if (p.Photos.Count > 0)
+    {
+        <div class="post-photos n@(Math.Min(p.Photos.Count, 4))">
+            @{ var k = 0; }
+            @foreach (var ph in Model.Compact ? p.Photos.Take(1) : p.Photos)
+            {
+                k++;
+                <a href="/board/photo/@ph.Id" target="_blank" rel="noopener" aria-label="Open photo @k of @p.Photos.Count full size">
+                    <img src="/board/photo/@ph.Id?thumb=true" alt="Photo @k posted by @p.AuthorName" loading="lazy" />
+                </a>
+            }
+        </div>
+    }
+    @if (admin || canDelete)
+    {
+        <footer class="post-actions">
+            @if (admin && !p.IsPinned)
+            {
+                <form method="post" asp-page="/Board/Index" asp-page-handler="Pin" asp-route-id="@p.Id" class="inline-form"><button class="btn sm" type="submit">📌 Pin</button></form>
+            }
+            @if (admin && p.IsPinned)
+            {
+                <form method="post" asp-page="/Board/Index" asp-page-handler="Unpin" asp-route-id="@p.Id" asp-route-page="@Model.Page" class="inline-form"><button class="btn sm" type="submit">Unpin</button></form>
+            }
+            @if (canDelete)
+            {
+                <details class="post-remove">
+                    <summary class="btn sm">Remove</summary>
+                    <form method="post" asp-page="/Board/Index" asp-page-handler="Delete" asp-route-id="@p.Id" asp-route-page="@Model.Page" class="decide-form">
+                        @if (p.AuthorUserId != User.UserId()) { <input type="text" name="reason" maxlength="300" placeholder="Reason (optional)" aria-label="Reason for removing" /> }
+                        <button class="btn sm danger" type="submit" data-confirm="Remove this post from the message board?">Remove post</button>
+                    </form>
+                </details>
+            }
+        </footer>
+    }
+</article>

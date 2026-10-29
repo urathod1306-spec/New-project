@@ -1,0 +1,49 @@
+@page
+@model NabconsIntranet.Pages.Board.IndexModel
+@{
+    ViewData["Title"] = "Message Board";
+    var o = Model.Options;
+}
+<div class="page-head">
+    <div>
+        <h1>Message Board</h1>
+        <p>Share news, greetings and photos with colleagues. Everyone can post; administrators may pin up to @o.MaxPinned posts and remove posts.</p>
+    </div>
+</div>
+
+<div class="board-layout">
+    <section class="card composer" aria-labelledby="compose-h">
+        <h2 id="compose-h">Post a message</h2>
+        @if (Model.Error != null) { <div class="alert danger" role="alert">@Model.Error</div> }
+        <form method="post" asp-page-handler="Create" enctype="multipart/form-data">
+            <div class="field">
+                <label for="body" class="offscreen-label">Your message</label>
+                <textarea id="body" name="body" rows="4" maxlength="@o.MaxChars" placeholder="Write your message…" data-count="body-count">@Model.Draft</textarea>
+                <span class="hint"><span id="body-count" aria-live="polite"></span> Up to @o.MaxChars.ToString("N0") characters. Plain text; line breaks are kept.</span>
+            </div>
+            <div class="field">
+                <label for="photos">Photos (optional)</label>
+                <input id="photos" name="photos" type="file" multiple accept="image/jpeg,image/png,image/webp" data-max-mb="@o.MaxPhotoMB" data-max-files="@o.MaxPhotosPerPost" data-multi-preview="photo-previews" />
+                <span class="hint">Up to @o.MaxPhotosPerPost photos, JPEG, PNG or WebP, @o.MaxPhotoMB MB each. Location and camera details are removed automatically.</span>
+                <div id="photo-previews" class="photo-previews" aria-live="polite"></div>
+            </div>
+            <p class="hint muted small">Please keep posts official and courteous. Do not post personal, confidential or client information.</p>
+            <button class="btn primary" type="submit">Post</button>
+        </form>
+    </section>
+
+    <div class="board-feed">
+        @if (Model.Pinned.Count > 0)
+        {
+            <h2 class="feed-h">Pinned</h2>
+            @foreach (var p in Model.Pinned) { <partial name="_Post" model="(p, 1, false)" /> }
+            if (Model.Result.Items.Count > 0) { <h2 class="feed-h">Latest</h2> }
+        }
+        @if (Model.Result.Items.Count == 0 && Model.Pinned.Count == 0)
+        {
+            <div class="card"><p class="empty">No posts yet. Be the first to share something.</p></div>
+        }
+        @foreach (var p in Model.Result.Items) { <partial name="_Post" model="(p, Model.Result.Page, false)" /> }
+        <partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, Model.PageUrl)" />
+    </div>
+</div>
