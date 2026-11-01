@@ -59,6 +59,7 @@ public class RegisterModel(RegistrationRepository registrations, UserRepository 
     {
         Mobile = (Mobile ?? "").Trim();
         if (!RegistrationRepository.IsValidMobile(Mobile)) return "Enter your 10-digit mobile number (digits only, without +91 or 0).";
+        if (!"6789".Contains(Mobile[0])) return "Enter a valid 10-digit Indian mobile number.";   // same rule as My Profile
         if (users.GetByUsername(Mobile) != null) return "An account already exists for this mobile number. Please sign in, or contact the administrator if you have forgotten your password.";
         if (registrations.HasPending(Mobile)) return "A registration for this mobile number is already awaiting the administrator's approval.";
         return null;
@@ -95,6 +96,12 @@ public class RegisterModel(RegistrationRepository registrations, UserRepository 
     {
         if (!o.SelfRegistrationAvailable) return NotFound();
         Step = 2;
+        if (!Throttle.Allow("reg-submit:" + Ip, 5, TimeSpan.FromHours(1)))
+        {
+            ModelState.Clear(); Step = 1;
+            ModelState.AddModelError("", "Too many registrations from this computer. Please wait an hour and try again.");
+            return Page();
+        }
         var error = CheckMobile();
         if (error != null) { ModelState.Clear(); Step = 1; ModelState.AddModelError(nameof(Mobile), error); return Page(); }
         Match = registrations.FindStaffByMobile(Mobile!);   // re-evaluated on the server, never trusted from the form
@@ -110,7 +117,12 @@ public class RegisterModel(RegistrationRepository registrations, UserRepository 
         else if (location != null && !Locations.Contains(location, StringComparer.OrdinalIgnoreCase))
             ModelState.AddModelError("Input.Location", "Choose a location from the list, or “Others” to type it.");
         var email = Clean(Input.OfficialEmail, 150);
-        if (email != null && !MailAddress.TryCreate(email, out _)) ModelState.AddModelError("Input.OfficialEmail", "Enter a valid e-mail address.");
+        if (email != null && (!MailAddress.TryCreate(email, out var addr) || addr.Address != email)) ModelState.AddModelError("Input.OfficialEmail", "Enter a valid e-mail address.");
+        else if (email != null && !string.IsNullOrWhiteSpace(o.OfficialEmailDomain) && !email.EndsWith("@" + o.OfficialEmailDomain.Trim().TrimStart('@'), StringComparison.OrdinalIgnoreCase))
+            ModelState.AddModelError("Input.OfficialEmail", $"Use your official @{o.OfficialEmailDomain.Trim().TrimStart('@')} address.");
+        var vertical = Clean(Input.Vertical, 100);
+        if (vertical != null && !Verticals.Contains(vertical, StringComparer.OrdinalIgnoreCase))
+            ModelState.AddModelError("Input.Vertical", "Choose your vertical from the list.");
         if (Match == null && email == null) ModelState.AddModelError("Input.OfficialEmail", "Enter your official e-mail address.");
         if (Input.Password != Input.ConfirmPassword) ModelState.AddModelError("Input.ConfirmPassword", "The passwords do not match.");
         if (PasswordHasher.CheckPolicy(Input.Password, Mobile) is string policy) ModelState.AddModelError("Input.Password", policy);
@@ -121,7 +133,7 @@ public class RegisterModel(RegistrationRepository registrations, UserRepository 
             Mobile = Mobile!, StaffId = Match?.StaffId,
             EmployeeCode = Match?.EmployeeCode ?? Clean(Input.EmployeeCode, 30),
             FullName = Input.FullName.Trim(), Designation = Clean(Input.Designation, 120),
-            Vertical = Clean(Input.Vertical, 100), Location = location,
+            Vertical = vertical, Location = location,
             OfficialEmail = email ?? Match?.OfficialEmail,
             PasswordHash = PasswordHasher.Hash(Input.Password), IpAddress = Ip,
         });

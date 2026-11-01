@@ -106,27 +106,34 @@ public sealed class BoardRepository(Db db, BoardOptions o, IntranetOptions io, A
     // posts per person per hour (in memory; resets on restart, which is fine for a flood guard)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, Queue<DateTime>> _recent = new();
 
-    private bool AllowPost(long userId)
+    // (kept per repository rather than in the shared Throttle, so separate app instances in tests do not share counts)
+    private DateTime? ReservePost(long userId)
     {
         var q = _recent.GetOrAdd(userId, _ => new Queue<DateTime>());
         lock (q)
         {
             var now = DateTime.UtcNow;
             while (q.Count > 0 && now - q.Peek() > TimeSpan.FromHours(1)) q.Dequeue();
-            if (q.Count >= Math.Max(1, o.PostsPerHour)) return false;
+            if (q.Count >= Math.Max(1, o.PostsPerHour)) return null;
             q.Enqueue(now);
-            return true;
+            return now;
+        }
+    }
+
+    /// <summary>Gives back the slot of a post that failed (bad photo, error), so it does not count against the hourly limit.</summary>
+    private void ReleasePost(long userId, DateTime? slot)
+    {
+        if (slot == null || !_recent.TryGetValue(userId, out var q)) return;
+        lock (q)
+        {
+            var kept = q.ToList();
+            if (!kept.Remove(slot.Value)) return;
+            q.Clear();
+            foreach (var t in kept) q.Enqueue(t);
         }
     }
 
     public bool CanDelete(BoardPost p, ClaimsPrincipal u) => u.IsAdmin() || p.AuthorUserId == u.UserId();
-
-    /// <summary>Posts by others since the user last opened the board (for the menu badge; at most the last 30 days).</summary>
-    public long NewSince(long userId) => db.Scalar<long>("""
-        SELECT COUNT(*) FROM BoardPosts
-        WHERE IsDeleted = 0 AND AuthorUserId <> @userId
-          AND CreatedAt > COALESCE((SELECT BoardSeenAt FROM Users WHERE Id = @userId), @floor) AND CreatedAt > @floor
-        """, new { userId, floor = DateTime.UtcNow.AddDays(-30).ToString("o") });
 
     public void MarkSeen(long userId)
     {
@@ -145,25 +152,29 @@ public sealed class BoardRepository(Db db, BoardOptions o, IntranetOptions io, A
         if (body.Length == 0 && files.Count == 0) throw new WorkflowException("Write a message or add a photo.");
         if (body.Length > o.MaxChars) throw new WorkflowException($"A message can be at most {o.MaxChars:N0} characters (yours has {body.Length:N0}).");
         if (files.Count > o.MaxPhotosPerPost) throw new WorkflowException($"Add at most {o.MaxPhotosPerPost} photos to one post.");
-        if (!AllowPost(user.UserId()))
-            throw new WorkflowException($"You can post at most {o.PostsPerHour} messages an hour. Please try again later.");
+        var slot = ReservePost(user.UserId())
+            ?? throw new WorkflowException($"You can post at most {o.PostsPerHour} messages an hour. Please try again later.");
 
+        var names = new List<string>();                                     // every file name, recorded before it is written
         var written = new List<(string file, int w, int h, long size, string sha)>();
+        var committed = false;
         try
         {
             foreach (var f in files)
             {
                 using var stream = f.OpenReadStream();
+                using var gate = PhotoService.Gate();
                 SKBitmap bmp;
                 try { bmp = PhotoService.DecodeUpright(stream, f.Length, o.MaxPhotoMB); }
                 catch (UploadRejectedException ex) { throw new WorkflowException($"“{Path.GetFileName(f.FileName)}”: {ex.Message}"); }
                 using (bmp)
                 {
                     var name = $"{DateTime.UtcNow:yyyy}/{Guid.NewGuid():N}";
+                    names.Add(name);
                     var full = Path.Combine(Folder, name + ".jpg");
                     var (w, h) = PhotoService.WriteFitted(bmp, BoardOptions.FullSide, full);
-                    written.Add((name, w, h, new FileInfo(full).Length, Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(full)))));
                     PhotoService.WriteFitted(bmp, BoardOptions.ThumbSide, Path.Combine(Folder, name + "_t.jpg"));
+                    written.Add((name, w, h, new FileInfo(full).Length, Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(full)))));
                 }
             }
 
@@ -181,6 +192,7 @@ public sealed class BoardRepository(Db db, BoardOptions o, IntranetOptions io, A
                     Db.Insert(c, tx, "INSERT INTO BoardPhotos (PostId, FileName, Width, Height, SizeBytes, Sha256, SortOrder) VALUES (@id, @file, @w, @h, @size, @sha, @k)",
                         new { id, p.file, p.w, p.h, p.size, p.sha, k = k++ });
                 tx.Commit();
+                committed = true;
             }
             tracker.Touch(ChangeTracker.BoardQueue);
             audit.Log("Board.Posted", "BoardPost", id, $"{Preview(body)}" + (written.Count > 0 ? $" (+{written.Count} photo(s))" : ""));
@@ -188,7 +200,8 @@ public sealed class BoardRepository(Db db, BoardOptions o, IntranetOptions io, A
         }
         catch
         {
-            foreach (var p in written) DeleteFiles(p.file);
+            // only a post that was not saved gives back its slot and loses its files; a saved post keeps its photos
+            if (!committed) { ReleasePost(user.UserId(), slot); foreach (var n in names) DeleteFiles(n); }
             throw;
         }
     }
@@ -220,8 +233,9 @@ public sealed class BoardRepository(Db db, BoardOptions o, IntranetOptions io, A
         {
             if (pin && Db.Scalar<long>(c, tx, "SELECT COUNT(*) FROM BoardPosts WHERE IsPinned = 1 AND IsDeleted = 0") >= o.MaxPinned)
                 throw new WorkflowException($"At most {o.MaxPinned} posts can be pinned. Unpin one first.");
-            Db.Exec(c, tx, "UPDATE BoardPosts SET IsPinned = @pin, PinnedAt = CASE WHEN @pin = 1 THEN @now ELSE NULL END, PinnedBy = CASE WHEN @pin = 1 THEN @by ELSE NULL END WHERE Id = @id",
+            var n = Db.Exec(c, tx, "UPDATE BoardPosts SET IsPinned = @pin, PinnedAt = CASE WHEN @pin = 1 THEN @now ELSE NULL END, PinnedBy = CASE WHEN @pin = 1 THEN @by ELSE NULL END WHERE Id = @id AND IsDeleted = 0",
                 new { pin, now = Db.Now(), by = user.DisplayName(), id });
+            if (n == 0) throw new WorkflowException("This post has been removed.");
             tx.Commit();
         }
         tracker.Touch(ChangeTracker.BoardQueue);

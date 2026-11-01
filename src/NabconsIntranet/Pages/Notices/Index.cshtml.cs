@@ -42,7 +42,7 @@ public class IndexModel(NoticeRepository notices, AuditService audit, Fmt fmt) :
 
     public IActionResult OnPostDeactivate(long id)
     {
-        notices.Deactivate(id);
+        if (!notices.Deactivate(id)) { FlashError("That notice was not found or has already been removed."); return RedirectToPage(); }
         audit.Log("Notice.Removed", "Notice", id);
         Flash("Notice removed from the notice board.");
         return RedirectToPage();

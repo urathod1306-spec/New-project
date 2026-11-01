@@ -98,7 +98,6 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
         yield return "u:" + u.UserId();
         if (u.IsAdmin()) yield return ChangeTracker.AdminQueue;
         if (leads.CanManage(u)) yield return ChangeTracker.LeadQueue;
-        yield return ChangeTracker.ENoteQueue;
         yield return ChangeTracker.BoardQueue;
     }
 
@@ -154,7 +153,7 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
         return c with { Token = Hash($"{tracker.Boot}|{u.UserId()}|{c.Unread}|{c.Total}|{c.Inbox}|{c.AdminPending}|{c.NewLeads}|{c.ENotesPending}|{c.ENotesMine}|{c.BoardNew}") };
     }
 
-    private static readonly string OpenExcluded = string.Join(", ", LeadStatus.Closed.Select(s => "'" + s.Replace("'", "''") + "'"));
+    private static readonly string OpenExcluded = LeadRepository.ClosedSql;
 
     private object Args(ClaimsPrincipal u) => new
     {

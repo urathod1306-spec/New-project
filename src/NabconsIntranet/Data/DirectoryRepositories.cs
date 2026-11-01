@@ -109,11 +109,15 @@ public sealed class StaffRepository(Db db, Fmt fmt)
     {
         var yesterday = fmt.Today.AddDays(-1).ToString("yyyy-MM-dd");
         int n = 0;
+        var now = Db.Now();
+        using var c = db.Open();
+        using var tx = c.BeginTransaction();   // all or nothing: a failed import never leaves the directory half retired
         foreach (var s in All().Where(s => s.IsActive(fmt.Today) && !keepCodes.Contains(s.EmployeeCode, StringComparer.OrdinalIgnoreCase)))
         {
-            n += db.Exec("UPDATE Staff SET ActiveTo = @yesterday, UpdatedBy = @actor, UpdatedAt = @now WHERE StaffId = @id",
-                new { yesterday, actor, now = Db.Now(), id = s.StaffId });
+            n += Db.Exec(c, tx, "UPDATE Staff SET ActiveTo = @yesterday, UpdatedBy = @actor, UpdatedAt = @now WHERE StaffId = @id",
+                new { yesterday, actor, now, id = s.StaffId });
         }
+        tx.Commit();
         return n;
     }
 }
@@ -136,5 +140,6 @@ public sealed class NoticeRepository(Db db, Fmt fmt)
         VALUES (@Title, @Body, @IsImportant, @StartsOn, @EndsOn, 1, @PostedBy, @PostedAt)
         """, n);
 
-    public void Deactivate(long id) => db.Exec("UPDATE Notices SET IsActive = 0 WHERE Id = @id", new { id });
+    /// <summary>True when a notice that was on the board was taken down (false: not found or already removed).</summary>
+    public bool Deactivate(long id) => db.Exec("UPDATE Notices SET IsActive = 0 WHERE Id = @id AND IsActive = 1", new { id }) > 0;
 }

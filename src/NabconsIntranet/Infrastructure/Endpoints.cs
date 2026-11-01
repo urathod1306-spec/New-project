@@ -87,8 +87,10 @@ public static class Endpoints
             return Results.Empty;
         }).RequireAuthorization();
 
-        app.MapGet("/api/users/lookup", (string? q, HttpContext ctx, ENoteRepository notes) =>
-            Results.Json(notes.Lookup(q, ctx.User.UserId()).Select(u => new { id = u.Id, name = u.Name, designation = u.Designation, vertical = u.Vertical })))
+        // used only by e-Note's "Mark to" box, so it is off when e-Note is off
+        app.MapGet("/api/users/lookup", (string? q, HttpContext ctx, ENoteRepository notes, ENoteOptions eo) =>
+            !eo.Enabled ? Results.NotFound()
+            : Results.Json(notes.Lookup(q, ctx.User.UserId()).Select(u => new { id = u.Id, name = u.Name, designation = u.Designation, vertical = u.Vertical })))
             .RequireAuthorization();
 
         // ---- message board photos: signed-in users only; never for a removed post ----
@@ -100,7 +102,7 @@ public static class Endpoints
             if (ph == null || post == null || post.IsDeleted) return Results.NotFound();
             var path = board.PhotoPath(ph, thumb == true);
             if (path.Length == 0 || !File.Exists(path)) return Results.NotFound();
-            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            ctx.Response.Headers.CacheControl = "private, no-cache";   // re-checked each time, so a removed post's photos stop showing at once
             ctx.Response.Headers.Remove("Pragma");
             return Results.File(path, "image/jpeg");
         }).RequireAuthorization();

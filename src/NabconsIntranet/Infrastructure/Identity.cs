@@ -66,9 +66,16 @@ public sealed class WindowsRoleTransformation(UserRepository users, IntranetOpti
             if (!o.WindowsAutoProvisionStaff && !IsConfiguredAdmin(name)) return Task.FromResult(principal);
             var display = name.Contains('\\') ? name[(name.IndexOf('\\') + 1)..] : name;
             u = new AppUser { Username = name, DisplayName = display, Roles = Roles.Staff, IsActive = true };
-            users.Create(u, "system (Windows sign-in)");
-            u = users.GetByUsername(name)!;
-            audit.Log("User.AutoProvisioned", "User", u.Id, $"First Windows sign-in by {name}", name);
+            try
+            {
+                users.Create(u, "system (Windows sign-in)");
+                u = users.GetByUsername(name)!;
+                audit.Log("User.AutoProvisioned", "User", u.Id, $"First Windows sign-in by {name}", name);
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 19)   // two first requests at once: the other one created it
+            {
+                u = users.GetByUsername(name) ?? throw new InvalidOperationException("Could not create the user record for " + name, ex);
+            }
         }
         if (!u.IsActive) return Task.FromResult(principal);
 

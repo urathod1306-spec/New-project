@@ -111,4 +111,19 @@ public class PhotoTests : IDisposable
             if (hay.AsSpan(i, needle.Length).SequenceEqual(needle)) return i;
         return -1;
     }
+
+    [Theory]
+    [InlineData(1)] [InlineData(2)] [InlineData(3)] [InlineData(4)] [InlineData(5)] [InlineData(6)] [InlineData(7)] [InlineData(8)]
+    public void Every_camera_orientation_comes_out_upright(int orientation)
+    {
+        // test images: red top-left, green top-right, blue bottom-left, yellow bottom-right once upright (120 x 80)
+        var bytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Assets", "orient", $"o{orientation}.jpg"));
+        using var bmp = NabconsIntranet.Infrastructure.PhotoService.DecodeUpright(new MemoryStream(bytes), bytes.Length, 5);
+        Assert.Equal((120, 80), (bmp.Width, bmp.Height));
+        static bool Near(SkiaSharp.SKColor c, int r, int g, int b) => Math.Abs(c.Red - r) < 60 && Math.Abs(c.Green - g) < 60 && Math.Abs(c.Blue - b) < 60;
+        Assert.True(Near(bmp.GetPixel(15, 15), 220, 30, 30), $"top-left should be red: {bmp.GetPixel(15, 15)}");
+        Assert.True(Near(bmp.GetPixel(105, 15), 30, 200, 30), $"top-right should be green: {bmp.GetPixel(105, 15)}");
+        Assert.True(Near(bmp.GetPixel(15, 65), 30, 30, 220), $"bottom-left should be blue: {bmp.GetPixel(15, 65)}");
+        Assert.True(Near(bmp.GetPixel(105, 65), 230, 210, 30), $"bottom-right should be yellow: {bmp.GetPixel(105, 65)}");
+    }
 }

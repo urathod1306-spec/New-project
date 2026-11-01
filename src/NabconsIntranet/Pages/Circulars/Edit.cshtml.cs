@@ -106,17 +106,26 @@ public class EditModel(CircularRepository circulars, MasterRepository masters, F
         c.Keywords = Clean(Input.Keywords, 500);
         c.Synopsis = Clean(Input.Synopsis, 4000);
         c.Visibility = Input.Visibility;
-        c.SupersedesId = Input.SupersedesId;
+        // the "supersedes" link is fixed once a circular is published (the older circular has already been marked)
+        c.SupersedesId = existing != null && existing.Status != CircularStatus.Draft ? existing.SupersedesId : Input.SupersedesId;
 
-        if (existing == null)
+        try
         {
-            c.Id = circulars.Create(c);
-            audit.Log("Circular.Created", "Circular", c.Id, $"{c.CircularNumber}: {c.Title}");
+            if (existing == null)
+            {
+                c.Id = circulars.Create(c);
+                audit.Log("Circular.Created", "Circular", c.Id, $"{c.CircularNumber}: {c.Title}");
+            }
+            else
+            {
+                circulars.UpdateMetadata(c, User.UserName());
+                audit.Log("Circular.MetadataEdited", "Circular", c.Id, $"{c.CircularNumber}: {c.Title}; visibility={c.Visibility}");
+            }
         }
-        else
+        catch
         {
-            circulars.UpdateMetadata(c, User.UserName());
-            audit.Log("Circular.MetadataEdited", "Circular", c.Id, $"{c.CircularNumber}: {c.Title}; visibility={c.Visibility}");
+            if (stored != null) files.Delete(stored.StoredPath);     // no orphan file if the record could not be saved
+            throw;
         }
         if (stored != null)
         {
@@ -125,10 +134,14 @@ public class EditModel(CircularRepository circulars, MasterRepository masters, F
         }
         if (publish && (existing == null || existing.Status == CircularStatus.Draft))
         {
-            var superseded = circulars.Publish(c.Id, User.UserName());
-            audit.Log("Circular.Published", "Circular", c.Id, c.CircularNumber);
-            if (superseded != null) audit.Log("Circular.Superseded", "Circular", superseded, $"Superseded by {c.CircularNumber}");
-            Flash($"{c.CircularNumber} saved and published.");
+            var (published, superseded) = circulars.Publish(c.Id, User.UserName());
+            if (published)
+            {
+                audit.Log("Circular.Published", "Circular", c.Id, c.CircularNumber);
+                if (superseded != null) audit.Log("Circular.Superseded", "Circular", superseded, $"Superseded by {c.CircularNumber}");
+                Flash($"{c.CircularNumber} saved and published.");
+            }
+            else Flash($"{c.CircularNumber} saved; it had already been published.");
         }
         else Flash($"{c.CircularNumber} saved" + (c.Status == CircularStatus.Draft ? " as a draft." : "."));
         return Redirect($"/Circulars/Details/{c.Id}");

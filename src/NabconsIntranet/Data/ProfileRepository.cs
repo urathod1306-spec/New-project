@@ -78,6 +78,8 @@ public sealed class ProfileRepository(Db db, UserRepository users, StaffReposito
 
     public void SetLink(long userId, long? staffId, string actor)
     {
+        if (staffId != null && db.Scalar<long>("SELECT COUNT(*) FROM Staff WHERE StaffId = @staffId", new { staffId }) == 0)
+            throw new WorkflowException("That directory entry no longer exists.");
         if (staffId != null && db.Scalar<long>("SELECT COUNT(*) FROM Users WHERE StaffId = @staffId AND Id <> @userId", new { staffId, userId }) > 0)
             throw new WorkflowException("That directory entry is already linked to another user account.");
         db.Exec("UPDATE Users SET StaffId = @staffId WHERE Id = @userId", new { staffId, userId });
@@ -193,6 +195,21 @@ public sealed class ProfileRepository(Db db, UserRepository users, StaffReposito
         tracker.Touch(ChangeTracker.AdminQueue);
         audit.Log("Profile.VerticalChangeRequested", "ProfileChange", id, $"{u.Username}: '{current}' -> '{newVertical}'", u.Username);
         return true;
+    }
+
+    /// <summary>An administrator changes a user's vertical: the account and the linked directory entry change together and the change is recorded.</summary>
+    public void SetVerticalByAdmin(long userId, long? staffId, string? oldV, string? newV, string actor)
+    {
+        if (string.Equals(oldV ?? "", newV ?? "", StringComparison.Ordinal)) return;
+        ApplyVertical(userId, staffId, oldV, newV, actor);
+    }
+
+    /// <summary>After a directory entry's vertical is edited, the linked sign-in account follows (approval routing uses it).</summary>
+    public void SyncStaffVertical(long staffId, string? oldV, string? newV, string actor)
+    {
+        if (string.Equals(oldV ?? "", newV ?? "", StringComparison.Ordinal)) return;
+        var userId = db.Scalar<long>("SELECT COALESCE((SELECT Id FROM Users WHERE StaffId = @staffId LIMIT 1), 0)", new { staffId });
+        if (userId > 0) ApplyVertical(userId, staffId, oldV, newV, actor);
     }
 
     private void ApplyVertical(long userId, long? staffId, string? oldV, string? newV, string actor)

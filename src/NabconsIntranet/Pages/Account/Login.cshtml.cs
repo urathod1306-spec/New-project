@@ -13,6 +13,7 @@ public class LoginModel(UserRepository users, RegistrationRepository registratio
     [BindProperty, Required, StringLength(100)] public string Username { get; set; } = "";
     [BindProperty, Required, DataType(DataType.Password), StringLength(200)] public string Password { get; set; } = "";
     public string? ReturnUrl { get; set; }
+    private static readonly string DummyHash = PasswordHasher.Hash(Guid.NewGuid().ToString());
 
     public IActionResult OnGet(string? returnUrl)
     {
@@ -21,11 +22,20 @@ public class LoginModel(UserRepository users, RegistrationRepository registratio
         return Page();
     }
 
+    private static readonly TimeSpan IpWindow = TimeSpan.FromMinutes(10);
+
     public async Task<IActionResult> OnPostAsync(string? returnUrl)
     {
         if (o.IsWindowsAuth) return Redirect("/");
         ReturnUrl = returnUrl;
         if (!ModelState.IsValid) return Page();
+        // at most 30 failed sign-ins per computer in 10 minutes (successful sign-ins do not count)
+        var ipKey = "login-failed:" + (HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+        if (Throttle.Blocked(ipKey, 30, IpWindow))
+        {
+            ModelState.AddModelError("", "Too many sign-in attempts from this computer. Please wait a few minutes and try again.");
+            return Page();
+        }
 
         // Self-registered staff sign in with their mobile number; accept it with spaces or +91.
         var login = Username.Trim();
@@ -47,16 +57,17 @@ public class LoginModel(UserRepository users, RegistrationRepository registratio
                 return Page();
             }
         }
+        if (u == null || !u.IsActive) PasswordHasher.Verify(Password, DummyHash);   // same time as a real check: no hint which names exist
         if (u == null)
         {
             audit.Log("Login.Failed", "User", null, $"Unknown user name '{Clean(Username, 60)}'", "anonymous");
-            ModelState.AddModelError("", generic);
+            Throttle.Record(ipKey, IpWindow); ModelState.AddModelError("", generic);
             return Page();
         }
         if (!u.IsActive)
         {
             audit.Log("Login.Failed", "User", u.Id, "Account is deactivated", u.Username);
-            ModelState.AddModelError("", generic);
+            Throttle.Record(ipKey, IpWindow); ModelState.AddModelError("", generic);
             return Page();
         }
         if (u.IsLockedOut)
@@ -70,7 +81,7 @@ public class LoginModel(UserRepository users, RegistrationRepository registratio
             users.RecordFailedLogin(u, o.MaxFailedLogins, o.LockoutMinutes);
             var locked = u.IsLockedOut;
             audit.Log(locked ? "Login.LockedOut" : "Login.Failed", "User", u.Id, locked ? $"Locked for {o.LockoutMinutes} minutes" : "Wrong password", u.Username);
-            ModelState.AddModelError("", locked ? $"Too many failed attempts. The account is locked for {o.LockoutMinutes} minutes." : generic);
+            Throttle.Record(ipKey, IpWindow); ModelState.AddModelError("", locked ? $"Too many failed attempts. The account is locked for {o.LockoutMinutes} minutes." : generic);
             return Page();
         }
 

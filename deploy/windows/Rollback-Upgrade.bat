@@ -20,8 +20,34 @@ choice /M "Continue"
 if errorlevel 2 exit /b 1
 set "WASSERVICE=0"
 sc query %SERVICE% >nul 2>&1
-if %errorlevel% equ 0 ( set "WASSERVICE=1" & sc stop %SERVICE% >nul 2>&1 & timeout /t 10 /nobreak >nul )
+if %errorlevel% equ 0 (
+  set "WASSERVICE=1"
+  echo Stopping the Windows service ...
+  sc stop %SERVICE% >nul 2>&1
+  rem wait up to 60 seconds for the service to report STOPPED
+  for /L %%i in (1,1,30) do (
+    sc query %SERVICE% | find "STOPPED" >nul && goto stopped
+    timeout /t 2 /nobreak >nul
+  )
+)
+:stopped
+tasklist /FI "IMAGENAME eq NabconsIntranet.exe" 2>nul | find /I "NabconsIntranet.exe" >nul
+if %errorlevel% equ 0 (
+  echo.
+  echo The intranet is still running. Close its black window, then press any key.
+  pause >nul
+  tasklist /FI "IMAGENAME eq NabconsIntranet.exe" 2>nul | find /I "NabconsIntranet.exe" >nul
+  if not errorlevel 1 ( echo Still running - roll-back cancelled, nothing was changed. & pause & exit /b 1 )
+)
 robocopy "previous-version" "." /E /NFL /NDL /NJH /NJS /NP >nul
+if %errorlevel% geq 8 (
+  echo.
+  echo ROLL-BACK FAILED: the previous program files could not be copied back ^(robocopy error %errorlevel%^).
+  echo Nothing in data or documents was touched. Close any open program windows and run this again,
+  echo or ask IT to copy the contents of "previous-version" into this folder.
+  if "%WASSERVICE%"=="1" sc start %SERVICE% >nul
+  pause & exit /b 1
+)
 if "%WASSERVICE%"=="1" sc start %SERVICE% >nul
 echo.
 echo Previous program restored.

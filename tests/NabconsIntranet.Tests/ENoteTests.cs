@@ -383,7 +383,7 @@ public class ENoteUploadTests() : ENoteTestBase(("ENote__MaxFileMB", "1"), ("ENo
         // rejected uploads leave no files behind
         var folder = Path.Combine(App.Root, "documents", "enotes");
         Assert.Equal(3, Directory.GetFiles(folder, "*.dat", SearchOption.AllDirectories).Length);
-        Assert.Empty(W.OrphanFiles());
+        Assert.Empty(App.Get<HousekeepingService>().OrphanFiles(TimeSpan.Zero));
     }
 }
 

@@ -63,6 +63,9 @@ public class UserEditModel(UserRepository users, MasterRepository masters, Audit
             ModelState.AddModelError("Input.TempPassword", "Set a temporary password for the new user.");
         if (!o.IsWindowsAuth && !string.IsNullOrEmpty(Input.TempPassword) && PasswordHasher.CheckPolicy(Input.TempPassword, Input.Username) is string err)
             ModelState.AddModelError("Input.TempPassword", err);
+        var vertical = Clean(Input.Vertical, 100);
+        if (vertical != null && !Verticals.Contains(vertical, StringComparer.OrdinalIgnoreCase) && vertical != Existing?.Vertical)
+            ModelState.AddModelError("Input.Vertical", "Choose a vertical from the list (Administration → Masters).");
         if (!ModelState.IsValid) return Page();
 
         if (Existing == null)
@@ -70,7 +73,7 @@ public class UserEditModel(UserRepository users, MasterRepository masters, Audit
             var u = new AppUser
             {
                 Username = Input.Username.Trim(), DisplayName = Input.DisplayName.Trim(), Email = Clean(Input.Email, 150),
-                Vertical = Clean(Input.Vertical, 100), Roles = Infrastructure.Roles.Join(roles), IsActive = Input.IsActive,
+                Vertical = vertical, Roles = Infrastructure.Roles.Join(roles), IsActive = Input.IsActive,
                 PasswordHash = o.IsWindowsAuth ? null : PasswordHasher.Hash(Input.TempPassword!), MustChangePassword = !o.IsWindowsAuth,
             };
             var newId = users.Create(u, User.UserName());
@@ -83,10 +86,13 @@ public class UserEditModel(UserRepository users, MasterRepository masters, Audit
         var rolesChanged = Infrastructure.Roles.Join(roles) != Infrastructure.Roles.Join(Existing.RoleList) || Existing.IsActive != Input.IsActive;
         Existing.DisplayName = Input.DisplayName.Trim();
         Existing.Email = Clean(Input.Email, 150);
-        Existing.Vertical = Clean(Input.Vertical, 100);
+        var oldVertical = Existing.Vertical;
         Existing.Roles = Infrastructure.Roles.Join(roles);
         Existing.IsActive = Input.IsActive;
         users.Update(Existing, User.UserName(), rotateStamp: rolesChanged);
+        // the vertical changes with the linked directory entry, and is recorded in the profile history
+        profiles.SetVerticalByAdmin(Existing.Id, Existing.StaffId, oldVertical, vertical, User.UserName());
+        Existing.Vertical = vertical;
         var after = $"roles={Existing.Roles}; active={Existing.IsActive}; vertical={Existing.Vertical}";
         audit.Log(rolesChanged ? "User.RolesChanged" : "User.Updated", "User", Existing.Id, $"{Existing.Username}: {before} -> {after}");
         if (!o.IsWindowsAuth && !string.IsNullOrEmpty(Input.TempPassword))

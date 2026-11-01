@@ -5,7 +5,7 @@ using NabconsIntranet.Infrastructure;
 
 namespace NabconsIntranet.Pages.Admin;
 
-public class StaffEditModel(StaffRepository staff, MasterRepository masters, AuditService audit) : AppPage
+public class StaffEditModel(StaffRepository staff, MasterRepository masters, AuditService audit, ProfileRepository profiles) : AppPage
 {
     public sealed class InputModel
     {
@@ -62,16 +62,20 @@ public class StaffEditModel(StaffRepository staff, MasterRepository masters, Aud
         if (byCode != null && byCode.StaffId != Id) ModelState.AddModelError("Input.EmployeeCode", "Another staff entry already uses this employee code.");
         if (existing != null && !existing.EmployeeCode.Equals(Input.EmployeeCode.Trim(), StringComparison.OrdinalIgnoreCase))
             ModelState.AddModelError("Input.EmployeeCode", "The employee code is the permanent key and cannot be changed. Create a new entry instead.");
+        var vertical = Clean(Input.Vertical, 100);
+        if (vertical != null && vertical != existing?.Vertical && !masters.Names(MasterTypes.Vertical).Contains(vertical, StringComparer.OrdinalIgnoreCase))
+            ModelState.AddModelError("Input.Vertical", "Choose a vertical from the list (Administration → Masters).");
         if (!ModelState.IsValid) return Page();
 
         var s = new StaffMember
         {
             EmployeeCode = Input.EmployeeCode.Trim(), FullName = Input.FullName.Trim(), Designation = Clean(Input.Designation, 120),
-            Vertical = Clean(Input.Vertical, 100), Location = Clean(Input.Location, 100), OfficialEmail = Clean(Input.OfficialEmail, 150),
+            Vertical = vertical, Location = Clean(Input.Location, 100), OfficialEmail = Clean(Input.OfficialEmail, 150),
             Extension = Clean(Input.Extension, 20), Mobile = Clean(Input.Mobile, 20), ShowMobile = Input.ShowMobile,
             ActiveFrom = IsoDate(Input.ActiveFrom), ActiveTo = IsoDate(Input.ActiveTo),
         };
         var created = staff.Upsert(s, User.UserName());
+        if (existing != null) profiles.SyncStaffVertical(s.StaffId, existing.Vertical, s.Vertical, User.UserName());
         audit.Log(created ? "Staff.Created" : "Staff.Updated", "Staff", s.StaffId, $"{s.EmployeeCode} {s.FullName}; {s.Designation}; {s.Vertical}; active to {s.ActiveTo ?? "-"}");
         Flash($"{s.FullName} saved.");
         return RedirectToPage("/Admin/Staff");

@@ -68,17 +68,17 @@ public class EditModel(RequestWorkflow workflow, UserRepository users, MasterRep
         if (Uploads.Count > 5) ModelState.AddModelError(nameof(Uploads), "Attach at most 5 files at a time.");
         if (!ModelState.IsValid) return Page();
 
-        var stored = new List<StoredFile>();
-        foreach (var f in Uploads.Where(u => u.Length > 0 || !string.IsNullOrEmpty(u.FileName)))
+        if (!string.IsNullOrWhiteSpace(Input.RequestCategory) && !Categories.Contains(Input.RequestCategory.Trim()) && Existing?.RequestCategory != Input.RequestCategory.Trim())
+        { ModelState.AddModelError("Input.RequestCategory", "Choose a category from the list."); return Page(); }
+        List<StoredFile> stored;
+        try { stored = await files.SaveAllAsync(Uploads.Where(u => u.Length > 0 || !string.IsNullOrEmpty(u.FileName)), "requests"); }
+        catch (UploadRejectedException ex)
         {
-            try { stored.Add(await files.SaveAsync(f, "requests")); }
-            catch (UploadRejectedException ex)
-            {
-                audit.Log("Upload.Rejected", "Request", id, ex.Message);
-                ModelState.AddModelError(nameof(Uploads), $"{f.FileName}: {ex.Message}");
-                return Page();
-            }
+            audit.Log("Upload.Rejected", "Request", id, ex.Message);
+            ModelState.AddModelError(nameof(Uploads), ex.Message);
+            return Page();
         }
+        var attached = 0;
 
         var r = new ApprovalRequest
         {
@@ -90,7 +90,7 @@ public class EditModel(RequestWorkflow workflow, UserRepository users, MasterRep
         {
             if (Id == 0) Id = workflow.CreateDraft(r, User);
             else workflow.UpdateDraft(r, User, Input.RowVersion);
-            foreach (var s in stored) workflow.AddAttachment(Id, s, User);
+            foreach (var s in stored) { workflow.AddAttachment(Id, s, User); attached++; }
             if (submit)
             {
                 var latest = workflow.Get(Id)!;
@@ -101,6 +101,7 @@ public class EditModel(RequestWorkflow workflow, UserRepository users, MasterRep
         }
         catch (WorkflowException ex)
         {
+            foreach (var s in stored.Skip(attached)) files.Delete(s.StoredPath);    // files not recorded: no orphans
             ModelState.AddModelError("", ex.Message);
             if (Id > 0 && id == null) return Redirect($"/Requests/Edit/{Id}");
             return Page();

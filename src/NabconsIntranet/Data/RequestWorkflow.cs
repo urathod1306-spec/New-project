@@ -14,7 +14,7 @@ public sealed record WorkflowAction(string Name, string Label, string ToState, b
 /// Every transition is recorded in the append-only ApprovalActions table and the audit log.
 /// Optimistic concurrency (RowVersion) prevents two approvers acting on the same request at once.
 /// </summary>
-public sealed class RequestWorkflow(Db db, AuditService audit, INotificationService notifications)
+public sealed class RequestWorkflow(Db db, AuditService audit, INotificationService notifications, Fmt fmt)
 {
     public const string FormName = "General Administrative Approval Request";
 
@@ -40,7 +40,9 @@ public sealed class RequestWorkflow(Db db, AuditService audit, INotificationServ
     public bool CanView(ApprovalRequest r, ClaimsPrincipal user)
     {
         var uid = user.UserId();
-        return r.SubmitterUserId == uid || r.ReviewerUserId == uid || r.ApproverUserId == uid || user.IsAdmin() || user.IsAuditor();
+        if (r.SubmitterUserId == uid || user.IsAdmin() || user.IsAuditor()) return true;
+        // the chosen officers see a request only once it has been submitted, not while it is the submitter's draft
+        return r.State != RequestStates.Draft && (r.ReviewerUserId == uid || r.ApproverUserId == uid);
     }
 
     public bool CanEdit(ApprovalRequest r, ClaimsPrincipal user) =>
@@ -78,6 +80,9 @@ public sealed class RequestWorkflow(Db db, AuditService audit, INotificationServ
          WHERE r.AssignedToUserId = @userId AND r.State IN ('{RequestStates.Submitted}', '{RequestStates.UnderReview}')
          ORDER BY r.UpdatedAt
         """, new { userId });
+
+    public long OpenCount(long userId) => db.Scalar<long>(
+        $"SELECT COUNT(*) FROM Requests WHERE SubmitterUserId = @userId AND State <> '{RequestStates.Closed}'", new { userId });
 
     public long InboxCount(long userId) => db.Scalar<long>($"""
         SELECT COUNT(*) FROM Requests WHERE AssignedToUserId = @userId AND State IN ('{RequestStates.Submitted}', '{RequestStates.UnderReview}')
@@ -126,7 +131,7 @@ public sealed class RequestWorkflow(Db db, AuditService audit, INotificationServ
             VALUES (@FormType, @Subject, @RequestCategory, @Amount, @RequiredBy, @Details, @uid, @name, @vertical,
                     @ReviewerUserId, @ApproverUserId, 'Draft', @uid, 1, @now, @now)
             """, new { r.FormType, r.Subject, r.RequestCategory, r.Amount, r.RequiredBy, r.Details, uid = user.UserId(), name = user.DisplayName(), vertical = user.Vertical(), r.ReviewerUserId, r.ApproverUserId, now });
-        var number = $"NABCONS/REQ/{DateTime.UtcNow:yyyy}/{r.Id:D5}";
+        var number = $"NABCONS/REQ/{fmt.Today.Year}/{r.Id:D5}";   // office (IST) calendar year, as on the paper register
         Db.Exec(c, tx, "UPDATE Requests SET RequestNumber = @number WHERE Id = @Id", new { number, r.Id });
         AppendAction(c, tx, r.Id, "Created", null, RequestStates.Draft, user, "Submitter", null, now);
         tx.Commit();
