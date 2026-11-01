@@ -20,3 +20,25 @@ Design documents in the Elephant–Goldfish Model (EGM) style: each explains *wh
 3. **Live data survives every upgrade.** Database changes are additive migrations only; older program versions must keep working on an upgraded database (roll-back).
 4. **Strict web security.** Content-Security-Policy without inline script or style; anti-forgery on every POST; authorisation on every page, download and JSON endpoint.
 5. **Change process.** Every change on a new `claude/v<version>-<topic>` branch; merged into `main` only after the owner confirms.
+
+## Glossary
+| Term | Meaning |
+|---|---|
+| NABARD / NABCONS | National Bank for Agriculture and Rural Development / its subsidiary NABARD Consultancy Services, the owner of this intranet |
+| Vertical | A department or business unit (e.g. HR & Administration, BDU). Kept in *Administration → Master lists → Verticals*. A user's vertical is on their user record; changing it from My Profile needs administrator approval. It decides access to Business Leads (BDU) and vertical-only circulars, and the e-Note number code |
+| Location / office | Office where a person sits; a master list used in the directory |
+| Master lists | Administrator-maintained drop-down values (`MasterItems` table): verticals, locations, categories, lead lists, e-Note categories |
+| BDU | Business Development Unit — the vertical that manages business leads (setting `BusinessDevelopmentVerticalName`, default "BDU") |
+| LeadViewer | Role for the COO (Chief Operating Officer) and MD (Managing Director): sees and manages all business leads |
+| FY | Indian financial year, 1 April – 31 March, written `2026-27`. Lead and e-Note serials restart each FY |
+| IST | Indian Standard Time, UTC+5:30 (setting `DisplayUtcOffsetMinutes = 330`) |
+| CSP | Content-Security-Policy: a browser rule that only allows scripts, styles and images from this server |
+| WAL | SQLite "write-ahead log" mode: readers do not block the single writer |
+| FTS5 | SQLite's built-in full-text search |
+| PBKDF2 | Standard slow password-hashing method (210,000 rounds, SHA-256) |
+| ETag / 304 | HTTP mechanism that lets the badge poll answer "nothing changed" without sending data |
+| vCard | Standard contact file (`.vcf`) that Outlook and phones can import |
+| SkiaSharp / HarfBuzz | Open-source (MIT) image and text libraries bundled in the program: photos, PDFs, Hindi text shaping |
+| Green sheet | NABARD/NABCONS name for the paper note-sheet that e-Note replaces |
+| EGM / Elephant / Goldfish | Elephant–Goldfish Model: the author (Elephant, full context) writes the design; fresh reviewers with no context (Goldfish) check it |
+| YAGNI | "You aren't gonna need it": do not build for speculative future needs |

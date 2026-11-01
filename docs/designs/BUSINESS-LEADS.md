@@ -16,6 +16,12 @@ Business opportunities seen by staff across verticals were not reaching the Busi
 - **Notifications:** BDU members on new leads; submitter on status/owner changes; new owner on assignment (same transaction).
 - **Export:** dependency-free `Infrastructure/XlsxWriter.cs`.
 
+### Behaviour details (confirmed in the v1.5.0 review)
+- **Duplicate check:** matches the same tender number (letters and digits only), or the same client with a similar title (shared words, or one title's words a subset of the other's), among leads of the last 180 days; at most 5 shown. A person who may not open a matching lead is told only that a colleague has submitted a similar lead, without reference or status (v1.5.0).
+- **Status changes:** any open or closed status can be set by the BDU/COO (re-opening is allowed). Leaving *Won* clears the awarded value and award date (v1.5.0). The closed statuses (Won, Lost, Dropped) are defined once in code.
+- Lead viewers cannot be owners; owners must be BDU members. The Excel export is limited to 2,000 rows.
+- Files saved for a lead that then fails to save are deleted again (v1.5.0).
+
 ## Alternatives Considered
 - **Access by role only:** rejected — BDU membership changes with postings; vertical (approved by an administrator) is the source of truth.
 

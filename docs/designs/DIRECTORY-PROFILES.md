@@ -15,6 +15,13 @@ Staff need to find colleagues and their official contact details, keep their own
 - **Photos** (`Infrastructure/PhotoService.cs`): JPEG/PNG/WebP up to `MaxPhotoMB` (2), decoded (real image check, ≤ 40 MP), oriented from EXIF, centre-cropped, re-encoded to 400 px and 96 px JPEG without metadata; stored as `data/uploads/photos/<userId>.jpg`; served by `GET /photo/{userId}` to signed-in users with a version number in the URL for caching (`Users.PhotoVersion`).
 - **Self-registration** (`Pages/Account/Register`, `RegistrationRepository`): anonymous, rate-limited per IP; looks up the mobile in the directory and pre-fills (e-mail masked); creates a `RegistrationRequests` row with a password hash; administrators are notified; on approval an account (user name = mobile) is created and the directory entry is updated or added (provisional code if none), then linked.
 
+### Behaviour details (confirmed in the v1.5.0 review)
+- **Self-registration:** the mobile number must be a 10-digit Indian mobile (starting 6–9); the e-mail must be valid and, when `OfficialEmailDomain` is set, on that domain; the vertical must be from the master list. Look-ups are limited to 10 per computer per 10 minutes and submissions to 5 per hour (v1.5.0).
+- Only a **current** directory entry is matched by mobile number; the entry of someone who has left is never matched or brought back (v1.5.0). Approval claims the request first, so two administrators cannot both approve it; if the account cannot be created the request returns to the queue. On approval or rejection the stored password hash is removed.
+- An administrator's change to a user's vertical updates the linked directory entry and is recorded in the profile history; a directory entry's vertical change updates the linked account. Both must be a vertical from the master list (an existing value is kept) (v1.5.0).
+- Linking an account to a directory entry checks that the entry exists. Mobile uniqueness is checked against other active, linked users; the staff import and staff edit pages do not check mobile format. The staff export includes hidden mobile numbers (administrators only). "Deactivate missing" on import runs as one transaction (v1.5.0).
+- Photos: 400 px square plus a 96 px thumbnail, at least 32 px, EXIF removed; all eight camera orientations are turned upright (orientation 7 fixed in v1.5.0). Photos of deactivated users are still served to signed-in users (directory history).
+
 ## Alternatives Considered
 - **Name-based auto-linking:** rejected — common names collide; a wrong link would expose or let someone edit another person's details.
 - **Storing original photos:** rejected — original files carry GPS/EXIF; re-encoding removes them and bounds size.

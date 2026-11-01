@@ -20,7 +20,7 @@ Run on the isolated test PC with the demo data (password for all demo accounts: 
 | 14 | Rejection / return | Repeat with *Return* (remarks required), resubmit, then *Reject* | Remarks enforced; history preserved ✔ | |
 | 15 | Concurrent approvals | As `approver1`, open the same submitted request in two tabs; act in tab 1, then in tab 2 | Tab 2 is refused: "updated by someone else" ✔ | |
 | 16 | Self-approval | As `approver1`, raise a request and try to choose yourself | Not offered and refused by the server | |
-| 17 | Withdrawn / superseded | Open `NABCONS/HR/<year>/01` and `NABCONS/ADM/<year>/03` | Superseded banner linking to HR/04; withdrawn banner with reason. Hidden from staff search unless *Include withdrawn* is ticked | |
+| 17 | Withdrawn / superseded | Open `NABCONS/HR/<year>/01` and `NABCONS/ADM/<year>/03` | Superseded banner linking to HR/04 (the superseded circular still appears in search); withdrawn banner with reason, and the withdrawn circular is hidden from staff search unless *Include withdrawn* is ticked | |
 | 18 | Audit completeness | As `auditor`, filter the audit log for each action above | Each action is present with user, time and IP | |
 | 19 | Audit integrity | *Audit → Verify integrity*; run `Verify-Audit-Log.bat` | "intact" ✔ | |
 | 20 | Lockout | Enter a wrong password 5 times for `auditor` | Account locked for 15 minutes; `Login.LockedOut` in audit; admin can unlock ✔ | |

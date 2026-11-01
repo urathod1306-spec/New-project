@@ -1,6 +1,8 @@
 # e-Note (Digital Note-Sheet)
 
-Status at v1.4.0: built and tested; **switched off on the live server** by the owner (`ENote:Enabled = false`). Data tables exist; pages return 404 while disabled.
+Status at v1.4.0: built and tested; **switched off on the live server** by the owner (`ENote:Enabled = false`). The tables exist; while disabled, e-Note pages and endpoints return 404, the menu item and My Desk sections are hidden, and the daily ageing alerts do not run. To enable: set `"ENote": { "Enabled": true }` and restart (no migration needed).
+
+The system enforces **no** hierarchy: users choose whom to mark a note to, following the office's paper hierarchy themselves.
 
 ## Problem Statement
 Routine office notes move on paper note-sheets ("green sheets"); tracking where a file is, and reconstructing who said what, is slow.
@@ -14,6 +16,12 @@ Routine office notes move on paper note-sheets ("green sheets"); tracking where 
 - **Workflow:** `ENoteWorkflow` — every action is one `BEGIN IMMEDIATE` transaction with `RowVersion` and state check, movement/comment append, participants, search index and notifications; audit after commit. Number `NCS/EN/<code|GEN>/<FY>/<serial>` at first submission.
 - **Visibility:** `ENoteRepository.CanView` — initiator; participants; everyone for approved non-confidential notes (setting `ApprovedVisibility`). Register (`Pages/ENotes/Register`) is metadata only.
 - **PDF:** `Infrastructure/ENotePdf.cs` — SkiaSharp + HarfBuzz with embedded Noto fonts; record SHA-256 in the footer; stored once per final state; at most 2 generated at once.
+
+### Behaviour details (confirmed in the v1.5.0 review)
+- Superseding an attachment and removing a draft attachment are single statements; any participant who may add files may supersede one.
+- PDF: downloadable by anyone who may view the note, only in a final state; it is generated once per final state and cached under `documents/enotes/pdf/`. An older PDF is kept and is not reported as an orphan.
+- The "Mark to" people search (`/api/users/lookup`) is switched off with the module (v1.5.0).
+- "Viewed" audit entries are sampled to one per person per note per day.
 
 ## Alternatives Considered
 - **Fixed approval hierarchy:** rejected by the COO — real routing follows the offline hierarchy.
