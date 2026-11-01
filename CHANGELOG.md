@@ -1,5 +1,39 @@
 # Changelog — NABCONS Intranet
 
+## 1.5.0 — 2026-11-01
+**Upgrade note:** no database change (schema stays 6) and no new settings. Program files only; roll back to 1.4.0 at any time.
+
+This release comes from a structured design review (Google's *Elephant–Goldfish Model*): design specifications were written for every module (`docs/designs/`) and then checked against the code by independent reviewers with no prior context. 108 findings were raised; 90 were fixed and 18 were kept or deferred with reasons. See `docs/designs/reviews/consolidated_review_report.md`.
+
+### Security
+- Small built-in addresses (photos, contact cards, badge counts, people search) now require exactly the same sign-in check as pages; in Windows mode they previously accepted any Windows user.
+- Failed sign-ins are counted reliably even when many arrive at once, so the 5-attempt lock-out cannot be bypassed.
+- Sign-in answers in the same time whether or not the user name exists, and a computer is limited to 30 failed sign-ins in 10 minutes.
+- Self-registration: submissions are limited to 5 per hour per computer; the mobile must be a valid Indian mobile, the e-mail on the official domain (when set) and the vertical from the list.
+- Business Leads: the duplicate warning no longer shows the reference or status of leads the person may not open.
+- The e-Note people search is switched off together with e-Note.
+
+### Backups and recovery
+- Every backup is now checked before it is kept: the database copy passes an integrity check, the ZIP is written under a temporary name, read back, and only then given its final name. A failed backup no longer leaves a partial ZIP behind.
+- Restore unpacks the backup to a staging folder first, and only then swaps it in; if anything fails, your current data is put back. Unsafe entries in a ZIP are listed.
+- `Rollback-Upgrade.bat` waits for the service to stop, refuses to run while the program is open in a window, and reports a failed copy instead of always saying "restored".
+
+### Fixes
+- Requests: the number uses the Indian date (a request made just after midnight on 1 January no longer gets the old year); drafts are visible only to the submitter (and administrators/auditors) until submitted; the category must be from the list.
+- Circulars: publishing, withdrawing and superseding check the circular's current state, so double clicks or two publishers cannot overwrite each other; the "supersedes" link is locked after publishing.
+- No stray files are left when saving a request, circular or lead fails part-way; the nightly report of such files now covers all modules (it reports, never deletes).
+- Business Leads: moving a lead away from *Won* clears the awarded value and date.
+- Registration: two administrators approving the same request at once can no longer create two accounts; the directory entry of someone who has left is never matched or brought back.
+- Administration: changing a user's vertical also updates their directory entry (and the other way round) and is recorded in the profile history; linking to a deleted directory entry, removing an already-removed notice, and a failed "deactivate missing" import are handled cleanly.
+- Message Board: a post refused for a bad photo no longer uses up the hourly limit; a removed post cannot be pinned; photos of a removed post stop showing at once; a saved post can never lose its photos.
+- Photos taken with orientation 7 (some phones, rotated and mirrored) now appear correctly instead of blank.
+- The notification bell takes you to the sign-in page when your session has ended, instead of showing the sign-in page inside the menu.
+- Photo processing is limited to two at a time, protecting a small server PC's memory.
+- Several small efficiency fixes (home page counts, e-Note badge refresh, view sampling).
+
+### Documentation
+- Design specifications for every module in `docs/designs/`, with a glossary, roles matrix, settings table, migrations table and operations notes; the five review reports and the consolidated report in `docs/designs/reviews/`.
+
 ## 1.4.0 — 2026-10-29
 **Upgrade note:** database schema 5 → 6 (additive only; `NabconsIntranet.exe --migrate` takes a backup first). The new `MessageBoard` settings section is optional; defaults apply when it is absent.
 

@@ -1,5 +1,17 @@
 # NABCONS Intranet — Manual testing checklist (office machine)
 
+## 1.5.0: review fixes
+- [ ] Upgrade → *System information* shows 1.5.0 / schema 6; old data intact; settings unchanged.
+- [ ] *Administration → Backup → Create backup now*: a new ZIP appears; no `.partial` file is left in the backups folder.
+- [ ] Sign in with a wrong password 5 times: the account locks. An unknown user name gives the same message as a wrong password.
+- [ ] Business Leads → *New lead*: as an ordinary user, type the client and title of a colleague's lead: you see "a similar lead already submitted by a colleague", without its reference.
+- [ ] Requests: a draft request does not appear for the chosen reviewer until it is submitted.
+- [ ] Message Board: try a post with a renamed `.exe` as a photo 11 times; it is refused each time, and a normal post still works afterwards.
+- [ ] Leave a page open past the 30-minute idle time, then open the bell: you are taken to the sign-in page.
+- [ ] With e-Notes switched off, opening `/api/users/lookup?q=a` shows "not found".
+
+---
+
 ## 1.4.0: Message Board
 - [ ] Upgrade → *System information* shows 1.4.0 / schema 6; old data intact; e-Notes still switched off if you had switched them off.
 - [ ] As an ordinary user: *Message Board* → write a message, add 2 photos → *Post*. Both photos are shown upright; the post also appears on the home page.
