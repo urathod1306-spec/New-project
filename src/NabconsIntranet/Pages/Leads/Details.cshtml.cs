@@ -79,16 +79,13 @@ public class DetailsModel(LeadRepository leads, LeadAccess access, MasterReposit
         if (note == null && incoming.Count == 0) { FlashError("Write a note or choose a file."); return RedirectToPage(new { id }); }
         if (leads.AttachmentBytes(id) + incoming.Sum(f => f.Length) > o.MaxLeadTotalMB * 1024L * 1024L)
         { FlashError($"Attachments may total at most {o.MaxLeadTotalMB} MB per lead."); return RedirectToPage(new { id }); }
-        var stored = new List<StoredFile>();
-        foreach (var f in incoming)
+        List<StoredFile> stored;
+        try { stored = await files.SaveAllAsync(incoming, "leads", FileStore.LeadExtensions, o.MaxLeadFileMB * 1024L * 1024L); }
+        catch (UploadRejectedException ex)
         {
-            try { stored.Add(await files.SaveAsync(f, "leads", FileStore.LeadExtensions, o.MaxLeadFileMB * 1024L * 1024L)); }
-            catch (UploadRejectedException ex)
-            {
-                audit.Log("Upload.Rejected", "Lead", id, $"{f.FileName}: {ex.Message}");
-                FlashError($"{f.FileName}: {ex.Message}");
-                return RedirectToPage(new { id });
-            }
+            audit.Log("Upload.Rejected", "Lead", id, ex.Message);
+            FlashError(ex.Message);
+            return RedirectToPage(new { id });
         }
         var side = CanManage ? "BDU" : "Submitter";
         if (note != null) leads.AddNote(Item, note, User, CanManage ? "Remark" : "Note");

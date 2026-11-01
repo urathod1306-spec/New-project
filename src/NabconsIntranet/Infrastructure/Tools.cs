@@ -82,7 +82,7 @@ public static class Tools
                 foreach (var s in steps)
                 {
                     Console.WriteLine(s);
-                    audit.Log("System.Upgraded", "Database", Schema.Version, s, Environment.UserDomainName + "\\" + Environment.UserName + " (command line)");
+                    audit.Log(s.StartsWith("Note:", StringComparison.Ordinal) ? "System.SchemaNewer" : "System.Upgraded", "Database", Schema.Version, s, Environment.UserDomainName + "\\" + Environment.UserName + " (command line)");
                 }
                 Console.WriteLine(steps.Count == 0 ? $"Database already up to date (schema version {Schema.Version}). Nothing changed." : $"Database is now at schema version {Schema.Version}.");
                 return 0;

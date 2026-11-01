@@ -172,7 +172,7 @@ function nabCopy(text, done) {
                 box.textContent = '';
                 var h = document.createElement('strong'); h.textContent = 'A similar lead may already exist: ';
                 box.appendChild(h);
-                box.appendChild(document.createTextNode(list.map(function (d) { return d.reference + ' (' + d.status + ', ' + d.submitted + ')'; }).join('; ') +
+                box.appendChild(document.createTextNode(list.map(function (d) { return d.reference ? d.reference + ' (' + d.status + ', ' + d.submitted + ')' : 'a similar lead already submitted by a colleague'; }).join('; ') +
                     '. If yours is a different opportunity, click “Submit anyway”.'));
                 box.classList.remove('hidden');
                 btn.textContent = 'Submit anyway';
@@ -245,7 +245,11 @@ document.querySelectorAll('select[data-autosubmit]').forEach(function (s) { s.ad
     function items() { return Array.prototype.slice.call(bell.querySelectorAll('.bell-menu a[href], .bell-menu button')); }
     function load() {
         fetch('/Notifications?handler=Menu', { credentials: 'same-origin', cache: 'no-store' })
-            .then(function (r) { return r.ok ? r.text() : null; })
+            .then(function (r) {
+                // the session has ended: the server answered with the sign-in page; go there instead of showing it in the menu
+                if (r.redirected && /\/Account\/Login/i.test(r.url)) { window.location.href = r.url; return null; }
+                return r.ok ? r.text() : null;
+            })
             .then(function (html) { if (html !== null) list.innerHTML = html; })     // server-rendered, HTML-encoded by Razor
             .catch(function () { /* keep the link to the Notifications page */ });
     }

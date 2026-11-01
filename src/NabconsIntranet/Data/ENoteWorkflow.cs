@@ -160,8 +160,7 @@ public sealed class ENoteWorkflow(Db db, ENoteRepository notes, ENoteOptions o, 
                 $"e-Note {number} marked to you — {n.Subject}", remarks, $"/ENotes/{id}", "ENote", id));
             tx.Commit();
         }
-        tracker.TouchUser(n.InitiatorUserId);
-        tracker.Touch(ChangeTracker.ENoteQueue);
+        tracker.TouchUser(n.InitiatorUserId);           // the new holder and the sender are refreshed by Notify
         audit.Log(auditAction, "ENote", id, $"{number}: marked to user {toUserId}" + (newVersion != null ? $"; text version {newVersion}" : "") + (remarks != null ? $"; remarks: {remarks}" : ""));
         if (auditAction != "ENote.MarkedTo") audit.Log("ENote.MarkedTo", "ENote", id, $"{number}: to user {toUserId}");
     }
@@ -237,7 +236,7 @@ public sealed class ENoteWorkflow(Db db, ENoteRepository notes, ENoteOptions o, 
                 $"e-Note {n.NoteNumber} {(approve ? "approved" : "rejected")} by {me.Name} — {n.Subject}", remarks, $"/ENotes/{id}", "ENote", id));
             tx.Commit();
         }
-        tracker.Touch(ChangeTracker.ENoteQueue);
+        tracker.TouchUser(n.InitiatorUserId);           // the decider and every participant are refreshed by Notify
         audit.Log("ENote." + state, "ENote", id, $"{n.NoteNumber}: {state}; remarks: {remarks}");
     }
 
@@ -539,21 +538,6 @@ public sealed class ENoteWorkflow(Db db, ENoteRepository notes, ENoteOptions o, 
             tx.Commit();
         }
         return due.Count > 0 ? new List<string> { $"e-Note ageing reminders: {due.Count}" } : new();
-    }
-
-    /// <summary>Reports (never deletes) stored e-Note files with no database record, e.g. after a failed save.</summary>
-    public List<string> OrphanFiles()
-    {
-        var folder = Path.Combine(io.DocumentsPath, "enotes");
-        if (!Directory.Exists(folder)) return new();
-        var known = db.Strings("SELECT StoredPath FROM ENoteAttachments").Concat(db.Strings("SELECT PdfPath FROM ENotes WHERE PdfPath IS NOT NULL"))
-            .Select(p => p.Replace('\\', '/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var orphans = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
-            .Select(f => Path.GetRelativePath(io.DocumentsPath, f).Replace('\\', '/'))
-            .Where(r => !known.Contains(r) && !r.StartsWith("enotes/pdf/", StringComparison.OrdinalIgnoreCase)).ToList();
-        if (orphans.Count == 0) return new();
-        log.LogWarning("e-Note files without a database record: {Files}", string.Join(", ", orphans.Take(50)));
-        return new List<string> { $"e-Note orphan files (not deleted; see the log): {orphans.Count}" };
     }
 }
 

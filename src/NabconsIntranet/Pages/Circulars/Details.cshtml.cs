@@ -29,7 +29,8 @@ public class DetailsModel(CircularRepository circulars, FileStore files, AuditSe
         if (c == null) return NotFound();
         if (c.Status != CircularStatus.Draft) { FlashError("Only draft circulars can be published."); return RedirectToPage(new { id }); }
         if (c.CurrentVersion == 0) { FlashError("Upload the circular file before publishing."); return RedirectToPage(new { id }); }
-        var superseded = circulars.Publish(id, User.UserName());
+        var (published, superseded) = circulars.Publish(id, User.UserName());
+        if (!published) { FlashError("This circular was already published by someone else."); return RedirectToPage(new { id }); }
         audit.Log("Circular.Published", "Circular", id, c.CircularNumber);
         if (superseded != null)
             audit.Log("Circular.Superseded", "Circular", superseded, $"Superseded by {c.CircularNumber}");
@@ -45,7 +46,7 @@ public class DetailsModel(CircularRepository circulars, FileStore files, AuditSe
         reason = Clean(reason, 500);
         if (reason == null) { FlashError("A reason is required to withdraw a circular."); return RedirectToPage(new { id }); }
         if (c.Status != CircularStatus.Published) { FlashError("Only published circulars can be withdrawn."); return RedirectToPage(new { id }); }
-        circulars.Withdraw(id, reason, User.UserName());
+        if (!circulars.Withdraw(id, reason, User.UserName())) { FlashError("This circular was already withdrawn."); return RedirectToPage(new { id }); }
         audit.Log("Circular.Withdrawn", "Circular", id, $"{c.CircularNumber}: {reason}");
         Flash($"{c.CircularNumber} has been withdrawn.");
         return RedirectToPage(new { id });

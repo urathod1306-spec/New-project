@@ -135,25 +135,34 @@ public sealed class CircularRepository(Db db)
         return version;
     }
 
-    /// <summary>Publishes a draft; if it supersedes an older circular, that one is marked superseded.</summary>
-    public long? Publish(long id, string actor)
+    /// <summary>
+    /// Publishes a draft; if it supersedes an older circular, that one is marked superseded — but only if it is still
+    /// published and not already superseded by another circular. Returns published = false when the circular was no
+    /// longer a draft (someone else acted first).
+    /// </summary>
+    public (bool published, long? superseded) Publish(long id, string actor)
     {
         using var c = db.Open();
         using var tx = c.BeginTransaction();
         var now = Db.Now();
-        Db.Exec(c, tx, $"UPDATE Circulars SET Status = '{CircularStatus.Published}', PublishedBy = @actor, PublishedAt = @now, UpdatedBy = @actor, UpdatedAt = @now WHERE Id = @id AND Status = '{CircularStatus.Draft}'",
+        var n = Db.Exec(c, tx, $"UPDATE Circulars SET Status = '{CircularStatus.Published}', PublishedBy = @actor, PublishedAt = @now, UpdatedBy = @actor, UpdatedAt = @now WHERE Id = @id AND Status = '{CircularStatus.Draft}'",
             new { id, actor, now });
+        if (n == 0) return (false, null);
         var supersedes = Db.Scalar<long?>(c, tx, "SELECT SupersedesId FROM Circulars WHERE Id = @id", new { id });
-        if (supersedes != null)
-            Db.Exec(c, tx, "UPDATE Circulars SET SupersededById = @id, UpdatedBy = @actor, UpdatedAt = @now WHERE Id = @supersedes",
-                new { id, supersedes, actor, now });
+        long? linked = null;
+        if (supersedes != null && Db.Exec(c, tx, $"""
+                UPDATE Circulars SET SupersededById = @id, UpdatedBy = @actor, UpdatedAt = @now
+                WHERE Id = @supersedes AND Status = '{CircularStatus.Published}' AND SupersededById IS NULL
+                """, new { id, supersedes, actor, now }) > 0)
+            linked = supersedes;
         tx.Commit();
-        return supersedes;
+        return (true, linked);
     }
 
-    public void Withdraw(long id, string reason, string actor) => db.Exec($"""
+    /// <summary>Withdraws a published circular; false if it was not (or no longer) published.</summary>
+    public bool Withdraw(long id, string reason, string actor) => db.Exec($"""
         UPDATE Circulars SET Status = '{CircularStatus.Withdrawn}', WithdrawnBy = @actor, WithdrawnAt = @now, WithdrawalReason = @reason,
                UpdatedBy = @actor, UpdatedAt = @now
         WHERE Id = @id AND Status = '{CircularStatus.Published}'
-        """, new { id, reason, actor, now = Db.Now() });
+        """, new { id, reason, actor, now = Db.Now() }) > 0;
 }

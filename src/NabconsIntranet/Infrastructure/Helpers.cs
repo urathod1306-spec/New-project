@@ -152,8 +152,29 @@ public static class Throttle
 {
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Queue<System.DateTime>> Hits = new();
 
+    private static long _calls;
+
+    /// <summary>True when <paramref name="key"/> already has <paramref name="max"/> hits within the window (records nothing).</summary>
+    public static bool Blocked(string key, int max, TimeSpan window)
+    {
+        if (!Hits.TryGetValue(key, out var q)) return false;
+        lock (q)
+        {
+            var now = System.DateTime.UtcNow;
+            while (q.Count > 0 && now - q.Peek() > window) q.Dequeue();
+            return q.Count >= max;
+        }
+    }
+
+    /// <summary>Records one hit for <paramref name="key"/>.</summary>
+    public static void Record(string key, TimeSpan window) => Allow(key, int.MaxValue, window);
+
     public static bool Allow(string key, int max, TimeSpan window)
     {
+        // occasionally drop keys that have been idle for a day, so the table cannot grow without limit
+        if (Interlocked.Increment(ref _calls) % 1000 == 0)
+            foreach (var kv in Hits)
+                lock (kv.Value) if (kv.Value.Count == 0 || System.DateTime.UtcNow - kv.Value.Last() > TimeSpan.FromDays(1)) Hits.TryRemove(kv.Key, out _);
         var q = Hits.GetOrAdd(key, _ => new Queue<System.DateTime>());
         lock (q)
         {

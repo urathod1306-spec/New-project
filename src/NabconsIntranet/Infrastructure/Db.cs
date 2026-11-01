@@ -80,7 +80,9 @@ public sealed class Db
 
         foreach (var m in pending)
         {
-            using var tx = c.BeginTransaction();
+            using var tx = c.BeginTransaction();       // BEGIN IMMEDIATE: one process at a time
+            // another process (e.g. the service and --migrate started together) may have applied it meanwhile
+            if (Scalar<long>(c, tx, "SELECT COUNT(*) FROM SchemaInfo WHERE Version = @v", new { v = m.Version }) > 0) { tx.Rollback(); continue; }
             Exec(c, tx, m.Sql);
             Exec(c, tx, "INSERT INTO SchemaInfo (Version, AppliedAt) VALUES (@v, @now)", new { v = m.Version, now = Now() });
             tx.Commit();

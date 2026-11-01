@@ -15,7 +15,7 @@
 {
     <div class="alert warning" id="dup-warning">
         <strong>A similar lead may already exist</strong> (same tender number, or same client with a similar title, in the last 180 days):
-        <ul>@foreach (var d in Model.Duplicates) { <li><strong>@d.Reference</strong> — @d.Status, submitted @F.Date(d.CreatedAt)</li> }</ul>
+        <ul>@foreach (var d in Model.Duplicates) { if (Model.CanSee(d)) { <li><strong>@d.Reference</strong> — @d.Status, submitted @F.Date(d.CreatedAt)</li> } else { <li>A similar lead already submitted by a colleague</li> } }</ul>
         If yours is a different opportunity, re-attach any files below and click <strong>Submit anyway</strong>.
     </div>
 }

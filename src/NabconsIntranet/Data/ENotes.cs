@@ -405,16 +405,15 @@ public sealed class ENoteRepository(Db db, ENoteOptions o, Fmt fmt)
         : db.Single<ENoteBodyVersion>("SELECT * FROM ENoteBodyVersions WHERE NoteId = @noteId ORDER BY Version DESC LIMIT 1", new { noteId });
 
     // ---- "ENote.Viewed" is sampled to once per user per note per day, to keep the audit log lean ----
-    private readonly ConcurrentDictionary<(long note, long user), string> _viewed = new();
+    private readonly ConcurrentDictionary<(long note, long user), byte> _viewed = new();
+    private string _viewedDay = "";
 
     public bool FirstViewToday(long noteId, long userId)
     {
         var today = fmt.Today.ToString("yyyy-MM-dd");
-        var key = (noteId, userId);
-        if (_viewed.TryGetValue(key, out var d) && d == today) return false;
-        _viewed[key] = today;
-        if (_viewed.Count > 100_000) foreach (var k in _viewed.Where(kv => kv.Value != today).Select(kv => kv.Key).ToList()) _viewed.TryRemove(k, out _);
-        return true;
+        lock (_viewed)
+            if (_viewedDay != today) { _viewed.Clear(); _viewedDay = today; }   // a new day starts with an empty list
+        return _viewed.TryAdd((noteId, userId), 0);
     }
 
     /// <summary>Paragraphs of a note body: separated by blank lines; single line breaks are kept inside a paragraph.</summary>

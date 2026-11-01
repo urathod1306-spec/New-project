@@ -1,5 +1,16 @@
 # NABCONS Intranet — Setup Guide
 
+## Upgrading to 1.5.0 (from 1.4.x): review fixes
+
+1. Download `release/NABCONS-Intranet-v1.5.0-win-x64.zip` and check its SHA-256. Extract it to a new folder, then right-click `Upgrade-Existing-Intranet.bat` → *Run as administrator*. There is **no database change** (schema stays 6) and no new setting; your `appsettings.json` is kept.
+2. Check *Administration → System information*: version 1.5.0, schema 6.
+3. Take a manual backup from *Administration → Backup* and confirm it appears in the list (backups are now checked before they are kept).
+4. Nothing changes for staff. See `CHANGELOG.md` for the list of fixes.
+
+Roll back with `Rollback-Upgrade.bat`; version 1.4.0 runs unchanged on the same database.
+
+---
+
 ## Upgrading to 1.4.0 (from 1.3.x): Message Board
 
 1. Download `release/NABCONS-Intranet-v1.4.0-win-x64.zip` and check its SHA-256. Extract it to a new folder, then right-click `Upgrade-Existing-Intranet.bat` → *Run as administrator*. If you prefer, upgrade the database first by hand: with the intranet stopped, run `NabconsIntranet.exe --migrate`. The database goes from schema 5 to 6 after a full backup. Nothing existing is changed, and your settings (including e-Notes switched off) are kept.

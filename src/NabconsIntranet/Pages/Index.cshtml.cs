@@ -29,7 +29,7 @@ public class IndexModel(CircularRepository circulars, NoticeRepository notices, 
         Latest = circulars.Latest(User, 6);
         Notices = notices.Current();
         InboxCount = User.IsApprover() ? workflow.InboxCount(User.UserId()) : 0;
-        OpenRequests = workflow.Mine(User.UserId()).Count(r => r.State != RequestStates.Closed);
+        OpenRequests = workflow.OpenCount(User.UserId());
         StaffCount = staff.Count();
         CircularCount = circulars.CountPublished();
         if (board.Options.Enabled) BoardPosts = board.Highlights(3);

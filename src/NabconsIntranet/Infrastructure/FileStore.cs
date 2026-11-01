@@ -84,6 +84,27 @@ public sealed class FileStore
         return new StoredFile(relative, original, ContentTypes[ext], file.Length, sha);
     }
 
+    /// <summary>
+    /// Saves several uploads; if any is rejected, the ones already saved are deleted again and the rejection is
+    /// re-thrown with the file name, so a rejected upload never leaves files behind.
+    /// </summary>
+    public async Task<List<StoredFile>> SaveAllAsync(IEnumerable<IFormFile> uploads, string area, IReadOnlyCollection<string> allowed, long maxBytes)
+    {
+        var stored = new List<StoredFile>();
+        foreach (var f in uploads)
+        {
+            try { stored.Add(await SaveAsync(f, area, allowed, maxBytes)); }
+            catch (UploadRejectedException ex)
+            {
+                foreach (var s in stored) Delete(s.StoredPath);
+                throw new UploadRejectedException($"{Path.GetFileName(f.FileName)}: {ex.Message}");
+            }
+        }
+        return stored;
+    }
+
+    public Task<List<StoredFile>> SaveAllAsync(IEnumerable<IFormFile> uploads, string area) => SaveAllAsync(uploads, area, _o.AllowedUploadExtensions, _o.MaxUploadBytes);
+
     /// <summary>Saves server-generated content (used for demo data).</summary>
     public StoredFile SaveBytes(byte[] content, string originalName, string area)
     {
@@ -97,13 +118,31 @@ public sealed class FileStore
             content.Length, Convert.ToHexString(SHA256.HashData(content)));
     }
 
-    public Stream? OpenRead(string storedPath)
+    /// <summary>Full path of a stored file, or null if the path would leave the documents folder.</summary>
+    public string? Resolve(string storedPath)
     {
         var root = Path.GetFullPath(_o.DocumentsPath) + Path.DirectorySeparatorChar;
         var full = Path.GetFullPath(Path.Combine(_o.DocumentsPath, storedPath));
-        if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(full)) return null;
+        return full.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? full : null;
+    }
+
+    public Stream? OpenRead(string storedPath)
+    {
+        var full = Resolve(storedPath);
+        if (full == null || !File.Exists(full)) return null;
         return new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read);
     }
+
+    /// <summary>Removes a stored file that never got (or no longer has) a database record. Best effort.</summary>
+    public void Delete(string storedPath)
+    {
+        try { var full = Resolve(storedPath); if (full != null && File.Exists(full)) File.Delete(full); } catch { /* best effort */ }
+    }
+
+    /// <summary>Stored files under documents\ (relative paths, '/' separators), excluding generated PDFs.</summary>
+    public IEnumerable<string> AllStored() => !Directory.Exists(_o.DocumentsPath) ? Enumerable.Empty<string>() :
+        Directory.EnumerateFiles(_o.DocumentsPath, "*.dat", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(_o.DocumentsPath, f).Replace('\\', '/'));
 
     private static bool SignatureMatches(string ext, ReadOnlySpan<byte> h)
     {

@@ -295,7 +295,7 @@ public sealed class LeadRepository(Db db, AuditService audit, INotificationServi
         using var tx = c.BeginTransaction(deferred: false);
         var n = Db.Exec(c, tx, """
             UPDATE Leads SET Status = @to, LossReason = @reason, LossReasonText = @reasonText,
-                   AwardedValueLakh = COALESCE(@award, AwardedValueLakh), AwardDate = COALESCE(@awardDate, AwardDate),
+                   AwardedValueLakh = CASE WHEN @to = 'Won' THEN @award ELSE NULL END, AwardDate = CASE WHEN @to = 'Won' THEN @awardDate ELSE NULL END,
                    RowVersion = RowVersion + 1, UpdatedAt = @now
             WHERE Id = @Id AND RowVersion = @expectedVersion
             """, new { to = u.NewStatus, reason, reasonText, award, awardDate, now, l.Id, expectedVersion });
@@ -351,20 +351,23 @@ public sealed class LeadRepository(Db db, AuditService audit, INotificationServi
         return ev;
     }
 
+    /// <summary>SQL list of the closed statuses, built from <see cref="LeadStatus.Closed"/> so the two can never disagree.</summary>
+    public static readonly string ClosedSql = string.Join(", ", LeadStatus.Closed.Select(s => "'" + s.Replace("'", "''") + "'"));
+
     public List<Lead> Pipeline(LeadFilter f)
     {
         var where = new List<string> { "1 = 1" };
         if (!string.IsNullOrWhiteSpace(f.Q))
             where.Add(@"(l.Title LIKE @like ESCAPE '\' OR l.ClientName LIKE @like ESCAPE '\' OR l.Reference LIKE @like ESCAPE '\'
                          OR l.TenderNumber LIKE @like ESCAPE '\' OR l.Description LIKE @like ESCAPE '\')");
-        if (!string.IsNullOrWhiteSpace(f.Status)) where.Add(f.Status == "Open" ? "l.Status NOT IN ('Won', 'Lost', 'Dropped / Not Pursued')" : "l.Status = @Status");
+        if (!string.IsNullOrWhiteSpace(f.Status)) where.Add(f.Status == "Open" ? $"l.Status NOT IN ({ClosedSql})" : "l.Status = @Status");
         if (!string.IsNullOrWhiteSpace(f.ClientType)) where.Add("l.ClientType = @ClientType");
         if (!string.IsNullOrWhiteSpace(f.Sector)) where.Add("l.Sector = @Sector");
         if (f.OwnerUserId is > 0) where.Add("l.OwnerUserId = @OwnerUserId");
         if (f.OwnerUserId == -1) where.Add("l.OwnerUserId IS NULL");
         if (!string.IsNullOrWhiteSpace(f.Submitter)) where.Add(@"l.SubmitterName LIKE @sublike ESCAPE '\'");
         if (!string.IsNullOrWhiteSpace(f.FinancialYear)) where.Add("l.FinancialYear = @FinancialYear");
-        if (f.DueSoon) where.Add("l.DueDate IS NOT NULL AND l.DueDate <> '' AND l.DueDate <= @soon AND l.Status NOT IN ('Won', 'Lost', 'Dropped / Not Pursued')");
+        if (f.DueSoon) where.Add($"l.DueDate IS NOT NULL AND l.DueDate <> '' AND l.DueDate <= @soon AND l.Status NOT IN ({ClosedSql})");
         var order = f.Sort switch
         {
             "due" => "CASE WHEN l.DueDate IS NULL OR l.DueDate = '' THEN 1 ELSE 0 END, l.DueDate",

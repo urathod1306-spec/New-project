@@ -125,6 +125,9 @@ builder.Services.AddAuthorization(a =>
 {
     // Everything requires a signed-in, active intranet user unless a page explicitly allows anonymous access.
     a.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().RequireClaim(ClaimNames.UserId).Build();
+    // Endpoints marked .RequireAuthorization() use the default policy: make it the same, so a Windows user who is
+    // authenticated but not admitted (no intranet user id, e.g. deactivated) is refused there too.
+    a.DefaultPolicy = a.FallbackPolicy;
     a.AddPolicy(Policies.Publisher, p => p.RequireClaim(ClaimNames.UserId).RequireRole(Roles.Publisher, Roles.Administrator));
     a.AddPolicy(Policies.Approver, p => p.RequireClaim(ClaimNames.UserId).RequireRole(Roles.Approver));
     a.AddPolicy(Policies.Admin, p => p.RequireClaim(ClaimNames.UserId).RequireRole(Roles.Administrator));
@@ -159,7 +162,8 @@ var app = builder.Build();
 foreach (var step in app.Services.GetRequiredService<Db>().Initialize())
 {
     app.Logger.LogWarning("{Step}", step);
-    app.Services.GetRequiredService<AuditService>().Log("System.Upgraded", "Database", Schema.Version, step, "system");
+    app.Services.GetRequiredService<AuditService>().Log(step.StartsWith("Note:", StringComparison.Ordinal) ? "System.SchemaNewer" : "System.Upgraded",
+        "Database", Schema.Version, step, "system");
 }
 app.Services.GetRequiredService<Seeder>().Run();
 app.Services.GetRequiredService<ProfileRepository>().LinkUnlinkedAccounts();
@@ -167,7 +171,6 @@ app.Services.GetRequiredService<ProfileRepository>().LinkUnlinkedAccounts();
     var housekeeping = app.Services.GetRequiredService<HousekeepingService>();
     var enoteWorkflow = app.Services.GetRequiredService<ENoteWorkflow>();
     if (enoteOptions.Enabled) housekeeping.ExtraSteps.Add(enoteWorkflow.AgeingAlerts);
-    housekeeping.ExtraSteps.Add(enoteWorkflow.OrphanFiles);
 }
 app.Services.GetRequiredService<AuditService>().Log("System.Started", "System", null,
     $"NABCONS Intranet {typeof(Program).Assembly.GetName().Version} started; auth={options.AuthenticationMode}", "system");

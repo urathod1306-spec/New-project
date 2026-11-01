@@ -6,7 +6,7 @@ using NabconsIntranet.Infrastructure;
 
 namespace NabconsIntranet.Pages.Leads;
 
-public class NewModel(LeadRepository leads, MasterRepository masters, FileStore files, AuditService audit, IntranetOptions o) : AppPage
+public class NewModel(LeadRepository leads, MasterRepository masters, FileStore files, AuditService audit, IntranetOptions o, LeadAccess access) : AppPage
 {
     public sealed class InputModel
     {
@@ -48,9 +48,14 @@ public class NewModel(LeadRepository leads, MasterRepository masters, FileStore 
     public IActionResult OnGetCheck(string? client, string? title, string? tender)
     {
         if (string.IsNullOrWhiteSpace(client) || string.IsNullOrWhiteSpace(title)) return new JsonResult(Array.Empty<object>());
+        // details only for leads this person may already see; otherwise just "a colleague submitted a similar lead"
         return new JsonResult(leads.PossibleDuplicates(client, title, tender)
-            .Select(l => new { reference = l.Reference, status = l.Status, submitted = l.CreatedAt[..10] }));
+            .Select(l => access.CanView(l, User)
+                ? new { reference = (string?)l.Reference, status = (string?)l.Status, submitted = (string?)l.CreatedAt[..10] }
+                : new { reference = (string?)null, status = (string?)null, submitted = (string?)null }));
     }
+
+    public bool CanSee(Lead l) => access.CanView(l, User);
 
     public async Task<IActionResult> OnPostAsync()
     {
@@ -80,19 +85,19 @@ public class NewModel(LeadRepository leads, MasterRepository masters, FileStore 
         }
 
         // validate and store every file before creating the lead, so a rejected file creates nothing
-        var stored = new List<StoredFile>();
-        foreach (var f in incoming)
+        List<StoredFile> stored;
+        try { stored = await files.SaveAllAsync(incoming, "leads", FileStore.LeadExtensions, o.MaxLeadFileMB * 1024L * 1024L); }
+        catch (UploadRejectedException ex)
         {
-            try { stored.Add(await files.SaveAsync(f, "leads", FileStore.LeadExtensions, o.MaxLeadFileMB * 1024L * 1024L)); }
-            catch (UploadRejectedException ex)
-            {
-                audit.Log("Upload.Rejected", "Lead", null, $"{f.FileName}: {ex.Message}");
-                ModelState.AddModelError(nameof(Uploads), $"{f.FileName}: {ex.Message}");
-                return Page();
-            }
+            audit.Log("Upload.Rejected", "Lead", null, ex.Message);
+            ModelState.AddModelError(nameof(Uploads), ex.Message);
+            return Page();
         }
 
-        var lead = leads.Create(new Lead
+        Lead lead;
+        try
+        {
+        lead = leads.Create(new Lead
         {
             Title = Input.Title.Trim(), ClientName = Input.ClientName.Trim(), ClientType = Clean(Input.ClientType, 100), Sector = Clean(Input.Sector, 100),
             StateLocation = Clean(Input.StateLocation, 100), Source = Clean(Input.Source, 100),
@@ -100,6 +105,12 @@ public class NewModel(LeadRepository leads, MasterRepository masters, FileStore 
             ContactName = Clean(Input.ContactName, 120), ContactDesignation = Clean(Input.ContactDesignation, 120), ContactPhone = Clean(Input.ContactPhone, 30),
             ContactEmail = Clean(Input.ContactEmail, 150), Description = Input.Description.Trim(), TenderNumber = Clean(Input.TenderNumber, 100),
         }, User);
+        }
+        catch
+        {
+            foreach (var s in stored) files.Delete(s.StoredPath);
+            throw;
+        }
         foreach (var s in stored) leads.AddAttachment(lead, s, "Submitter", User);
         if (ConfirmDuplicate) audit.Log("Lead.DuplicateConfirmed", "Lead", lead.Id, $"{lead.Reference} submitted despite possible duplicates");
         Flash($"Thank you. Your lead has been submitted with reference {lead.Reference}.");

@@ -12,6 +12,23 @@ public sealed class PhotoService(IntranetOptions o)
     public const int Size = 400, ThumbSize = 96, Quality = 85;
     private const long MaxPixels = 40_000_000; // refuse decompression bombs
 
+    // A 40-megapixel photo needs about 160 MB while it is resized; at most two are processed at a time so that a few
+    // people uploading together cannot exhaust the memory of a small server PC.
+    private static readonly SemaphoreSlim DecodeSlots = new(2, 2);
+
+    /// <summary>Waits for one of the two photo-processing slots; dispose the result to release it.</summary>
+    public static IDisposable Gate()
+    {
+        DecodeSlots.Wait();
+        return new Releaser();
+    }
+
+    private sealed class Releaser : IDisposable
+    {
+        private int _done;
+        public void Dispose() { if (Interlocked.Exchange(ref _done, 1) == 0) DecodeSlots.Release(); }
+    }
+
     public string PhotoPath(long userId, bool thumb) => Path.Combine(o.PhotosPath, thumb ? $"{userId}_t.jpg" : $"{userId}.jpg");
 
     public bool Exists(long userId) => File.Exists(PhotoPath(userId, false));
@@ -19,6 +36,7 @@ public sealed class PhotoService(IntranetOptions o)
     /// <summary>Validates and processes an upload. Throws UploadRejectedException with a user-readable reason.</summary>
     public void Save(long userId, Stream upload, long length)
     {
+        using var gate = Gate();
         using var oriented = DecodeUpright(upload, length, o.MaxPhotoMB);
         using var square = CropSquare(oriented);
 
@@ -115,7 +133,7 @@ public sealed class PhotoService(IntranetOptions o)
             case SKEncodedOrigin.BottomLeft: c.Scale(1, -1); c.Translate(0, -h); break;
             case SKEncodedOrigin.LeftTop: c.RotateDegrees(90); c.Scale(1, -1); break;
             case SKEncodedOrigin.RightTop: c.Translate(h, 0); c.RotateDegrees(90); break;
-            case SKEncodedOrigin.RightBottom: c.Translate(h, w); c.RotateDegrees(90); c.Scale(-1, 1); c.Translate(-w, 0); break;
+            case SKEncodedOrigin.RightBottom: c.Translate(h, w); c.RotateDegrees(90); c.Scale(-1, 1); break;
             case SKEncodedOrigin.LeftBottom: c.Translate(0, w); c.RotateDegrees(-90); break;
         }
         using var img = SKImage.FromBitmap(src);

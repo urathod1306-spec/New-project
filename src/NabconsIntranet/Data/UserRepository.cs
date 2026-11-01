@@ -52,15 +52,22 @@ public sealed class UserRepository(Db db)
         "UPDATE Users SET FailedLogins = 0, LockoutUntil = NULL, UpdatedBy = @actor, UpdatedAt = @now WHERE Id = @id",
         new { id, actor, now = Db.Now() });
 
+    /// <summary>Counts a failed sign-in in one atomic statement, so parallel guesses cannot all read the same count.</summary>
     public void RecordFailedLogin(AppUser u, int maxFailed, int lockoutMinutes)
     {
-        var failed = u.FailedLogins + 1;
-        string? until = failed >= maxFailed ? DateTime.UtcNow.AddMinutes(lockoutMinutes).ToString("o") : null;
-        db.Exec("UPDATE Users SET FailedLogins = @failed, LockoutUntil = COALESCE(@until, LockoutUntil) WHERE Id = @Id",
-            new { failed = until != null ? 0 : failed, until, u.Id });
-        u.FailedLogins = failed;
-        u.LockoutUntil = until ?? u.LockoutUntil;
+        var r = db.Query<FailRow>("""
+            UPDATE Users SET
+              LockoutUntil = CASE WHEN FailedLogins + 1 >= @maxFailed THEN @until ELSE LockoutUntil END,
+              FailedLogins = CASE WHEN FailedLogins + 1 >= @maxFailed THEN 0 ELSE FailedLogins + 1 END
+            WHERE Id = @Id
+            RETURNING FailedLogins, LockoutUntil
+            """, new { maxFailed, until = DateTime.UtcNow.AddMinutes(lockoutMinutes).ToString("o"), u.Id }).FirstOrDefault();
+        if (r == null) return;
+        u.FailedLogins = r.FailedLogins;
+        u.LockoutUntil = r.LockoutUntil;
     }
+
+    private sealed class FailRow { public long FailedLogins { get; set; } public string? LockoutUntil { get; set; } }
 
     public void RecordSuccessfulLogin(long id) => db.Exec(
         "UPDATE Users SET FailedLogins = 0, LockoutUntil = NULL, LastLoginAt = @now WHERE Id = @id", new { id, now = Db.Now() });

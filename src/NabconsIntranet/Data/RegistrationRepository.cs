@@ -60,12 +60,13 @@ public sealed class RegistrationRepository(Db db, StaffRepository staff, UserRep
         return shown + email[at..];
     }
 
-    /// <summary>Active directory entry whose mobile matches (formatting ignored).</summary>
-    public StaffMember? FindStaffByMobile(string mobile)
-    {
-        var matches = staff.All().Where(s => Normalize(s.Mobile) == mobile).ToList();
-        return matches.FirstOrDefault(s => s.IsActive(fmt.Today)) ?? matches.FirstOrDefault();
-    }
+    /// <summary>
+    /// Current directory entry whose mobile matches (formatting ignored). Entries of people who have left are
+    /// never matched, so approving a registration cannot silently bring back a retired entry (the administrator
+    /// can still add a new directory entry when approving).
+    /// </summary>
+    public StaffMember? FindStaffByMobile(string mobile) =>
+        staff.All().FirstOrDefault(s => Normalize(s.Mobile) == mobile && s.IsActive(fmt.Today));
 
     public RegistrationRequest? Get(long id) => db.Single<RegistrationRequest>("SELECT * FROM RegistrationRequests WHERE Id = @id", new { id });
 
@@ -103,16 +104,33 @@ public sealed class RegistrationRepository(Db db, StaffRepository staff, UserRep
     public long Approve(RegistrationRequest r, IEnumerable<string> roles, bool updateDirectory, string? employeeCodeForNew, string actor)
     {
         if (users.GetByUsername(r.Mobile) != null) throw new WorkflowException($"A user account for {r.Mobile} already exists.");
-        var userId = users.Create(new AppUser
+        // Claim the request first, so two administrators approving at the same moment cannot both create accounts.
+        var claimed = db.Exec("""
+            UPDATE RegistrationRequests SET Status = 'Approved', DecidedBy = @actor, DecidedAt = @now
+            WHERE Id = @Id AND Status = 'Pending'
+            """, new { actor, now = Db.Now(), r.Id });
+        if (claimed == 0) throw new WorkflowException("This registration was already decided by someone else.");
+        long userId;
+        try
         {
-            Username = r.Mobile, DisplayName = r.FullName, Email = r.OfficialEmail, Vertical = r.Vertical,
-            Roles = Infrastructure.Roles.Join(roles), PasswordHash = r.PasswordHash, MustChangePassword = false, IsActive = true,
-        }, actor);
+            userId = users.Create(new AppUser
+            {
+                Username = r.Mobile, DisplayName = r.FullName, Email = r.OfficialEmail, Vertical = r.Vertical,
+                Roles = Infrastructure.Roles.Join(roles), PasswordHash = r.PasswordHash, MustChangePassword = false, IsActive = true,
+            }, actor);
+        }
+        catch
+        {
+            // no account was made: put the request back in the queue
+            db.Exec("UPDATE RegistrationRequests SET Status = 'Pending', DecidedBy = NULL, DecidedAt = NULL WHERE Id = @Id AND CreatedUserId IS NULL", new { r.Id });
+            throw;
+        }
 
         long? linkStaffId = null;
         if (updateDirectory)
         {
             var existing = r.StaffId != null ? staff.Get(r.StaffId.Value) : null;
+            if (existing != null && !existing.IsActive(fmt.Today)) existing = null;   // never bring back the entry of someone who has left
             if (existing != null)
             {
                 existing.FullName = r.FullName;
@@ -138,11 +156,7 @@ public sealed class RegistrationRepository(Db db, StaffRepository staff, UserRep
         if (linkStaffId != null && db.Scalar<long>("SELECT COUNT(*) FROM Users WHERE StaffId = @linkStaffId", new { linkStaffId }) == 0)
             db.Exec("UPDATE Users SET StaffId = @linkStaffId WHERE Id = @userId", new { linkStaffId, userId });
 
-        var n = db.Exec("""
-            UPDATE RegistrationRequests SET Status = 'Approved', DecidedBy = @actor, DecidedAt = @now, CreatedUserId = @userId, PasswordHash = NULL
-            WHERE Id = @Id AND Status = 'Pending'
-            """, new { actor, now = Db.Now(), userId, r.Id });
-        if (n == 0) throw new WorkflowException("This registration was already decided by someone else.");
+        db.Exec("UPDATE RegistrationRequests SET CreatedUserId = @userId, PasswordHash = NULL WHERE Id = @Id", new { userId, r.Id });
         tracker.Touch(ChangeTracker.AdminQueue);
         return userId;
     }

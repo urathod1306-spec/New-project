@@ -37,6 +37,8 @@ public sealed class BackupService
             var work = Path.Combine(_o.BackupPath, "_work-" + stamp);
             Directory.CreateDirectory(work);
             var zipPath = Path.Combine(_o.BackupPath, Prefix + stamp + ".zip");
+            var partial = zipPath + ".partial";        // only renamed to .zip once complete and verified
+            int expectedEntries = 0;
             try
             {
                 var dbCopy = Path.Combine(work, "intranet.db");
@@ -48,33 +50,56 @@ public sealed class BackupService
                     cmd.Parameters.AddWithValue("@p", dbCopy);
                     cmd.ExecuteNonQuery();
                 }
-
-                using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+                // verify the database copy before it goes into the backup
+                using (var c = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = dbCopy, Pooling = false, Mode = SqliteOpenMode.ReadOnly }.ToString()))
                 {
-                    zip.CreateEntryFromFile(dbCopy, "data/intranet.db", CompressionLevel.Optimal);
+                    c.Open();
+                    using var cmd = c.CreateCommand();
+                    cmd.CommandText = "PRAGMA quick_check";
+                    var result = cmd.ExecuteScalar() as string;
+                    if (!string.Equals(result, "ok", StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException("The database copy failed its integrity check: " + result);
+                }
+
+                using (var zip = ZipFile.Open(partial, ZipArchiveMode.Create))
+                {
+                    zip.CreateEntryFromFile(dbCopy, "data/intranet.db", CompressionLevel.Optimal); expectedEntries++;
                     if (Directory.Exists(_o.UploadsPath))
                     {
                         foreach (var f in Directory.EnumerateFiles(_o.UploadsPath, "*", SearchOption.AllDirectories))
-                            zip.CreateEntryFromFile(f, "data/uploads/" + Path.GetRelativePath(_o.UploadsPath, f).Replace('\\', '/'), CompressionLevel.Fastest);
+                        { zip.CreateEntryFromFile(f, "data/uploads/" + Path.GetRelativePath(_o.UploadsPath, f).Replace('\\', '/'), CompressionLevel.Fastest); expectedEntries++; }
                     }
                     if (Directory.Exists(_o.DocumentsPath))
                     {
                         foreach (var f in Directory.EnumerateFiles(_o.DocumentsPath, "*", SearchOption.AllDirectories))
-                            zip.CreateEntryFromFile(f, "documents/" + Path.GetRelativePath(_o.DocumentsPath, f).Replace('\\', '/'), CompressionLevel.Fastest);
+                        { zip.CreateEntryFromFile(f, "documents/" + Path.GetRelativePath(_o.DocumentsPath, f).Replace('\\', '/'), CompressionLevel.Fastest); expectedEntries++; }
                     }
                     var settings = Path.Combine(_o.ContentRoot, "appsettings.json");
-                    if (File.Exists(settings)) zip.CreateEntryFromFile(settings, "config/appsettings.json");
+                    if (File.Exists(settings)) { zip.CreateEntryFromFile(settings, "config/appsettings.json"); expectedEntries++; }
                     if (audit != null)
                     {
-                        var entry = zip.CreateEntry("audit/audit-log-export.csv");
+                        var entry = zip.CreateEntry("audit/audit-log-export.csv"); expectedEntries++;
                         using var w = new StreamWriter(entry.Open());
                         audit.ExportCsv(w);
                     }
-                    var readme = zip.CreateEntry("RESTORE-README.txt");
+                    var readme = zip.CreateEntry("RESTORE-README.txt"); expectedEntries++;
                     using (var w = new StreamWriter(readme.Open()))
                         w.Write($"NABCONS Intranet backup created {DateTime.Now:dd MMM yyyy HH:mm} by {actor}.\r\n" +
                                 "To restore: stop the intranet, then run Restore-Backup.bat and choose this file.\r\n");
                 }
+                // verify the finished ZIP: it opens, has every entry and the database reads back in full
+                using (var check = ZipFile.OpenRead(partial))
+                {
+                    if (check.Entries.Count != expectedEntries) throw new InvalidOperationException("The backup ZIP is incomplete.");
+                    using var s = check.GetEntry("data/intranet.db")!.Open();
+                    s.CopyTo(Stream.Null);
+                }
+                File.Move(partial, zipPath);
+            }
+            catch
+            {
+                try { if (File.Exists(partial)) File.Delete(partial); } catch { /* ignore */ }
+                throw;
             }
             finally
             {
@@ -141,6 +166,11 @@ public sealed class BackupService
         }
     }
 
+    private static void TryDelete(string dir)
+    {
+        try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { /* ignore */ }
+    }
+
     public static string HashFile(string path)
     {
         using var s = File.OpenRead(path);
@@ -171,32 +201,65 @@ public sealed class BackupService
         using var zip = ZipFile.OpenRead(zipPath);
         if (zip.GetEntry("data/intranet.db") == null) { output.WriteLine("This ZIP is not a NABCONS Intranet backup."); return 4; }
 
+        // 1. extract everything into staging folders next to the live ones (nothing live is touched yet)
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-        foreach (var dir in new[] { o.DataPath, o.DocumentsPath })
+        var dataStage = o.DataPath.TrimEnd(Path.DirectorySeparatorChar) + ".restoring-" + stamp;
+        var docsStage = o.DocumentsPath.TrimEnd(Path.DirectorySeparatorChar) + ".restoring-" + stamp;
+        try
         {
-            if (Directory.Exists(dir) && Directory.EnumerateFileSystemEntries(dir).Any())
+            Directory.CreateDirectory(dataStage);
+            Directory.CreateDirectory(docsStage);
+            foreach (var entry in zip.Entries)
             {
-                var aside = dir.TrimEnd(Path.DirectorySeparatorChar) + ".before-restore-" + stamp;
-                Directory.Move(dir, aside);
-                output.WriteLine($"Moved current {Path.GetFileName(dir)} folder to {aside}");
+                if (string.IsNullOrEmpty(entry.Name)) continue;
+                string? targetRoot = null, relative = null;
+                if (entry.FullName.StartsWith("data/", StringComparison.Ordinal)) { targetRoot = dataStage; relative = entry.FullName[5..]; }
+                else if (entry.FullName.StartsWith("documents/", StringComparison.Ordinal)) { targetRoot = docsStage; relative = entry.FullName[10..]; }
+                if (targetRoot == null || relative == null) continue;
+                var root = Path.GetFullPath(targetRoot) + Path.DirectorySeparatorChar;
+                var dest = Path.GetFullPath(Path.Combine(targetRoot, relative));
+                if (!dest.StartsWith(root, StringComparison.OrdinalIgnoreCase)) { output.WriteLine("Skipped unsafe entry: " + entry.FullName); continue; }  // zip-slip protection
+                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                entry.ExtractToFile(dest, overwrite: true);
             }
-            Directory.CreateDirectory(dir);
+        }
+        catch (Exception ex)
+        {
+            TryDelete(dataStage); TryDelete(docsStage);
+            output.WriteLine("Restore failed while unpacking the backup; your current data was NOT changed. " + ex.Message);
+            return 6;
         }
 
-        foreach (var entry in zip.Entries)
+        // 2. swap: move the live folders aside, move the staged folders in; undo the swap if any step fails
+        var moved = new List<(string from, string to)>();
+        try
         {
-            if (string.IsNullOrEmpty(entry.Name)) continue;
-            string? targetRoot = null, relative = null;
-            if (entry.FullName.StartsWith("data/", StringComparison.Ordinal)) { targetRoot = o.DataPath; relative = entry.FullName[5..]; }
-            else if (entry.FullName.StartsWith("documents/", StringComparison.Ordinal)) { targetRoot = o.DocumentsPath; relative = entry.FullName[10..]; }
-            if (targetRoot == null || relative == null) continue;
-            var root = Path.GetFullPath(targetRoot) + Path.DirectorySeparatorChar;
-            var dest = Path.GetFullPath(Path.Combine(targetRoot, relative));
-            if (!dest.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue; // zip-slip protection
-            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            entry.ExtractToFile(dest, overwrite: true);
+            foreach (var (live, stage) in new[] { (o.DataPath, dataStage), (o.DocumentsPath, docsStage) })
+            {
+                var liveDir = live.TrimEnd(Path.DirectorySeparatorChar);
+                if (Directory.Exists(liveDir))
+                {
+                    var aside = liveDir + ".before-restore-" + stamp;
+                    Directory.Move(liveDir, aside);
+                    moved.Add((aside, liveDir));
+                    output.WriteLine($"Moved current {Path.GetFileName(liveDir)} folder to {aside}");
+                }
+                Directory.Move(stage, liveDir);
+                moved.Add((liveDir, stage));
+            }
         }
-        output.WriteLine("Restore complete. Start the intranet again and check the Audit page -> Verify integrity.");
+        catch (Exception ex)
+        {
+            for (var i = moved.Count - 1; i >= 0; i--)
+            {
+                try { if (Directory.Exists(moved[i].from) && !Directory.Exists(moved[i].to)) Directory.Move(moved[i].from, moved[i].to); } catch { /* best effort */ }
+            }
+            TryDelete(dataStage); TryDelete(docsStage);
+            output.WriteLine("Restore failed while replacing the folders; the previous data has been put back. " + ex.Message);
+            return 6;
+        }
+        output.WriteLine("Restore complete. Note: appsettings.json is not restored (a copy is inside the ZIP under config/).");
+        output.WriteLine("Start the intranet again and check the Audit page -> Verify integrity.");
         return 0;
     }
 }
