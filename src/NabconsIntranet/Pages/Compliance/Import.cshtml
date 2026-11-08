@@ -1,0 +1,50 @@
+@page
+@model NabconsIntranet.Pages.Compliance.ImportModel
+@{
+    ViewData["Title"] = "Import action points";
+    var e = Model.Event;
+    var ok = Model.Rows.Count > 0 && Model.Rows.All(r => r.Errors.Count == 0);
+}
+<div class="page-head"><div><p class="muted"><a href="/Compliance/Event/@e.Id">← @(e.EventNo != null ? e.EventNo + " — " : "")@e.Title</a></p><h1>Import action points from CSV</h1>
+<p>Prepare the points in Excel using the template, then <strong>File → Save As → CSV UTF-8</strong>. Officers are given by their sign-in user name. The file is checked in memory and is not kept.</p></div></div>
+@if (Model.Text == null)
+{
+    <div class="card narrow-form">
+        <p><a class="btn" href="/Compliance/Import?eventId=@e.Id&handler=Template">Download the template</a></p>
+        <p class="small muted">Columns: @string.Join(", ", ComplianceImport.Columns). Required: ActionPoint, PrimaryOfficer, DueDate. Dates as dd.MM.yyyy. At most @Model.Options.MaxImportRows rows and @Model.Options.MaxImportKB KB. All rows are imported, or none.</p>
+        <form method="post" asp-page-handler="Preview" enctype="multipart/form-data">
+            <input type="hidden" name="eventId" value="@e.Id" />
+            <div class="field"><label for="file">CSV file</label><input type="file" id="file" name="file" accept=".csv,text/csv" required /></div>
+            <button class="btn primary" type="submit">Check the file</button>
+        </form>
+    </div>
+}
+else
+{
+    <div class="card table-wrap">
+        <h2>@Model.FileName — @Model.Rows.Count row(s)</h2>
+        @if (!ok) { <div class="alert danger">Some rows have errors. Correct the file and upload it again; nothing has been imported.</div> }
+        <table class="table compact">
+            <thead><tr><th>Line</th><th>Ref</th><th>Action point</th><th>Officers</th><th>Due</th><th>Check</th></tr></thead>
+            <tbody>
+                @foreach (var r in Model.Rows)
+                {
+                    <tr class="@(r.Errors.Count > 0 ? "row-overdue" : "")">
+                        <td>@r.Line</td><td>@r.Input.RefNo</td><td>@(r.Input.PointText?.Length > 120 ? r.Input.PointText[..117] + "…" : r.Input.PointText)</td>
+                        <td>@r.Officers</td><td class="nowrap">@r.Input.DueDate</td>
+                        <td>@if (r.Errors.Count == 0) { <span class="badge success">OK</span> } else { <ul class="small">@foreach (var x in r.Errors) { <li>@x</li> }</ul> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (ok)
+        {
+            <form method="post" asp-page-handler="Confirm" enctype="multipart/form-data" class="mt">
+                <input type="hidden" name="eventId" value="@e.Id" />
+                <textarea name="csv" class="hidden" aria-hidden="true" tabindex="-1">@Model.Text</textarea>
+                <button class="btn primary" type="submit">Import @Model.Rows.Count action point(s)</button>
+                <a class="btn" href="/Compliance/Import?eventId=@e.Id">Start again</a>
+            </form>
+        }
+    </div>
+}

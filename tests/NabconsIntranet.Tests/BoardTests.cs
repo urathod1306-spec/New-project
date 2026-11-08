@@ -145,7 +145,7 @@ public class BoardTests : IDisposable
     [Fact]
     public async Task Migration_6_and_backups_include_board_photos()
     {
-        Assert.Equal(6, Schema.Version);
+        Assert.True(Schema.Version >= 6);
         Assert.Empty(_app.Get<Db>().Initialize());
         B.Create("With photo", new[] { Upload("p.png", Png(100, 100)) }, _app.Principal("staff"));
         var backup = _app.Get<BackupService>().Create(_app.Get<AuditService>(), "test");

@@ -4,6 +4,7 @@
 @inject NotificationOptions NotifyOptions
 @inject ENoteOptions ENoteSettings
 @inject BoardOptions BoardSettings
+@inject ComplianceAccess ComplianceAccess
 @{
     var signedIn = User.Identity?.IsAuthenticated == true && User.UserId() > 0;
     // All badge numbers come from one cached query (see DeskService); the page script refreshes them with a small poll.
@@ -17,6 +18,8 @@
     var deskTotal = counts?.Total ?? 0;
     var enotesPending = counts?.ENotesPending ?? 0;
     var boardNew = counts?.BoardNew ?? 0;
+    var complianceN = counts?.Compliance ?? 0;
+    var showCompliance = signedIn && ComplianceAccess.ShowsMenu(User, counts?.ComplianceAssigned == true);
     string Hide(long n) => n > 0 ? "" : "hidden";
     var path = Context.Request.Path.Value ?? "/";
     string Active(string prefix) => (prefix == "/" ? path == "/" : path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ? "active" : "";
@@ -110,6 +113,10 @@
                         <li><a class="@Active("/Circulars")" href="/Circulars">Circulars</a></li>
                         <li><a class="@(path.StartsWith("/Requests") && !path.StartsWith("/Requests/Inbox") ? "active" : "")" href="/Requests">My Requests</a></li>
                         <li><a class="@Active("/Leads")" href="@(leadManager ? "/Leads" : "/Leads/Mine")">Business Leads @if (leadManager) { <span class="count @Hide(newLeads)" data-badge="leads" title="Leads still in Submitted">@DeskCounts.Badge(newLeads)</span> }</a></li>
+                        @if (showCompliance)
+                        {
+                            <li><a class="@Active("/Compliance")" href="@(ComplianceAccess.SeesAll(User) ? "/Compliance" : "/Compliance/Mine")">Compliance <span class="count @Hide(complianceN)" data-badge="compliance" title="Compliance items waiting for you">@DeskCounts.Badge(complianceN)</span></a></li>
+                        }
                         @if (User.IsApprover())
                         {
                             <li><a class="@Active("/Requests/Inbox")" href="/Requests/Inbox">Approval Inbox <span class="count @Hide(inbox)" data-badge="inbox">@DeskCounts.Badge(inbox)</span></a></li>

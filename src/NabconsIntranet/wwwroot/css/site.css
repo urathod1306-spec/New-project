@@ -417,3 +417,17 @@ th a.sorted { color: var(--brand-dark); text-decoration: underline; }
 .photo-previews img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
 @media (max-width: 900px) { .board-layout { grid-template-columns: 1fr; } .composer { position: static; } }
 @media (max-width: 600px) { .post-photos img { height: 150px; } }
+
+/* ---------- compliance (v1.6) ---------- */
+.stat-danger .n { color: var(--danger); }
+a.stat { text-decoration: none; color: inherit; display: block; }
+a.stat:hover { border-color: var(--brand); }
+.card.highlight { border-color: var(--info); box-shadow: 0 0 0 2px var(--info-light); }
+.entry { border-bottom: 1px solid var(--line); padding: 8px 0; }
+.entry:last-child { border-bottom: none; }
+.center { text-align: center; }
+.summary-table { max-width: 420px; }
+.narrow-form { max-width: 980px; }
+.fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 14px; margin: 8px 0 12px; }
+.fieldset legend { font-weight: 600; font-size: .88rem; padding: 0 6px; }
+details > summary { cursor: pointer; font-weight: 600; margin: 8px 0; }

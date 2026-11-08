@@ -84,30 +84,6 @@ public sealed class ENotePdfService(Db db, ENoteRepository notes, IntranetOption
 
     private const float W = 595, H = 842, ML = 56, MR = 56, MT = 50, MB = 72, CW = W - ML - MR;
 
-    private sealed class Fonts : IDisposable
-    {
-        public readonly SKTypeface Latin, LatinBold, Deva, DevaBold;
-        public readonly SKShaper SLatin, SLatinBold, SDeva, SDevaBold;
-        public Fonts()
-        {
-            Latin = Load("NotoSans-Regular.ttf"); LatinBold = Load("NotoSans-Bold.ttf");
-            Deva = Load("NotoSansDevanagari-Regular.ttf"); DevaBold = Load("NotoSansDevanagari-Bold.ttf");
-            SLatin = new SKShaper(Latin); SLatinBold = new SKShaper(LatinBold); SDeva = new SKShaper(Deva); SDevaBold = new SKShaper(DevaBold);
-        }
-        private static SKTypeface Load(string name)
-        {
-            using var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("Fonts." + name) ?? throw new InvalidOperationException("Missing font " + name);
-            using var ms = new MemoryStream();
-            s.CopyTo(ms);
-            return SKTypeface.FromData(SKData.CreateCopy(ms.ToArray()));
-        }
-        public void Dispose()
-        {
-            foreach (var s in new[] { SLatin, SLatinBold, SDeva, SDevaBold }) s.Dispose();
-            foreach (var t in new[] { Latin, LatinBold, Deva, DevaBold }) t.Dispose();
-        }
-    }
-
     private sealed record Style(float Size, bool Bold, SKColor Color);
     private static readonly SKColor Ink = new(0x1d, 0x27, 0x33), Muted = new(0x5d, 0x6b, 0x7a), Brand = new(0x0b, 0x4b, 0x28), Accent = new(0x8a, 0x16, 0x16);
     private static readonly Style Body = new(10.5f, false, Ink), Small = new(8.5f, false, Muted), Label = new(9f, true, Muted), H1 = new(15f, true, Brand),
@@ -120,7 +96,7 @@ public sealed class ENotePdfService(Db db, ENoteRepository notes, IntranetOption
     private sealed record ImageOp(SKRect R) : Op;
 
     /// <summary>Lays text out page by page (two passes, so the footer can say "Page x of y").</summary>
-    private sealed class Layout(Fonts f)
+    private sealed class Layout(PdfFonts f)
     {
         public readonly List<List<Op>> Pages = new() { new() };
         public float Y = MT;
@@ -131,22 +107,8 @@ public sealed class ENotePdfService(Db db, ENoteRepository notes, IntranetOption
         public void Need(float h) { if (Y + h > H - MB) NewPage(); }
         public void Add(Op op) => Page.Add(op);
 
-        public static bool IsDeva(char ch) => ch is >= 'ऀ' and <= 'ॿ' or >= '꣠' and <= 'ꣿ' or >= '᳐' and <= '᳿' or '‌' or '‍';
-
-        /// <summary>Splits text into runs of Devanagari / other, so each run is shaped with the right font.</summary>
-        public static IEnumerable<(string text, bool deva)> Runs(string s)
-        {
-            if (s.Length == 0) yield break;
-            var sb = new StringBuilder();
-            bool? cur = null;
-            foreach (var ch in s)
-            {
-                var d = IsDeva(ch) || (cur == true && (char.GetUnicodeCategory(ch) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark));
-                if (cur != null && d != cur) { yield return (sb.ToString(), cur.Value); sb.Clear(); }
-                cur = d; sb.Append(ch);
-            }
-            if (sb.Length > 0) yield return (sb.ToString(), cur!.Value);
-        }
+        /// <summary>Splits text into runs of Devanagari / other (see <see cref="PdfFonts.Runs"/>).</summary>
+        public static IEnumerable<(string text, bool deva)> Runs(string s) => PdfFonts.Runs(s);
 
         public (SKShaper shaper, SKFont font) Font(bool deva, Style st)
         {
@@ -251,7 +213,7 @@ public sealed class ENotePdfService(Db db, ENoteRepository notes, IntranetOption
     public byte[] Render(ENoteRecord r, string recordHash)
     {
         var n = r.Note;
-        using var fonts = new Fonts();
+        using var fonts = new PdfFonts();
         var L = new Layout(fonts);
 
         // ---- 1. organisation header

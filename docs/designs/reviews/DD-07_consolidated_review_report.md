@@ -87,3 +87,33 @@ Three fresh, zero-context reviewers read DD-07 v1 and the code read-only: **G1 C
 | G3-26 | Brief reference | PROPOSE FIX | Removed |
 | G3-27 | 1.5.0 Linux build for roll-back | PROPOSE FIX | Worktree build (§13) |
 | G3-R1..R9 | R2 not buildable | DEFER (R2) | §16: R2 needs its own interview and Elephant pass |
+
+## Round 2 — fresh G3 readiness pass on v2
+
+Verdict: R1 almost buildable in one pass; 2 blocking gaps, 19 clarifications. All resolved in **v2.1** (or recorded as owner confirmations):
+
+| ID | Finding | Class | Resolution |
+|---|---|---|---|
+| R2G3-1 | Import confirm urlencoded inflates text; CRLF changes the hash (blocking) | PROPOSE FIX | Confirm posted as multipart; hash on BOM-stripped, LF text |
+| R2G3-2 | Which forum a multi-event ATR belongs to (blocking) | PROPOSE FIX | BoardAtr/InternalAudit: one forum; ObservationReply: newest event's forum |
+| R2G3-3 | UploadGuard incomplete | PROPOSE FIX | Allowlist, caps, placement |
+| R2G3-4 | Reminder audit wording | PROPOSE FIX | Own `Compliance.Reminders` entry |
+| R2G3-5 | NextMeeting cap contradiction | PROPOSE FIX | max(today, NRO − lead) when NRO > today |
+| R2G3-6 | Recompute points; who is reminded | PROPOSE FIX | Reopen and direct revision recompute; primary only |
+| R2G3-7 | Officers on the edit form vs Reassign | PROPOSE FIX | Same SetOfficers path (history, notifications, markers) |
+| R2G3-8 | Direct revision with a pending request | PROPOSE FIX | Pending becomes Superseded |
+| R2G3-9 | ReportedText/Status definitions; final in one transaction | PROPOSE FIX | §7.5 |
+| R2G3-10 | CHECK coverage; "full SQL is in" | PROPOSE FIX | Reworded; code limits stated |
+| R2G3-11 | Done markers | PROPOSE FIX | Updated |
+| R2G3-12 | CLI grant rules, .bat | PROPOSE FIX | §12 #11 |
+| R2G3-13 | Notify needs a transaction | PROPOSE FIX | Helper opens its own |
+| R2G3-14 | Admin can grant Auditor | PROPOSE FIX | CAs notified; residual risk R-6 |
+| R2G3-15 | Temp-folder test flaky | PROPOSE FIX | Private ASPNETCORE_TEMP per test app |
+| R2G3-16 | Numbering test needs a date | PROPOSE FIX | Optional date parameter for tests |
+| R2G3-17 | CA as officer on import; notification flood | PROPOSE FIX | Refused; one notification per officer per import |
+| R2G3-18 | ProposedClosure printed as Completed | CONTEST | Kept per D3 practice; owner confirms (R-7) |
+| R2G3-19 | Transfer when B is already primary | PROPOSE FIX | Handled (supporting row removed only) |
+| R2G3-20 | Pack helper JS; download audit | PROPOSE FIX | Server-side Pack handler; download/export audit |
+| R2G3-21 | R2 fenced | — | Confirmed |
+
+No blocking questions remain for R1. Implementation proceeds from v2.1.

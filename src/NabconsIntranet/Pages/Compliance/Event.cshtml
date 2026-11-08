@@ -1,0 +1,39 @@
+@page "{id:long}"
+@model NabconsIntranet.Pages.Compliance.EventModel
+@{
+    var e = Model.Item;
+    ViewData["Title"] = e.Title;
+    var restricted = e.IsConfidential;
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="@(Model.Managed ? "/Compliance/Events" : "/Compliance/Mine")">← @(Model.Managed ? "Events" : "My action points")</a></p>
+        <h1>@(e.EventNo != null ? e.EventNo + " — " : "")@e.Title</h1>
+        <p>@ComplianceSource.Label(e.SourceType) · @e.Forum @if (e.IsConfidential) { <span class="badge warning">confidential</span> }</p>
+    </div>
+    @if (Model.IsAdmin)
+    {
+        <div class="actions">
+            <a class="btn primary" href="/Compliance/PointEdit?eventId=@e.Id">+ Add action point</a>
+            <a class="btn" href="/Compliance/Import?eventId=@e.Id">Import from CSV</a>
+            <a class="btn" href="/Compliance/EventEdit/@e.Id">Edit event</a>
+            <a class="btn" href="/Compliance/Atr?events=@e.Id">Print ATR</a>
+        </div>
+    }
+</div>
+<partial name="_ComplianceTabs" />
+<div class="card">
+    <dl class="meta-grid">
+        <dt>Held on</dt><dd>@(e.HeldOn != null ? F.DateDot(e.HeldOn) : "—")</dd>
+        <dt>Period covered</dt><dd>@(e.PeriodFrom != null || e.PeriodTo != null ? F.DateDot(e.PeriodFrom) + " – " + F.DateDot(e.PeriodTo) : "—")</dd>
+        <dt>Report received</dt><dd>@(e.ReportReceivedOn != null ? F.DateDot(e.ReportReceivedOn) : "—")</dd>
+        <dt>Compliance reported to</dt><dd>@(e.ReportedTo ?? "—")</dd>
+        <dt>Reporting cycle</dt><dd>@ComplianceCycle.Labels.GetValueOrDefault(e.ReportingCycle, e.ReportingCycle)@(e.NextReportingOn != null ? " · next " + F.DateDot(e.NextReportingOn) : "")</dd>
+        <dt>Minutes / report kept at</dt><dd>@(e.SourceKeptAt ?? "—")</dd>
+        @if (!string.IsNullOrEmpty(e.Remarks)) { <dt>Remarks</dt><dd class="pre">@e.Remarks</dd> }
+    </dl>
+</div>
+<div class="card table-wrap mt">
+    <h2>Action points@(Model.Managed ? "" : " assigned to you")</h2>
+    <partial name="_PointTable" model='new NabconsIntranet.Pages.Compliance.PointTableModel(Model.Points, false, "No action points yet.")' />
+</div>

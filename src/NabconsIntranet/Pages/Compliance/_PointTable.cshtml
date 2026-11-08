@@ -1,0 +1,30 @@
+@model NabconsIntranet.Pages.Compliance.PointTableModel
+@{
+    var today = F.Today;
+}
+@if (Model.Items.Count == 0) { <p class="empty">@Model.Empty</p> }
+else
+{
+    <table class="table">
+        <thead><tr><th>Number</th><th>Action point</th><th class="hide-sm">Officer</th><th>Due</th><th>Status</th><th class="hide-sm right">Amount</th></tr></thead>
+        <tbody>
+            @foreach (var p in Model.Items)
+            {
+                var overdue = p.IsOverdue(today);
+                var soon = p.IsOpen && !overdue && string.CompareOrdinal(p.CurrentDueDate, today.AddDays(7).ToString("yyyy-MM-dd")) <= 0;
+                <tr class="@(overdue ? "row-overdue" : soon ? "row-due" : "")">
+                    <td class="nowrap ref-cell"><a href="/Compliance/Point/@p.Id">@p.Number</a><div class="muted small">@(p.RefNo ?? "")</div></td>
+                    <td><a href="/Compliance/Point/@p.Id">@(p.PointText.Length > 160 ? p.PointText[..157] + "…" : p.PointText)</a>
+                        <div class="muted small">@p.Forum · @(p.EventNo != null ? p.EventNo + " — " : "")@p.EventTitle</div></td>
+                    <td class="hide-sm">@p.OfficerName@if (!p.OfficerActive) { <span class="badge danger">inactive</span> }<div class="muted small">@(p.OwnerVertical ?? "")</div></td>
+                    <td class="nowrap">@F.DateDot(p.CurrentDueDate)@if (p.CurrentDueDate != p.OriginalDueDate) { <div class="muted small">orig. @F.DateDot(p.OriginalDueDate)</div> }</td>
+                    <td><span class="badge @CompliancePage.StatusCss(p.Status)">@CompliancePage.StatusLabel(p.Status)</span>
+                        @if (p.PendingUpdateId != null) { <div class="small">update awaiting review</div> }
+                        @if (p.PendingRevisionId != null) { <div class="small">new date requested</div> }
+                        @if (p.LastReturnedAt != null && p.IsOpen) { <div class="small">update returned</div> }</td>
+                    <td class="right hide-sm nowrap">@(Model.Lakh ? Fmt.Lakh(p.Amount) : Fmt.Money(p.Amount))</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

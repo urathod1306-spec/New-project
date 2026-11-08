@@ -138,6 +138,40 @@
             }
         </section>
     }
+    @if (v.ShowCompliance)
+    {
+        <section class="card desk-card" aria-labelledby="d-cmine">
+            <div class="card-head"><h2 id="d-cmine">Compliance — my action points <span class="badge @(c.ComplianceMine > 0 ? "warning" : "neutral")">@c.ComplianceMine</span></h2><a href="/Compliance/Mine">All ›</a></div>
+            @if (v.ComplianceMine.Count == 0) { <p class="empty">Nothing due: no action point is overdue, due soon, returned or waiting for a periodic update.</p> }
+            else
+            {
+                <ul class="list">
+                    @foreach (var p in v.ComplianceMine)
+                    {
+                        var od = p.IsOverdue(F.Today);
+                        <li><a href="/Compliance/Point/@p.Id"><strong>@p.Number</strong>@(string.IsNullOrEmpty(p.RefNo) ? "" : " · " + p.RefNo)</a> @if (od) { <span class="badge danger">overdue</span> } @if (p.LastReturnedAt != null) { <span class="badge warning">returned</span> }
+                            <div class="meta">@p.Forum · due @F.DateDot(p.CurrentDueDate)@(p.NextUpdateDue != null ? " · update due " + F.DateDot(p.NextUpdateDue) : "")</div></li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+    @if (v.ShowComplianceCell)
+    {
+        <section class="card desk-card" aria-labelledby="d-ccell">
+            <div class="card-head"><h2 id="d-ccell">Compliance Cell <span class="badge @(c.ComplianceCell > 0 ? "info" : "neutral")">@c.ComplianceCell</span></h2><a href="/Compliance/Review">Queue ›</a></div>
+            @if (v.ComplianceCell.Count == 0) { <p class="empty">Nothing is waiting for the Cell.</p> }
+            else
+            {
+                <ul class="list">
+                    @foreach (var r in v.ComplianceCell)
+                    {
+                        <li><a href="/Compliance/Point/@r.PointId"><strong>@r.Number</strong>@(string.IsNullOrEmpty(r.RefNo) ? "" : " · " + r.RefNo)</a><div class="meta">@r.Detail · @r.OfficerName</div></li>
+                    }
+                </ul>
+            }
+        </section>
+    }
     @if (v.ShowLeads)
     {
         <section class="card desk-card" aria-labelledby="d-leads">

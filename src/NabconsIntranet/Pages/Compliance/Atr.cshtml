@@ -1,0 +1,73 @@
+@page
+@model NabconsIntranet.Pages.Compliance.AtrModel
+@{
+    ViewData["Title"] = "Print ATR";
+    var b = Model.Build;
+}
+<div class="page-head"><div><h1>Print an Action Taken Report</h1>
+<p>Choose the template and events, preview, then download. The Compliance Cell marks the version given to the forum as <strong>final</strong>; it is then kept unchanged and feeds the "previous meeting" column of the next ATR.</p></div></div>
+<partial name="_ComplianceTabs" />
+<form method="get" class="card">
+    <input type="hidden" name="preview" value="true" />
+    <div class="form-grid">
+        <div class="field"><label for="template">Template</label><select id="template" name="template">@foreach (var t in AtrTemplate.Labels) { <option value="@t.Key" selected="@(Model.Template == t.Key)">@t.Value</option> }</select></div>
+        <div class="field"><label for="asOn">Status as on</label><input type="date" id="asOn" name="asOn" value="@Model.AsOn" max="@F.Today.ToString("yyyy-MM-dd")" required /></div>
+        <div class="field"><label for="since">Include points completed since</label><input type="date" id="since" name="since" value="@Model.Since" /><span class="hint">Default: the as-on date of the previous final ATR for this forum. Leave empty to leave out completed points of earlier meetings.</span></div>
+        <div class="field"><label for="officer">Dealing person shown as</label><select id="officer" name="officer"><option value="Code" selected="@(Model.Officer == "Code")">Officer code</option><option value="Name" selected="@(Model.Officer == "Name")">Name</option><option value="NameAndCode" selected="@(Model.Officer == "NameAndCode")">Name (code)</option></select></div>
+        <div class="field full"><label for="events">Events (Board / committee and internal-audit packs: one forum; newest event = Annexure I)</label>
+            <select id="events" name="events" multiple size="8">@foreach (var e in Model.Choices) { <option value="@e.Id" selected="@(Model.Events.Contains(e.Id))">@e.Forum — @(e.EventNo != null ? e.EventNo + " — " : "")@e.Title (@F.DateDot(e.DateKey)) · @e.OpenCount open</option> }</select>
+            <span class="hint">Hold Ctrl to choose several.</span></div>
+    </div>
+    <div class="actions"><button class="btn primary" type="submit">Preview</button></div>
+</form>
+<form method="get" class="card filters mt">
+    <input type="hidden" name="handler" value="Pack" />
+    <div class="field"><label for="forumId">Or prepare a pack for a forum (newest meeting + earlier ones with open points)</label>
+        <select id="forumId" name="forumId">@foreach (var f in Model.Forums) { <option value="@f.Id">@f.Name</option> }</select></div>
+    <div class="actions"><button class="btn" type="submit">Prepare pack</button></div>
+</form>
+
+@if (Model.Error != null) { <div class="alert danger mt">@Model.Error</div> }
+@if (b != null)
+{
+    <div class="card mt">
+        <p class="center"><strong>@b.Header.Org</strong></p>
+        <h2 class="center">@b.Header.Title</h2>
+        @foreach (var s in b.Header.Subtitles) { <p class="center muted">@s</p> }
+        @for (var i = 0; i < b.Header.Sections.Count; i++)
+        {
+            var s = b.Header.Sections[i];
+            var rows = s.IsSummary ? (s.SummaryRows ?? new()) : b.Items.Where(x => x.Section == i).Select(x => x.Cells).ToList();
+            @if (!string.IsNullOrEmpty(s.Heading)) { <h3 class="mt">@s.Heading</h3> }
+            <div class="table-wrap">
+                <table class="table compact @(s.IsSummary ? "summary-table" : "")">
+                    <thead><tr>@foreach (var c in s.Columns) { <th>@c.H</th> }</tr></thead>
+                    <tbody>@foreach (var r in rows) { <tr>@foreach (var c in r) { <td class="pre">@c</td> }</tr> }</tbody>
+                </table>
+            </div>
+        }
+        @if (b.Items.Count == 0) { <p class="empty">No rows for these events.</p> }
+        <p class="muted small mt">Content hash <span class="mono">@b.Hash</span> · @b.Items.Count row(s)</p>
+        <div class="actions">
+            <a class="btn" href="/Compliance/Atr@(Model.QueryString(false, "Download", "docx"))">Download Word (draft)</a>
+            <a class="btn" href="/Compliance/Atr@(Model.QueryString(false, "Download", "pdf"))">Download PDF (draft)</a>
+            <a class="btn" href="/Compliance/Atr@(Model.QueryString(false, "Download", "xlsx"))">Download Excel (draft)</a>
+        </div>
+    </div>
+    @if (Model.IsAdmin)
+    {
+        <form method="post" asp-page-handler="Final" class="card mt">
+            <h2>Mark as final — submitted to the forum</h2>
+            <p class="small">The report must be exactly as previewed above (content hash @b.Hash[..16]…). If anything changed since, you will be asked to preview again.</p>
+            <input type="hidden" name="hash" value="@b.Hash" />
+            <input type="hidden" name="template" value="@Model.Template" />
+            @foreach (var e in Model.Events) { <input type="hidden" name="events" value="@e" /> }
+            <input type="hidden" name="asOn" value="@Model.AsOn" /><input type="hidden" name="since" value="@Model.Since" /><input type="hidden" name="officer" value="@Model.Officer" />
+            <div class="form-grid">
+                <div class="field"><label for="to">Submitted to *</label><input id="to" name="submittedTo" maxlength="150" required value="@b.Forum" /></div>
+                <div class="field"><label for="on">Submitted on *</label><input type="date" id="on" name="submittedOn" required value="@F.Today.ToString("yyyy-MM-dd")" /></div>
+            </div>
+            <button class="btn primary" type="submit">Mark as final</button>
+        </form>
+    }
+}

@@ -1,0 +1,35 @@
+@page
+@model NabconsIntranet.Pages.Compliance.ReviewModel
+@{ ViewData["Title"] = "Compliance Cell queue"; }
+<div class="page-head"><div><h1>Compliance Cell queue</h1><p>Oldest first. Items on points where you are a dealing officer need another Cell member.</p></div></div>
+<partial name="_ComplianceTabs" />
+@{
+    void Table(string title, List<ComplianceQueueRow> rows, string detailHeader, string empty)
+    {
+        <div class="card table-wrap mt">
+            <h2>@title (@rows.Count)</h2>
+            @if (rows.Count == 0) { <p class="empty">@empty</p> }
+            else
+            {
+                <table class="table compact">
+                    <thead><tr><th>Point</th><th>Source</th><th>Officer</th><th>@detailHeader</th><th>Due</th><th></th></tr></thead>
+                    @foreach (var r in rows)
+                    {
+                        <tr>
+                            <td class="nowrap"><a href="/Compliance/Point/@r.PointId">@r.Number</a><div class="muted small">@r.RefNo</div></td>
+                            <td>@ComplianceSource.Label(r.SourceType)<div class="muted small">@r.Forum</div></td>
+                            <td>@r.OfficerName</td>
+                            <td class="small">@(r.Who != null ? r.Who + ", " : "")@(r.At != null ? (r.At.Length > 10 ? F.DateTime(r.At) : F.DateDot(r.At)) : "")<div>@r.Detail</div></td>
+                            <td class="nowrap">@F.DateDot(r.CurrentDueDate)</td>
+                            <td>@if (r.Own) { <span class="badge warning">needs another CA</span> }</td>
+                        </tr>
+                    }
+                </table>
+            }
+        </div>
+    }
+    Table("Updates awaiting review", Model.Updates, "Submitted", "No updates are waiting.");
+    Table("Due-date requests", Model.Revisions, "Requested", "No requests are waiting.");
+    Table("Proposed for closure", Model.Proposed, "As on", "None.");
+    Table("Overdue with no update for 30 days", Model.Stale, "Last as on", "None.");
+}

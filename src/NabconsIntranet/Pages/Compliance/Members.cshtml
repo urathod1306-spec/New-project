@@ -1,0 +1,35 @@
+@page
+@model NabconsIntranet.Pages.Compliance.MembersModel
+@{ ViewData["Title"] = "Compliance access"; }
+<div class="page-head"><div><h1>Compliance access</h1>
+<p>Only Compliance Admins can give or remove compliance access; the intranet administrator cannot. Every change is notified to all Compliance Admins and recorded. Dealing officers need no access here: they see their own points automatically.</p></div></div>
+<partial name="_ComplianceTabs" />
+<div class="grid two">
+    <div class="card table-wrap">
+        <h2>Members</h2>
+        <table class="table compact">
+            <thead><tr><th>Name</th><th>Access</th><th>Granted</th><th></th></tr></thead>
+            @foreach (var m in Model.Members)
+            {
+                <tr>
+                    <td>@m.DisplayName <span class="muted small">(@m.Username)</span>@if (!m.IsActive) { <span class="badge danger">inactive</span> }</td>
+                    <td>@ComplianceGrant.Labels.GetValueOrDefault(m.Role, m.Role)</td>
+                    <td class="small">@F.DateDot(m.GrantedAt) by @m.GrantedByName</td>
+                    <td>@if (m.UserId != User.UserId()) { <form method="post" asp-page-handler="Revoke"><input type="hidden" name="userId" value="@m.UserId" /><button class="btn small" type="submit">Revoke</button></form> }</td>
+                </tr>
+            }
+        </table>
+    </div>
+    <form method="post" asp-page-handler="Grant" class="card">
+        <h2>Give access</h2>
+        <div class="field"><label for="userId">User</label><select id="userId" name="userId" required><option value="">Choose…</option>@foreach (var u in Model.Users) { <option value="@u.Id">@u.DisplayName (@u.Username)</option> }</select></div>
+        <div class="field"><label for="role">Access</label><select id="role" name="role">@foreach (var g in ComplianceGrant.Labels) { <option value="@g.Key">@g.Value</option> }</select></div>
+        <button class="btn primary" type="submit">Give access</button>
+    </form>
+</div>
+<div class="card table-wrap mt">
+    <h2>Changes</h2>
+    <table class="table compact">
+        @foreach (var c in Model.Changes) { <tr><td class="small nowrap">@F.DateTime(c.At)</td><td class="small">@c.Action @(c.Role != null ? ComplianceGrant.Labels.GetValueOrDefault(c.Role, c.Role) : "") — @c.DisplayName, by @c.ActorName</td></tr> }
+    </table>
+</div>

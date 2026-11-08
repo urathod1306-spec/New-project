@@ -87,6 +87,25 @@ public static class Tools
                 Console.WriteLine(steps.Count == 0 ? $"Database already up to date (schema version {Schema.Version}). Nothing changed." : $"Database is now at schema version {Schema.Version}.");
                 return 0;
             }
+            case "--grant-compliance-admin":
+            {
+                // Creates the first Compliance Admin, or recovers when every Compliance Admin has left (DD-07 D12).
+                if (args.Length < 2) { Console.WriteLine("Usage: NabconsIntranet.exe --grant-compliance-admin <user name>"); return 1; }
+                db.Initialize();
+                var users = new UserRepository(db);
+                var u = users.GetByUsername(args[1].Trim());
+                if (u == null || !u.IsActive) { Console.WriteLine($"No active user '{args[1]}'. In Windows mode the person must sign in to the intranet once first."); return 2; }
+                var co = config.GetSection("Compliance").Get<ComplianceOptions>() ?? new ComplianceOptions();
+                co.Resolve();
+                var fmt = new Fmt(o);
+                var tracker = new ChangeTracker();
+                var access = new ComplianceAccess(db, co);
+                var workflow = new ComplianceWorkflow(db, access, new ComplianceRepository(db, access, co, fmt), co, new MasterRepository(db), audit,
+                    new NotificationService(db, tracker), tracker, fmt, NullLogger<ComplianceWorkflow>.Instance);
+                workflow.GrantCore(u.Id, ComplianceGrant.Admin, "system (command line: " + Environment.UserName + ")");
+                Console.WriteLine($"{u.DisplayName} ({u.Username}) is now a Compliance Admin. Existing Compliance Admins have been notified.");
+                return 0;
+            }
             case "--verify-audit":
             {
                 db.Initialize();
@@ -103,6 +122,7 @@ public static class Tools
                       NabconsIntranet.exe --reset-admin-password  re-enable 'admin' with the InitialAdminPassword
                       NabconsIntranet.exe --verify-audit          check the audit log hash chain
                       NabconsIntranet.exe --migrate               back up, then bring the database up to date (safe to repeat)
+                      NabconsIntranet.exe --grant-compliance-admin <user>   make a user a Compliance Admin (first one, or recovery)
                     """);
                 return 1;
         }

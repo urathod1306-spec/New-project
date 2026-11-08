@@ -12,6 +12,8 @@ public sealed class Fmt
 
     public Fmt(IntranetOptions o) => _offset = TimeSpan.FromMinutes(o.DisplayUtcOffsetMinutes);
 
+    public int OffsetMinutes => (int)_offset.TotalMinutes;
+
     public System.DateTime LocalNow => System.DateTime.UtcNow + _offset;
     public DateOnly Today => DateOnly.FromDateTime(LocalNow);
 
@@ -36,6 +38,24 @@ public sealed class Fmt
     }
 
     public static string Money(double? amount) => amount.HasValue ? "₹ " + amount.Value.ToString("N2", In) : "";
+
+    /// <summary>Amount in ₹ lakh with Indian grouping, e.g. 1,234.57 lakh.</summary>
+    public static string Lakh(double? amount) => amount.HasValue ? "₹ " + (amount.Value / 100_000d).ToString("N2", In) + " lakh" : "";
+
+    /// <summary>dd.MM.yyyy (used by the compliance module and its printouts). Accepts yyyy-MM-dd or an ISO UTC time.</summary>
+    public string DateDot(string? iso)
+    {
+        if (string.IsNullOrEmpty(iso)) return "";
+        if (iso.Length > 10 && System.DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var dt))
+            return (dt + _offset).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+        return DateOnly.TryParseExact(iso, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)
+            ? d.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture) : iso;
+    }
+
+    /// <summary>The office date of an ISO UTC time (yyyy-MM-dd).</summary>
+    public string LocalDate(string? isoUtc) =>
+        !string.IsNullOrEmpty(isoUtc) && System.DateTime.TryParse(isoUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var dt)
+            ? (dt + _offset).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "";
 
     public static string Size(long bytes) => bytes switch
     {

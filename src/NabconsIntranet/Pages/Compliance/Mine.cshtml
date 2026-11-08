@@ -1,0 +1,22 @@
+@page
+@model NabconsIntranet.Pages.Compliance.MineModel
+@{
+    ViewData["Title"] = "My action points";
+    var open = Model.Items.Where(p => p.IsOpen).ToList();
+    var closed = Model.Items.Where(p => !p.IsOpen).ToList();
+}
+<div class="page-head">
+    <div><h1>My action points</h1><p>Points where you are the primary or a supporting dealing officer. Open a point to submit compliance or ask for a new due date.</p></div>
+</div>
+<partial name="_ComplianceTabs" />
+<div class="card table-wrap">
+    <h2>Open (@open.Count)</h2>
+    <partial name="_PointTable" model='new NabconsIntranet.Pages.Compliance.PointTableModel(open, false, "No open action points are assigned to you.")' />
+</div>
+@if (closed.Count > 0)
+{
+    <div class="card table-wrap mt">
+        <h2>Closed in the last 90 days</h2>
+        <partial name="_PointTable" model='new NabconsIntranet.Pages.Compliance.PointTableModel(closed, false, "")' />
+    </div>
+}

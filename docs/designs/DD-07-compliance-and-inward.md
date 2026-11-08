@@ -1,6 +1,6 @@
 # DD-07 — Compliance Management (R1 = 1.6.0) and Inward Register with Invoice Inward (R2 = 1.7.0)
 
-**Status:** v2 — R1 revised after Goldfish round 1 (G1 comprehension, G2 critic, G3 readiness; resolutions in `docs/designs/reviews/DD-07_consolidated_review_report.md`). R2 is an **outline** that needs its own interview and Elephant pass before it can be built (§16).
+**Status:** v2.1 — R1 revised after Goldfish round 1 and the round-2 readiness pass (G1 comprehension, G2 critic, G3 readiness; resolutions in `docs/designs/reviews/DD-07_consolidated_review_report.md`). R2 is an **outline** that needs its own interview and Elephant pass before it can be built (§16).
 **Author:** Elephant session · **Date:** 08.11.2026 · **Baseline:** release 1.5.0, schema 6.
 
 This document is the single source of truth for R1. An engineer, or a fresh AI session, should be able to build R1 from it without the conversation. Existing behaviour is cited by file. Paths are relative to `src/NabconsIntranet/` unless they start with `docs/` or `tests/`.
@@ -125,7 +125,7 @@ Db · AuditService · INotificationService.Notify + ChangeTracker · DeskService
 | any open | Request due-date revision | PO, with no pending revision | new date (≥ today), reason | Revision is Pending. |
 | any open | Withdraw own revision | its requester | — | Revision becomes Withdrawn. |
 | any open, with a pending revision | Approve / reject revision | CA (same rule) | remarks for reject | On approve, `CurrentDueDate` = new date, the reminder markers are reset and `NextUpdateDue` is recomputed. |
-| any open | Revise due date directly | CA (same rule) | new date, reason | An already-approved revision row is inserted, with the same effect as approve. |
+| any open | Revise due date directly | CA (same rule) | new date, reason | An already-approved revision row is inserted, with the same effect as approve. A pending revision request becomes Superseded. |
 | any open | Edit point | CA (same rule) | — | Fields are updated. History records the old and new value of each changed field. `Number`, `EventId` and `OriginalDueDate` can never change (trigger). |
 | any open | **Close** | CA (same rule) | remarks, closure authority | **Completed**, with closure fields set. Pending update and revision become **Superseded**. |
 | any open | **Drop** | CA (same rule) | reason, authority | **Dropped**, same effect. |
@@ -285,7 +285,7 @@ CREATE TABLE IF NOT EXISTS ComplianceSnapshotVoids (
 
 -- master lists, seeded once: ComplianceForum and ComplianceCategory (names below)
 ```
-The full SQL, with every trigger written out, is in `Schema.cs` migration 7.
+Write the full SQL, with every trigger written out, in `Schema.cs` migration 7. Free-text columns not listed with a CHECK above are limited in code (`ComplianceText`) to 150 characters (names, category, vertical) or 4,000 (history detail).
 
 **Seeded master lists:**
 - **Forums:** Board of Directors; Audit Committee; Business Development Committee; HR Committee; Risk Management Committee; NABARD (Inspection); C&AG; Statutory Auditor; Internal Auditor; Subsidiaries Review Meeting; Strategic Review Meeting; NABARD Oversight Review.
@@ -331,7 +331,7 @@ The full SQL, with every trigger written out, is in `Schema.cs` migration 7.
    - Notifications carry only the point number, the source reference, and the source-type label (or "Restricted" for restricted events).
    - Audit details carry only ids, numbers, the source-type label (or "restricted"), states and counts. Reasons, remarks, authority and all other free text stay in `ComplianceHistory`.
    - Compliance data is not added to site search (`Pages/Search.cshtml.cs`).
-   - The daily job's return value written into the housekeeping audit entry contains counts only.
+   - The daily job writes its own audit entry `Compliance.Reminders` containing counts only. Downloads and exports are audited as `Compliance.AtrDownloaded` / `Compliance.Exported` with ids and counts only.
 5. **Grants are visible to the Cell.** Every grant or revoke, and every administrator password reset of a compliance member, notifies all active CAs and is audited.
 
 ## 6. Screens (R1)
@@ -364,13 +364,14 @@ All routes are under `/Compliance`. A **Compliance** menu tab appears for the pe
   - Dates may be written dd.MM.yyyy, dd/MM/yyyy, dd-MM-yyyy, d/M/yyyy or yyyy-MM-dd. Past due dates are allowed.
   - Status is Ongoing or PendingExternal. ActionTakenSoFar needs AsOn.
   - Text length rules are the same as on the forms.
-- **Preview** carries the CSV text in a hidden field.
+- **Preview** carries the CSV text in a hidden field; the confirm form is posted as `multipart/form-data` (allowed only on this page), so the text is not percent-encoded. The SHA-256 is computed on the text after removing a BOM and turning CRLF into LF.
+- Rows naming the acting CA as primary or supporting officer are refused (segregation). Officers get **one** notification per import listing how many points were assigned.
 - **Confirm** re-checks the size and row limits and re-validates every row. It then refuses a file already imported into the event (`ComplianceImports` holds the SHA-256 per event). Finally it inserts every row in one transaction, numbered in file order, with `Seq` continuing from the event's maximum.
 
 **ATR page (`/Compliance/Atr`):**
 - **Options:**
   - Template: defaults to the source type of the first event.
-  - Events: visible events, with a pack helper that ticks one forum's earlier events that still have open points.
+  - Events: visible events. **BoardAtr and InternalAudit: all selected events must belong to one forum** (`ForumId`); ObservationReply may mix forums and stores the newest event's forum, which only drives the defaults. A server-side *Pack* button (`?handler=Pack&forumId=`) ticks that forum's newest event plus its earlier events with open points.
   - As-on date (§7.6).
   - Include completed since: defaults to the as-on date of the previous snapshot for the same template and forum.
   - Officer code format: Code, Name, or Name (Code).
@@ -447,7 +448,8 @@ A single section and sheet, with the heading "Internal Audit — compliance stat
 
 ### 7.5 Snapshot mechanism
 1. **What the snapshot stores.**
-   - `ComplianceSnapshotItems` holds the printed table rows of non-summary sections: section index, cells as a JSON array, bold flag, `PointId`, `ReportedText` (what was printed as "action taken" for that point) and status.
+   - `ComplianceSnapshotItems` holds the printed table rows of non-summary sections: section index, cells as a JSON array, bold flag, `PointId`, `ReportedText` = the raw `AtrText` printed for that point (no " [Completed]" suffix), and `Status` = the point's status code. In the hash line a null value is written as an empty string.
+   - Mark as final rebuilds, compares the hash and inserts the snapshot inside **one** `BEGIN IMMEDIATE` transaction. The live hash is computed through the same "document → snapshot rows" function used for saving.
    - `HeaderJson` holds everything else as JSON: organisation line, title, subtitles, signature, the definition of each section (heading, columns and widths, summary flag, sheet name) and the summary rows.
    - JSON is written with `System.Text.Json` using one fixed options object: default encoder, no indentation, properties in declaration order.
 2. **Content hash.** It is the SHA-256 of the UTF-8 text made of the line `NABCONS ATR v1`, the `HeaderJson`, and one line per item: `Seq|Section|PointId|Bold|Cells|ReportedText|Status`. It is the same for a live preview and for the snapshot made from it.
@@ -527,7 +529,7 @@ The export has the following columns:
 - **Return value.** The job returns counts only.
 
 **NextUpdateDue.**
-- **When it is recomputed:** when a point is created, when an update is accepted, when a revision is approved, and when the event is edited.
+- **When it is recomputed:** when a point is created, when an update is accepted, when a revision is approved or the date is revised directly, when the point is reopened, and when the event is edited. Reminders go to the **primary** officer only.
 - **Base date:** the as-on date of the latest accepted update, otherwise the point's `RaisedOn`.
 - **By reporting cycle:**
 
@@ -535,7 +537,7 @@ The export has the following columns:
   |---|---|
   | Monthly | base + 1 month |
   | Quarterly | base + 3 months |
-  | NextMeeting | event `NextReportingOn` − `UpdateLeadDays`, but only if that date is after today; otherwise none |
+  | NextMeeting | if `NextReportingOn` is after today: the later of today and `NextReportingOn` − `UpdateLeadDays`; otherwise none |
   | OneTime | none |
 
 - **Cap.** It is capped at `CurrentDueDate`. If it would then fall before today, it is set to today, so that an overdue point with no recent update asks for one.
@@ -610,10 +612,10 @@ All settings are optional: the owner's existing file needs no change. This follo
 | 7 | `Data/ComplianceImport.cs` (new) | Template, parsing and validation. |
 | 8 | `Data/AtrBuilder.cs` (new) | The three templates, the as-on rule, previous-snapshot lookup, content hash, snapshot save, load, regenerate and void. |
 | 9 | `Infrastructure/ComplianceScheduler.cs` (new) | Hosted daily job. |
-| 10 | `Infrastructure/UploadGuard.cs` (new; **written**) + `Program.cs` | Content-type allowlist, body caps, `MemoryBufferThreshold`. Register the options, services and hosted service. |
-| 11 | `Infrastructure/Tools.cs` | `--grant-compliance-admin <user>` (audited). |
+| 10 | `Infrastructure/UploadGuard.cs` (new; partial: content-type allowlist ignoring `; charset=`, body caps and the call in `Program.cs` right after the header middleware still to add) + `Program.cs` | Content-type allowlist, body caps, `MemoryBufferThreshold`. Register the options, services and hosted service. |
+| 11 | `Infrastructure/Tools.cs`, `deploy/windows/Grant-Compliance-Admin.bat` | `--grant-compliance-admin <user>`: always allowed (recovery when every CA has left), only for an existing active user (in Windows mode the user must have signed in once), audited, notifies the CAs; listed in the usage text. |
 | 12 | `Data/Desk.cs`, `Infrastructure/Endpoints.cs`, `Pages/Desk/Index.cshtml`, `Pages/Shared/_Layout.cshtml`, `wwwroot/js/site.js` | Counts, cache keys, token, poll JSON, desk sections, tab and badge list. |
-| 13 | `Pages/Admin/UserEdit.cshtml.cs` | When an administrator resets a compliance member's password, notify the CAs. |
+| 13 | `Pages/Admin/UserEdit.cshtml.cs` | When an administrator resets a compliance member's password, or gives anyone the Auditor role, notify the CAs (the notification opens its own transaction). |
 | 14 | `Pages/Compliance/*` (new) | The pages in §6, plus a shared `_ComplianceTabs.cshtml`. |
 | 15 | `wwwroot/css/site.css` | Tiles, matrix, bar width classes `w-0` to `w-100` in steps of 5. |
 | 16 | `Infrastructure/Seeder.cs` | Demo data on **new empty databases only**: user `cs` (CA), `coo` given a CV grant, two synthetic events with points. |
@@ -655,7 +657,7 @@ All settings are optional: the owner's existing file needs no change. This follo
     - Import is all or nothing.
     - A repeat file is refused.
     - Limits are re-checked on confirm.
-    - Nothing is written to disk: the file counts of `data`, `documents`, `Path.GetTempPath()` and `ASPNETCORE_TEMP` are unchanged.
+    - Nothing is written to disk: each test app gets its own `ASPNETCORE_TEMP` folder, and that folder, `data` and `documents` have the same files before and after.
 12. **No upload accepted.**
     - A multipart POST to every other compliance page gets 415.
     - Other content types get 415.
@@ -723,6 +725,8 @@ All settings are optional: the owner's existing file needs no change. This follo
 | R-2 | Anyone who can copy the database file or a backup ZIP on the server can read Board matters. | Residual risk, recorded in `IT-SECURITY-NOTE`. Restrict folder access (NTFS) to the service account and the custodian. Encryption at rest (BitLocker) is recommended. |
 | R-3 | House formatting of the ATR (logo, fonts). | The DOCX can be edited. A `.dotx` can be supported later. |
 | R-4 | The Cell may have only one CA. | The dashboard warns. That CA's own points wait for a second CA. |
+| R-6 | The intranet Administrator can give anyone, including themselves, the **Auditor** role, which reads non-restricted compliance. | Residual risk: the CAs are notified whenever someone gains the Auditor role (§12 #13); recorded in IT-SECURITY-NOTE. |
+| R-7 | ProposedClosure points print as Completed / Complied before the Cell closes them (D3 practice: the forum is told the action is complete and takes it on record). | Owner to confirm; otherwise print "Proposed for closure". |
 | R-5 | Write contention at month-end ATR time. | Writes are single short transactions. ATR generation is read-only and limited to 2 at a time. |
 
 ## 16. R2 (1.7.0) — outline only; must not be built from this document

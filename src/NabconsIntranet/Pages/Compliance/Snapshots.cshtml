@@ -1,0 +1,22 @@
+@page
+@model NabconsIntranet.Pages.Compliance.SnapshotsModel
+@{ ViewData["Title"] = "Submitted ATRs"; }
+<div class="page-head"><div><h1>Submitted ATRs</h1><p>Every ATR marked final, exactly as given to the forum. They cannot be changed; a mistaken one can only be marked void.</p></div></div>
+<partial name="_ComplianceTabs" />
+<div class="card table-wrap">
+    @if (Model.Items.Count == 0) { <p class="empty">No ATR has been marked final yet.</p> }
+    else
+    {
+        <table class="table">
+            <thead><tr><th>#</th><th>Title</th><th>Submitted to</th><th>On</th><th>Status as on</th><th class="right">Rows</th></tr></thead>
+            @foreach (var s in Model.Items)
+            {
+                <tr class="@(s.IsVoided ? "muted" : "")">
+                    <td><a href="/Compliance/Snapshot/@s.Id">#@s.Id</a></td>
+                    <td><a href="/Compliance/Snapshot/@s.Id">@s.Title</a><div class="muted small">@AtrTemplate.Labels.GetValueOrDefault(s.Template, s.Template)</div>@if (s.IsVoided) { <span class="badge danger">void</span> }</td>
+                    <td>@s.SubmittedTo</td><td class="nowrap">@F.DateDot(s.SubmittedOn)</td><td class="nowrap">@F.DateDot(s.AsOn)</td><td class="right">@s.ItemCount</td>
+                </tr>
+            }
+        </table>
+    }
+</div>

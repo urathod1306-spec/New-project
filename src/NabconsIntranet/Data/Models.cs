@@ -49,6 +49,8 @@ public static class MasterTypes
     public const string LeadSource = "LeadSource";
     public const string LeadLossReason = "LeadLossReason";
     public const string ENoteCategory = "ENoteCategory";
+    public const string ComplianceForum = "ComplianceForum";
+    public const string ComplianceCategory = "ComplianceCategory";
 
     public static readonly Dictionary<string, string> Labels = new()
     {
@@ -61,6 +63,8 @@ public static class MasterTypes
         [LeadSource] = "Lead sources",
         [LeadLossReason] = "Lead lost / dropped reasons",
         [ENoteCategory] = "e-Note categories",
+        [ComplianceForum] = "Compliance forums / bodies",
+        [ComplianceCategory] = "Compliance categories",
     };
 }
 
