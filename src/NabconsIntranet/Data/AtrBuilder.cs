@@ -116,10 +116,10 @@ public sealed class AtrBuilder(Db db, ComplianceAccess access, ComplianceReposit
         _ => string.IsNullOrEmpty(p.OfficerCode) ? p.OfficerName : p.OfficerCode!,
     };
 
-    /// <summary>The newest non-voided snapshot of the same template and forum with an earlier as-on date (DD-07 §7.2).</summary>
+    /// <summary>The newest non-voided snapshot of the same template and forum with an as-on date on or before this one (DD-07 §7.2).</summary>
     public ComplianceSnapshot? PreviousSnapshot(string template, long? forumId, string asOn) => db.Single<ComplianceSnapshot>("""
         SELECT s.* FROM ComplianceSnapshots s
-        WHERE s.Template = @template AND s.ForumId IS @forumId AND s.AsOn < @asOn
+        WHERE s.Template = @template AND s.ForumId IS @forumId AND s.AsOn <= @asOn
           AND NOT EXISTS (SELECT 1 FROM ComplianceSnapshotVoids v WHERE v.SnapshotId = s.Id)
         ORDER BY s.AsOn DESC, s.Id DESC LIMIT 1
         """, new { template, forumId, asOn });

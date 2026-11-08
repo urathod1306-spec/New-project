@@ -24,7 +24,7 @@
 <div class="grid stats">
     <a class="stat" href="/Compliance/Points?status=open"><div class="n">@d.Open</div><div class="l">Open</div></a>
     <a class="stat stat-danger" href="/Compliance/Points?status=overdue"><div class="n">@d.Overdue</div><div class="l">Overdue</div></a>
-    <a class="stat" href="/Compliance/Points?status=duesoon"><div class="n">@d.DueSoon</div><div class="l">Due within 7 days</div></a>
+    <a class="stat" href="/Compliance/Points?status=duesoon"><div class="n">@d.DueSoon</div><div class="l">Due within @Model.DueSoonDays days</div></a>
     <a class="stat" href="/Compliance/Points?status=due30"><div class="n">@d.Due30</div><div class="l">Due within 30 days</div></a>
     <a class="stat" href="/Compliance/Points?status=awaiting"><div class="n">@d.Awaiting</div><div class="l">Updates awaiting review</div></a>
     <a class="stat" href="/Compliance/Points?status=revision"><div class="n">@d.Revisions</div><div class="l">Due-date requests</div></a>
@@ -46,7 +46,7 @@
                     @foreach (var s in CStatus.All)
                     {
                         var n = Model.Cell(src.Code, s);
-                        <td class="right">@if (n > 0) { <a href="/Compliance/Points?source=@src.Code&status=@s.ToLowerInvariant()">@n</a> } else { <span class="muted">0</span> }</td>
+                        <td class="right">@if (n > 0) { <a href="/Compliance/Points?source=@src.Code&status=@Model.FilterKey(s)">@n</a> } else { <span class="muted">0</span> }</td>
                     }
                     <td class="right"><strong>@total</strong></td>
                 </tr>

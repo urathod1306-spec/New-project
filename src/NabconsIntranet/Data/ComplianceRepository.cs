@@ -22,6 +22,7 @@ public sealed class CompliancePointFilter
     public static readonly Dictionary<string, string> StatusLabels = new()
     {
         ["open"] = "Open (all)", ["overdue"] = "Overdue", ["duesoon"] = "Due soon", ["due30"] = "Due within 30 days",
+        ["ongoing"] = "Ongoing", ["external"] = "Guidance awaited (external)",
         ["awaiting"] = "Update awaiting review", ["revision"] = "Revision requested", ["proposed"] = "Proposed for closure",
         ["completed"] = "Completed", ["dropped"] = "Dropped", ["merged"] = "Merged", ["all"] = "All",
     };
@@ -144,6 +145,8 @@ public sealed class ComplianceRepository(Db db, ComplianceAccess access, Complia
             "awaiting" => "p.PendingUpdateId IS NOT NULL",
             "revision" => "p.PendingRevisionId IS NOT NULL",
             "proposed" => "p.Status = 'ProposedClosure'",
+            "ongoing" => "p.Status = 'Ongoing'",
+            "external" => "p.Status = 'PendingExternal'",
             "completed" => "p.Status = 'Completed'",
             "dropped" => "p.Status = 'Dropped'",
             "merged" => "p.Status = 'Merged'",

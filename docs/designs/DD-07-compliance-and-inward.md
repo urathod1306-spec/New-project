@@ -419,7 +419,7 @@ The writers render only from this model:
 **Annexure II, III, …** are the earlier selected events, newest first.
 - **Columns:** Agenda No. | Action Point | Action presented in previous {Forum} meeting | Further action taken / to be taken.
 - **Rows:** points that are open, plus points completed (`ClosedAt` date) on or after the "include completed since" date.
-- **Column 3:** the `ReportedText` of the point's item in the **previous snapshot**: the newest non-voided snapshot of the same template and `ForumId` with `AsOn` < the current as-on date. If there is none, "—".
+- **Column 3:** the `ReportedText` of the point's item in the **previous snapshot**: the newest non-voided snapshot of the same template and `ForumId` with `AsOn` ≤ the current as-on date (an ATR finalised earlier the same day counts: it is what the forum was last told). If there is none, "—".
 - **Column 4:** the current `AtrText`, followed by " [Completed]" when completed.
 
 **After each annexure:** a summary table showing Completed n / Ongoing n / Total n.
