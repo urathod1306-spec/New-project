@@ -36,6 +36,10 @@ Work items are spread across modules; staff miss what is waiting for them, and t
 - Markers are bumped as part of each write, just before its commit; a count read within 1 second of a marker change is read again on the next poll, which covers that gap.
 - The e-Note badge counts notes held by the user that are in movement or returned; the My Desk sections split these by role (pending for me / returned to me as initiator), each showing up to 10.
 
+### Compliance (v1.6, DD-07 §8)
+- Two more counts in the single count query: `ComplianceMine` (own action points overdue, due soon, returned or with an update due) and `ComplianceCell` (for Compliance Admins: pending updates, revision requests and closure proposals, excluding their own points). Both are part of *My Desk (n)* and of the poll's `compliance` value, which drives the Compliance tab badge. The Cell queue uses the change marker `t:compliance`; the user's compliance grant is part of the cache key.
+- Daily compliance reminders run from their own scheduler (not the backup job): one aggregated notification per officer per day, plus a digest to the Cell.
+
 ## Alternatives Considered
 - **WebSockets / SignalR / Server-Sent Events:** rejected by the owner's network rules; a 60-second poll costs ~1 ms: the counts come from memory; with local accounts the sign-in cookie is still checked against the user record (one primary-key lookup) on each poll.
 - **E-mail:** no permitted mail relay; would add an outbound connection.

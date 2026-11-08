@@ -123,6 +123,21 @@ To switch self-registration off, set `"SelfRegistrationEnabled": false` in `apps
 - **Daily housekeeping** (after the scheduled backup) sends ageing reminders and reports any stored e-Note file that has no database record. It never deletes files; see the log.
 - **Switching off:** set `"ENote": { "Enabled": false }`. The data stays and returns when it is switched back on.
 
+## Compliance Management (v1.6)
+
+- **Who can do what.** Compliance access is **not** an intranet role, so the Administrator cannot give it (to anyone, including themselves).
+  - *Compliance Admins* (the Compliance Cell, e.g. the Company Secretary's office) register events, add or import action points, review compliance, decide due-date requests, close points and mark ATRs final.
+  - *Compliance Viewers* (e.g. COO, MD, CFO) see everything and print.
+  - Dealing officers see only their own points; they need no grant.
+  - The intranet **Auditor** role reads events that are not restricted.
+- **First Compliance Admin.** On the server, run `Grant-Compliance-Admin.bat` in the program folder and type the person's sign-in name. After that, Compliance Admins manage access on *Compliance → Access*. Appoint at least two: a Cell member cannot act on points where they are themselves a dealing officer.
+- **Restricted events.** Board and Audit Committee events (setting `Compliance:RestrictedSourceTypes`) and any event marked confidential are hidden from everyone except the Cell, the Viewers and the officers of each point. Notifications and the audit log show only point numbers.
+- **Lists.** *Master lists → Compliance forums / bodies* and *Compliance categories* are kept by the administrator.
+- **Registers only.** No files are uploaded. Minutes, reports and evidence stay in the paper file or shared folder; the register records where they are kept.
+- **Reminders** go out once a day (from 09:00, whenever the PC is on): one summary per officer, and a digest to the Cell.
+- **Password resets.** When an administrator resets the password of a compliance member, or gives anyone the Auditor role, the Compliance Cell is notified.
+- **Switching off:** `"Compliance": { "Enabled": false }`. Data is kept.
+
 ## Message Board (v1.4)
 
 - **Everyone can post.** Signed-in staff post messages with up to 4 photos on the *Message Board* tab. The home page shows the pinned posts and the newest ones.

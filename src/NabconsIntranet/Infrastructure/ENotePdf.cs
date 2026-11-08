@@ -34,11 +34,10 @@ public sealed record ENoteRecord(ENote Note, ENoteBodyVersion? Body, List<ENoteS
 /// Archival PDF of a decided e-Note, generated on the server with SkiaSharp (already bundled) and HarfBuzz text shaping,
 /// using the Noto Sans and Noto Sans Devanagari fonts embedded in the program, so Hindi and English both print
 /// correctly without any installed fonts. Generated once per final state and stored in documents\enotes\pdf.
-/// At most two PDFs are generated at the same time.
+/// At most two documents are rendered at the same time (one limit shared with the compliance reports, ReportGate).
 /// </summary>
 public sealed class ENotePdfService(Db db, ENoteRepository notes, IntranetOptions io, AuditService audit, Fmt fmt, IWebHostEnvironment env)
 {
-    private static readonly SemaphoreSlim Gate = new(2, 2);
 
     public ENoteRecord Record(ENote n) => new(n, notes.Version(n.Id, null), notes.Sheet(n.Id), notes.Attachments(n.Id));
 
@@ -50,8 +49,9 @@ public sealed class ENotePdfService(Db db, ENoteRepository notes, IntranetOption
         var n = notes.Get(noteId) ?? throw new WorkflowException("Note not found.");
         if (!ENoteStates.IsDecided(n.State)) throw new WorkflowException("The PDF is available once the note is approved, rejected, withdrawn or closed.");
         if (Cached(n) is { } hit) return hit;
-        await Gate.WaitAsync();
-        try
+        // one shared limit with the compliance reports: at most two documents are rendered at a time
+        using var slot = await Reports.ReportGate.EnterAsync(TimeSpan.FromSeconds(60))
+            ?? throw new WorkflowException("The PDF generator is busy; please try again in a minute.");
         {
             n = notes.Get(noteId)!;
             if (Cached(n) is { } again) return again;
@@ -70,7 +70,6 @@ public sealed class ENotePdfService(Db db, ENoteRepository notes, IntranetOption
             audit.Log("ENote.PdfGenerated", "ENote", n.Id, $"{n.DisplayNumber}: {n.FinalLabel}; PDF SHA-256 {sha}; record SHA-256 {hash}");
             return (full, sha);
         }
-        finally { Gate.Release(); }
     }
 
     private (string, string)? Cached(ENote n)

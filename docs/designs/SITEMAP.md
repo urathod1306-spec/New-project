@@ -42,3 +42,6 @@ Design documents in the Elephant–Goldfish Model (EGM) style: each explains *wh
 | Green sheet | NABARD/NABCONS name for the paper note-sheet that e-Note replaces |
 | EGM / Elephant / Goldfish | Elephant–Goldfish Model: the author (Elephant, full context) writes the design; fresh reviewers with no context (Goldfish) check it |
 | YAGNI | "You aren't gonna need it": do not build for speculative future needs |
+
+## Release 1.6.0 — Compliance Management
+Design: [DD-07-compliance-and-inward.md](DD-07-compliance-and-inward.md) (R1 built in 1.6.0; R2 Inward Register is an outline for a later release). Reviews: `reviews/2026-11-08_DD-07_G1_comprehension_report.md`, `reviews/DD-07_consolidated_review_report.md`.

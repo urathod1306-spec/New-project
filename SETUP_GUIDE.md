@@ -1,5 +1,18 @@
 # NABCONS Intranet — Setup Guide
 
+## Upgrading to 1.6.0 (from 1.5.x): Compliance Management
+
+1. Download `release/NABCONS-Intranet-v1.6.0-win-x64.zip` and check its SHA-256. Extract it to a new folder, then right-click `Upgrade-Existing-Intranet.bat` → *Run as administrator*. The database goes from schema 6 to 7 after a full backup; nothing existing is changed and your settings are kept.
+2. Check *Administration → System information*: version 1.6.0, schema 7.
+3. Create the first Compliance Admin: in the live program folder run `Grant-Compliance-Admin.bat` and type the sign-in name of the Company Secretary (or whoever leads the Compliance Cell). That person then adds the others on *Compliance → Access*. Appoint at least two Compliance Admins.
+4. Optional: review the forum and category lists (*Administration → Master lists → Compliance forums / bodies*, *Compliance categories*) and the `Compliance` settings (Deployment Guide, section 5).
+5. Tell officers: see *Compliance* in `docs/STAFF-GUIDE.md`.
+
+Roll back with `Rollback-Upgrade.bat`; version 1.5.0 runs on the upgraded database.
+
+---
+
+
 ## Upgrading to 1.5.0 (from 1.4.x): review fixes
 
 1. Download `release/NABCONS-Intranet-v1.5.0-win-x64.zip` and check its SHA-256. Extract it to a new folder, then right-click `Upgrade-Existing-Intranet.bat` → *Run as administrator*. There is **no database change** (schema stays 6) and no new setting; your `appsettings.json` is kept.

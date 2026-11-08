@@ -1,5 +1,29 @@
 # Changelog — NABCONS Intranet
 
+## 1.6.0 — 2026-11-08
+**Upgrade note:** database schema 6 → 7 (additive only: new compliance tables; `NabconsIntranet.exe --migrate` takes a backup first). The new `Compliance` settings section is optional. No new program files or DLLs except `Grant-Compliance-Admin.bat`.
+
+Built with Google's *Elephant–Goldfish Model*: design document `docs/designs/DD-07-compliance-and-inward.md` written first (Elephant), tested by fresh reviewers in two rounds (comprehension, critic, implementation readiness; 108 points, all resolved — `docs/designs/reviews/DD-07_consolidated_review_report.md`), then built from the document and given a hostile code review.
+
+### Added — Compliance Management (new **Compliance** tab)
+- **Events and action points.** The Compliance Cell registers Board and committee meetings, NABARD inspections, statutory/C&AG audits, internal audits and review meetings, and records the action points under each: reference (memorandum, agenda, para), text, category, priority, owner vertical, primary and supporting dealing officers, due date and amount. Points are numbered `CMP/<FY>/00001`.
+- **Bulk import** from a CSV template (Excel → *Save as CSV UTF-8*): preview with row-by-row checks, then all rows or none; the same file cannot be imported twice. The file is read in memory and never kept.
+- **Periodic compliance.** Officers submit dated updates (ongoing, pending with an external party, or complied — propose closure). The Cell accepts them, editing the wording printed in the ATR if needed, or returns them with remarks. The officer's text is never changed.
+- **Due dates.** Officers request a new date with a reason; the Cell decides. The original due date is never overwritten.
+- **Closure.** Only the Cell closes, drops or merges a point, always with a closure authority (e.g. "taken on record by the Board"). Points can be reopened with a reason.
+- **Monitoring.** Dashboard with open, overdue, due-soon and awaiting-review counts; source × status matrix; ageing; by vertical and by officer; points closed per month. Drill-down list with filters and Excel export (₹ or ₹ lakh).
+- **Action Taken Reports** in Word (editable), PDF and Excel, A4 landscape, "Status as on", page x of y:
+  - Board / committee ATR with Annexure I (latest meeting) and Annexures II, III… (earlier meetings with open points, including *"Action presented in previous meeting"*) and Completed / Ongoing / Total summaries;
+  - Observation – reply (statutory, C&AG, NABARD inspection);
+  - Internal-audit compliance sheet with dealing person and New / Old.
+- **Final ATRs.** Preview, then *Mark as final — submitted to {forum} on {date}*: the exact content is kept as an unchangeable snapshot, with its SHA-256 recorded in the audit log. It can be downloaded again at any time and comes out identical; the next ATR takes "previous meeting" text from it. No report file is stored.
+- **My Desk and reminders.** Officers see points that are overdue, due soon, returned or awaiting an update; the Cell sees its queue. Daily in-app reminders (one summary per officer) and a Cell digest; the Compliance tab has a live badge through the existing poll.
+- **Access and confidentiality.** Compliance access is granted only by the Compliance Cell (the intranet Administrator cannot give it); the first Compliance Admin is created with `Grant-Compliance-Admin.bat`. Board and Audit Committee events, and events marked confidential, are visible only to the Cell, Compliance Viewers and the assigned officers. Cell members cannot act on their own points. Notifications and the audit log carry numbers, not text.
+- **Register only.** No upload, attachment or file storage anywhere in the module; a guard refuses uploads on compliance pages.
+
+### Also
+- Shared report writers for Word, PDF and Excel (no new packages); the e-Note PDF now shares the same font code and generation limit.
+
 ## 1.5.0 — 2026-11-01
 **Upgrade note:** no database change (schema stays 6) and no new settings. Program files only; roll back to 1.4.0 at any time.
 

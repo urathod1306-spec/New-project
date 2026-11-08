@@ -1,6 +1,6 @@
 # DD-07 — Compliance Management (R1 = 1.6.0) and Inward Register with Invoice Inward (R2 = 1.7.0)
 
-**Status:** v2.1 — R1 revised after Goldfish round 1 and the round-2 readiness pass (G1 comprehension, G2 critic, G3 readiness; resolutions in `docs/designs/reviews/DD-07_consolidated_review_report.md`). R2 is an **outline** that needs its own interview and Elephant pass before it can be built (§16).
+**Status:** v2.2 — R1 **implemented in release 1.6.0** (this document describes what was built); revised after Goldfish round 1, the round-2 readiness pass and the post-build mean review (G1 comprehension, G2 critic, G3 readiness; resolutions in `docs/designs/reviews/DD-07_consolidated_review_report.md`). R2 is an **outline** that needs its own interview and Elephant pass before it can be built (§16).
 **Author:** Elephant session · **Date:** 08.11.2026 · **Baseline:** release 1.5.0, schema 6.
 
 This document is the single source of truth for R1. An engineer, or a fresh AI session, should be able to build R1 from it without the conversation. Existing behaviour is cited by file. Paths are relative to `src/NabconsIntranet/` unless they start with `docs/` or `tests/`.
@@ -339,7 +339,7 @@ All routes are under `/Compliance`. A **Compliance** menu tab appears for the pe
 
 | Route | Who | Content and actions |
 |---|---|---|
-| `/Compliance` | CA, CV, AU | **Dashboard.** Officers with no viewing grant are redirected to `/Compliance/Mine`.<br>**Tiles:** Open; Overdue; Due within `DueSoonDays`; Due within 30 days; Awaiting review; Revision requests; Proposed for closure; *Officer inactive* (open points whose primary officer's account is deactivated).<br>**Breakdowns:**<ul><li>a source type × status matrix, each cell linking to the Points list;</li><li>ageing since `RaisedOn` (0–30, 31–90, 91–180, 181–365, >365 days);</li><li>overdue ageing (1–30, 31–90, >90 days);</li><li>by vertical;</li><li>by officer (top 20);</li><li>closed per month over the last 12 months, drawn as bars with CSS width classes in 5 % steps (no inline styles).</li></ul>**Warning** when fewer than two CAs are active. |
+| `/Compliance` | CA, CV, AU | **Dashboard.** Officers with no viewing grant are redirected to `/Compliance/Mine`.<br>**Tiles:** Open; Overdue; Due within `DueSoonDays`; Due within 30 days; Awaiting review; Revision requests; Proposed for closure; *Officer inactive* (open points whose primary officer's account is deactivated).<br>**Breakdowns:**<ul><li>a source type × status matrix, each cell linking to the Points list;</li><li>ageing since `RaisedOn` (0–30, 31–90, 91–180, 181–365, >365 days);</li><li>overdue ageing (1–30, 31–90, >90 days);</li><li>by vertical;</li><li>by officer (top 20);</li><li>closed per month over the last 12 months, drawn with HTML `<progress>` bars as on the Leads dashboard (no inline styles, CSP-safe).</li></ul>**Warning** when fewer than two CAs are active. |
 | `/Compliance/Points` | CA, CV, AU | 50 rows per page.<br>**Filters:** source type, forum, event, status (open, overdue, due-soon, due30, awaiting, proposed, completed, dropped, merged, all), vertical, primary officer, category, priority, text (number, reference or point text, via `LIKE`).<br>**Export** (`?handler=Export`): XLSX of the filtered rows, at most 10,000; if there are more, the user is asked to narrow the filter. |
 | `/Compliance/Mine` | anyone with points | Own points: open first (overdue, then due soon, then returned updates flagged), then points closed in the last 90 days. |
 | `/Compliance/Events` | CA, CV, AU | Visible events, filtered by source type, forum and year, with open/total counts. CA sees a *New event* button. |
@@ -607,8 +607,8 @@ All settings are optional: the owner's existing file needs no change. This follo
 | 2 | `Infrastructure/Notifications.cs` | Add the "Compliance" label and `ChangeTracker.ComplianceQueue = "t:compliance"`. |
 | 3 | `Data/Models.cs` | Add `MasterTypes.ComplianceForum` and `ComplianceCategory`, with labels. |
 | 4 | `Infrastructure/Helpers.cs` | Add `Fmt.DateDot(iso)` (dd.MM.yyyy) and `Fmt.Lakh(amount)`. |
-| 5 | `Infrastructure/Reports/*`, `Infrastructure/PdfFonts.cs`, `Infrastructure/ENotePdf.cs` | **Done:** writers, gate, shared fonts. Remaining: `ENotePdfService` uses `ReportGate`. |
-| 6 | `Data/Compliance.cs` (new) | Codes, `ComplianceOptions` (with `Resolve()`), entities, `ComplianceAccess` (membership cache reloaded on change; `VisibleSql`; checks per action), `ComplianceRepository`, `ComplianceWorkflow` (§3.3, notifications, history, audit, `DailyReminders`). |
+| 5 | `Infrastructure/Reports/*`, `Infrastructure/PdfFonts.cs`, `Infrastructure/ENotePdf.cs` | Writers (`DocxWriter`, `ReportPdfWriter`, `XlsxBookWriter`), `ReportGate`, shared fonts; `ENotePdfService` uses `ReportGate`. |
+| 6 | `Data/Compliance.cs`, `Data/ComplianceRepository.cs`, `Data/ComplianceWorkflow.cs` (new) | Codes, `ComplianceOptions` (with `Resolve()`), entities, `ComplianceAccess` (grant cache reloaded on change; visibility SQL; per-action checks) in the first; read queries in the second; every state change, numbering, notifications, history, audit and `DailyReminders` in the third. |
 | 7 | `Data/ComplianceImport.cs` (new) | Template, parsing and validation. |
 | 8 | `Data/AtrBuilder.cs` (new) | The three templates, the as-on rule, previous-snapshot lookup, content hash, snapshot save, load, regenerate and void. |
 | 9 | `Infrastructure/ComplianceScheduler.cs` (new) | Hosted daily job. |
@@ -617,9 +617,9 @@ All settings are optional: the owner's existing file needs no change. This follo
 | 12 | `Data/Desk.cs`, `Infrastructure/Endpoints.cs`, `Pages/Desk/Index.cshtml`, `Pages/Shared/_Layout.cshtml`, `wwwroot/js/site.js` | Counts, cache keys, token, poll JSON, desk sections, tab and badge list. |
 | 13 | `Pages/Admin/UserEdit.cshtml.cs` | When an administrator resets a compliance member's password, or gives anyone the Auditor role, notify the CAs (the notification opens its own transaction). |
 | 14 | `Pages/Compliance/*` (new) | The pages in §6, plus a shared `_ComplianceTabs.cshtml`. |
-| 15 | `wwwroot/css/site.css` | Tiles, matrix, bar width classes `w-0` to `w-100` in steps of 5. |
+| 15 | `wwwroot/css/site.css` | A few classes for tiles, highlighted cards and summary tables (bars use `<progress>`). |
 | 16 | `Infrastructure/Seeder.cs` | Demo data on **new empty databases only**: user `cs` (CA), `coo` given a CV grant, two synthetic events with points. |
-| 17 | Tests | `ComplianceTests.cs` (new), `ReportWriterTests.cs` (**written**), `BoardTests.cs` (schema assertion becomes `>= 6`), `tests/e2e/compliance.e2e.js` + `run-all.sh`, compliance budgets in `PerformanceTests`/`BenchSeed`. |
+| 17 | Tests | `ComplianceTests.cs`, `ReportWriterTests.cs`, `ComplianceBenchTests.cs` (budgets at design volume, `NABCONS_BENCH=1`), `BoardTests.cs` (schema assertion becomes `>= 6`), `tests/e2e/compliance.e2e.js` + `run-all.sh`. |
 | 18 | Docs | `CHANGELOG.md`, `README.md`, `SETUP_GUIDE.md`, `TESTING_CHECKLIST.md`, `docs/ADMIN-GUIDE.md`, `docs/STAFF-GUIDE.md`, `docs/IT-SECURITY-NOTE.md` (grants, residual database-file risk), `docs/DEPLOYMENT-GUIDE.md` (settings, grant command), `docs/UPGRADE-GUIDE.md`, `docs/TEST-SCRIPT.md` (rows and p95 results), `docs/SBOM.md` (no new package), `docs/designs/SITEMAP.md`, `PLATFORM.md` (migration 7), `DESK-NOTIFICATIONS.md`. |
 | 19 | `NabconsIntranet.csproj` | Version 1.6.0. Rebuild the package and remove the 1.5.0 ZIP. |
 
