@@ -524,7 +524,7 @@ The export has the following columns:
   - **Overdue:** `CurrentDueDate < today` and (`LastOverdueReminderOn` is null, or ≤ today − `OverdueRepeatDays`).
   - **Update due:** `NextUpdateDue ≤ today`, there is no pending update, and `UpdateRemindedFor ≠ NextUpdateDue`.
 
-  The point's markers are set in the same transaction as the notification. Points are processed in batches of 200 per transaction.
+  The candidates are read first; their markers are then set in short transactions of 200 points each, and the per-officer summaries and the Cell digest are written in one final short transaction (so the write lock is never held for long).
 - **Example.** With today = 10.11 and due = 11.11, the point is "due tomorrow" (not "due soon"). On 12.11 it is "overdue".
 - **Return value.** The job returns counts only.
 
@@ -608,7 +608,7 @@ All settings are optional: the owner's existing file needs no change. This follo
 | 3 | `Data/Models.cs` | Add `MasterTypes.ComplianceForum` and `ComplianceCategory`, with labels. |
 | 4 | `Infrastructure/Helpers.cs` | Add `Fmt.DateDot(iso)` (dd.MM.yyyy) and `Fmt.Lakh(amount)`. |
 | 5 | `Infrastructure/Reports/*`, `Infrastructure/PdfFonts.cs`, `Infrastructure/ENotePdf.cs` | Writers (`DocxWriter`, `ReportPdfWriter`, `XlsxBookWriter`), `ReportGate`, shared fonts; `ENotePdfService` uses `ReportGate`. |
-| 6 | `Data/Compliance.cs`, `Data/ComplianceRepository.cs`, `Data/ComplianceWorkflow.cs` (new) | Codes, `ComplianceOptions` (with `Resolve()`), entities, `ComplianceAccess` (grant cache reloaded on change; visibility SQL; per-action checks) in the first; read queries in the second; every state change, numbering, notifications, history, audit and `DailyReminders` in the third. |
+| 6 | `Data/Compliance.cs`, `Data/ComplianceRepository.cs`, `Data/ComplianceWorkflow.cs` (new) | Codes, `ComplianceOptions` (with `Resolve()`), entities, `ComplianceAccess` (grant cache reloaded on every in-process change and at most 30 seconds old, so a grant by the server command or a deactivation takes effect without a restart; visibility SQL; per-action checks) in the first; read queries in the second; every state change, numbering, notifications, history, audit and `DailyReminders` in the third. |
 | 7 | `Data/ComplianceImport.cs` (new) | Template, parsing and validation. |
 | 8 | `Data/AtrBuilder.cs` (new) | The three templates, the as-on rule, previous-snapshot lookup, content hash, snapshot save, load, regenerate and void. |
 | 9 | `Infrastructure/ComplianceScheduler.cs` (new) | Hosted daily job. |

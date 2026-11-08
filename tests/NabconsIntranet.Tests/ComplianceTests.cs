@@ -354,7 +354,7 @@ public class ComplianceTests : IDisposable
         var bad = "ActionPoint,PrimaryOfficer,DueDate\nGood,staff,31.12.2026\nBad,nobody,31.12.2026\n";
         Assert.Equal(HttpStatusCode.Redirect, (await c.PostAsync($"/Compliance/Import?eventId={ev}&handler=Confirm", Multipart(token, ("eventId", ev.ToString()), ("csv", bad)))).StatusCode);
         Assert.Equal(2, R.EventPoints(ev, P("cs")).Count);
-        _ = again;
+        Assert.Equal(HttpStatusCode.Redirect, again.StatusCode);
     }
 
     [Fact]
@@ -481,5 +481,94 @@ public class ComplianceTests : IDisposable
         Assert.Equal("application/vnd.openxmlformats-officedocument.wordprocessingml.document", docx.Content.Headers.ContentType!.MediaType);
         var export = await cs.GetAsync("/Compliance/Points?handler=Export&status=all");
         Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+    }
+    // ------------------------------------------------------------------ further transitions (post-build review R-7)
+
+    [Fact]
+    public void Edits_of_events_and_points_are_recorded_with_old_and_new_values()
+    {
+        var ev = Event();
+        var id = Point(ev);
+        var e = R.Event(ev)!;
+        W.UpdateEvent(ev, new ComplianceEventInput { SourceType = e.SourceType, ForumId = e.ForumId, Title = e.Title, HeldOn = e.HeldOn, ReportingCycle = ComplianceCycle.Monthly }, e.RowVersion, P("cs"));
+        Assert.Throws<WorkflowException>(() => W.UpdateEvent(ev, new ComplianceEventInput { SourceType = ComplianceSource.Board, ForumId = e.ForumId, Title = e.Title, HeldOn = e.HeldOn }, R.Event(ev)!.RowVersion, P("cs")));   // type fixed once points exist
+        Assert.NotNull(R.Point(id)!.NextUpdateDue);                                            // monthly cycle now asks for updates
+        W.UpdatePoint(id, new CompliancePointInput { PointText = "Reconcile the register (revised)", PrimaryOfficerUserId = _app.User("staff").Id, Priority = "High" }, Rv(id), P("cs"));
+        var edit = R.History(id).Last(h => h.Action == "Edited");
+        Assert.Contains("Reconcile the fixed asset register with the books", edit.Detail);
+        Assert.Contains("Reconcile the register (revised)", edit.Detail);
+        Assert.Equal("High", R.Point(id)!.Priority);
+    }
+
+    [Fact]
+    public void Reassign_reject_proposal_withdraw_and_reject_revision()
+    {
+        var id = Point(Event(), "staff");
+        W.Reassign(id, _app.User("approver1").Id, new() { _app.User("staff").Id }, Rv(id), P("cs"));
+        Assert.Equal(_app.User("approver1").Id, R.Point(id)!.PrimaryOfficerUserId);
+        Assert.Single(R.SupportOfficers(id));
+        Assert.Throws<WorkflowException>(() => W.Reassign(id, _app.User("cs").Id, new(), Rv(id), P("cs")));      // not to yourself
+        var u = W.SubmitUpdate(id, D(0), "Done", CStatus.ProposedClosure, null, Rv(id), P("staff"));                  // supporting officers may submit
+        W.AcceptUpdate(id, u, null, Rv(id), P("cs"));
+        Assert.Throws<WorkflowException>(() => W.RejectClosureProposal(id, "", Rv(id), P("cs")));                     // remarks required
+        W.RejectClosureProposal(id, "Board has not yet taken it on record", Rv(id), P("cs"));
+        Assert.Equal(CStatus.Ongoing, R.Point(id)!.Status);
+        var r1 = W.RequestRevision(id, D(40), "More time", Rv(id), P("approver1"));
+        Assert.Throws<WorkflowException>(() => W.WithdrawRevision(id, r1, P("staff")));                              // not the requester
+        W.WithdrawRevision(id, r1, P("approver1"));
+        Assert.Equal("Withdrawn", R.Revision(r1)!.Status);
+        var r2 = W.RequestRevision(id, D(40), "More time", Rv(id), P("approver1"));
+        Assert.Throws<WorkflowException>(() => W.DecideRevision(id, r2, false, null, Rv(id), P("cs")));              // reject needs remarks
+        W.DecideRevision(id, r2, false, "Not justified", Rv(id), P("cs"));
+        Assert.Equal("Rejected", R.Revision(r2)!.Status);
+        Assert.Equal(D(30), R.Point(id)!.CurrentDueDate);
+    }
+
+    [Fact]
+    public void Transfer_plan_and_existing_supporting_officer()
+    {
+        var ev = Event();
+        var a = W.CreatePoint(ev, new CompliancePointInput { PointText = "A", PrimaryOfficerUserId = _app.User("approver1").Id, SupportOfficerIds = { _app.User("approver2").Id }, DueDate = D(9) }, P("cs"));
+        var plan = W.PlanTransfer(_app.User("approver1").Id, "both", P("cs"));
+        Assert.True(plan.Primary >= 1);
+        W.Transfer(_app.User("approver1").Id, _app.User("approver2").Id, "primary", P("cs"));
+        Assert.Equal(_app.User("approver2").Id, R.Point(a)!.PrimaryOfficerUserId);
+        Assert.Empty(R.SupportOfficers(a));                                                     // the new primary is no longer listed as supporting
+    }
+
+    [Fact]
+    public void Inactive_officers_get_no_reminders_and_the_daily_run_happens_once()
+    {
+        using var app = new TestApp(("Compliance__ReminderHour", "0"));
+        var w = app.Get<ComplianceWorkflow>();
+        var ev = w.CreateEvent(new ComplianceEventInput { SourceType = ComplianceSource.Other, ForumId = app.Get<MasterRepository>().List(MasterTypes.ComplianceForum).First().Id, Title = "x", HeldOn = "2026-09-01" }, app.Principal("cs"));
+        w.CreatePoint(ev, new CompliancePointInput { PointText = "x", PrimaryOfficerUserId = app.User("bdu").Id, DueDate = "2026-01-01" }, app.Principal("cs"));
+        app.Get<Db>().Exec("UPDATE Users SET IsActive = 0 WHERE Username = 'bdu'");
+        app.Get<Db>().Exec("DELETE FROM ComplianceState");
+        Assert.NotNull(w.RunDailyIfDue());
+        Assert.Null(w.RunDailyIfDue());                                                          // once per office day
+        Assert.Equal(0, app.Get<Db>().Scalar<long>("SELECT COUNT(*) FROM Notifications WHERE Type = 'Compliance.Reminder' AND UserId = @u", new { u = app.User("bdu").Id }));
+    }
+
+    [Fact]
+    public void Deactivating_a_Compliance_Admin_removes_access_at_once()
+    {
+        W.GrantCore(_app.User("approver2").Id, ComplianceGrant.Admin, "test");
+        Assert.True(_app.Get<ComplianceAccess>().IsAdmin(P("approver2")));
+        Db.Exec("UPDATE Users SET IsActive = 0 WHERE Username = 'approver2'");
+        W.UserChanged();
+        Assert.False(_app.Get<ComplianceAccess>().IsAdmin(P("approver2")));
+    }
+
+    [Fact]
+    public void A_double_click_on_final_and_a_second_void_are_refused()
+    {
+        var (older, newer) = BoardPack();
+        var opt = new AtrOptions { Template = AtrTemplate.BoardAtr, EventIds = { older, newer }, AsOn = D(0) };
+        var b = Atr.Build(opt, P("cs"));
+        var id = Atr.Finalise(opt, b.Hash, "Audit Committee", D(0), P("cs"));
+        Assert.Throws<WorkflowException>(() => Atr.Finalise(opt, b.Hash, "Audit Committee", D(0), P("cs")));
+        Atr.Void(id, "Wrong forum", P("cs"));
+        Assert.Throws<WorkflowException>(() => Atr.Void(id, "again", P("cs")));
     }
 }

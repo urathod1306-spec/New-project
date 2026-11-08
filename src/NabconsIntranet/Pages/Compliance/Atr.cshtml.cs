@@ -41,7 +41,8 @@ public class AtrModel(ComplianceRepository repo, AtrBuilder atr, ComplianceOptio
         if (Template == null && Events.Count > 0) Template = ComplianceSource.Template(Choices.First(c => c.Id == Events[0]).SourceType);
         AsOn ??= F.Today.ToString("yyyy-MM-dd");
         Officer ??= o.DefaultOfficerCodeFormat;
-        if (Since == null && Events.Count > 0 && Request.Query["since"].Count == 0)
+        // default only when the form has not been submitted yet (an empty field means "none" and must stay so for Mark as final)
+        if (Since == null && Events.Count > 0 && HttpMethods.IsGet(Request.Method) && Request.Query["since"].Count == 0)
         {
             var newest = Choices.Where(c => Events.Contains(c.Id)).OrderByDescending(c => c.DateKey ?? "").First();
             Since = atr.DefaultCompletedSince(Template ?? AtrTemplate.BoardAtr, newest.ForumId, AsOn);

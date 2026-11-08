@@ -538,6 +538,8 @@ public static class Schema
             CREATE INDEX IF NOT EXISTS IX_CPoints_Vertical ON CompliancePoints(OwnerVertical, Status);
             CREATE INDEX IF NOT EXISTS IX_CPoints_Closed ON CompliancePoints(ClosedAt) WHERE ClosedAt IS NOT NULL;
             CREATE INDEX IF NOT EXISTS IX_CPoints_Carried ON CompliancePoints(CarriedFromId) WHERE CarriedFromId IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS IX_CPoints_PendingUpdate ON CompliancePoints(PendingUpdateId) WHERE PendingUpdateId IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS IX_CPoints_PendingRevision ON CompliancePoints(PendingRevisionId) WHERE PendingRevisionId IS NOT NULL;
             CREATE TRIGGER IF NOT EXISTS CompliancePoints_fixed BEFORE UPDATE OF Number, FinancialYear, EventId, OriginalDueDate ON CompliancePoints
             WHEN new.Number IS NOT old.Number OR new.FinancialYear IS NOT old.FinancialYear OR new.EventId IS NOT old.EventId OR new.OriginalDueDate IS NOT old.OriginalDueDate
             BEGIN SELECT RAISE(ABORT, 'The number, event and original due date of an action point never change'); END;
@@ -629,6 +631,8 @@ public static class Schema
                 ImportedAt TEXT NOT NULL,
                 UNIQUE (EventId, Sha256)
             );
+            CREATE TRIGGER IF NOT EXISTS ComplianceImports_no_update BEFORE UPDATE ON ComplianceImports BEGIN SELECT RAISE(ABORT, 'The import register is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceImports_no_delete BEFORE DELETE ON ComplianceImports BEGIN SELECT RAISE(ABORT, 'The import register is append-only'); END;
 
             CREATE TABLE IF NOT EXISTS ComplianceSnapshots (
                 Id INTEGER PRIMARY KEY,

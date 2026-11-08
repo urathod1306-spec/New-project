@@ -17,7 +17,7 @@ public class TransferModel(ComplianceRepository repo, ComplianceWorkflow workflo
     {
         if (!Access.IsAdmin(User)) return NotFound();
         Users = repo.ActiveUsers();
-        AllUsers = Users;
+        AllUsers = repo.AllUsers();
         return null;
     }
 

@@ -94,6 +94,10 @@ public sealed class ComplianceRepository(Db db, ComplianceAccess access, Complia
     public List<PersonOption> SupportOfficers(long pointId) => db.Query<PersonOption>(
         "SELECT u.Id, u.DisplayName, u.Username FROM ComplianceSupportOfficers s JOIN Users u ON u.Id = s.UserId WHERE s.PointId = @pointId ORDER BY u.DisplayName", new { pointId });
 
+    /// <summary>Everyone, including deactivated users (marked), e.g. to transfer the points of an officer who has left.</summary>
+    public List<PersonOption> AllUsers() => db.Query<PersonOption>(
+        "SELECT Id, DisplayName || CASE WHEN IsActive = 0 THEN ' (inactive)' ELSE '' END AS DisplayName, Username FROM Users ORDER BY IsActive DESC, DisplayName");
+
     public List<PersonOption> ActiveUsers() => db.Query<PersonOption>("SELECT Id, DisplayName, Username FROM Users WHERE IsActive = 1 ORDER BY DisplayName");
 
     // ---------------------------------------------------------------- events
@@ -111,7 +115,7 @@ public sealed class ComplianceRepository(Db db, ComplianceAccess access, Complia
               (SELECT COUNT(*) FROM CompliancePoints p WHERE p.EventId = e.Id AND p.Status IN {CStatus.OpenSql} AND {countVis}) AS OpenCount,
               (SELECT COUNT(*) FROM CompliancePoints p WHERE p.EventId = e.Id AND {countVis}) AS TotalCount
             FROM ComplianceEvents e WHERE {string.Join(" AND ", where)}
-            ORDER BY COALESCE(e.HeldOn, e.PeriodTo, e.ReportReceivedOn, e.CreatedAt) DESC, e.Id DESC LIMIT 500
+            ORDER BY COALESCE(e.HeldOn, e.PeriodTo, e.ReportReceivedOn, e.CreatedAt) DESC, e.Id DESC LIMIT 5000
             """, new { uid = u.UserId(), source, forumId, year });
     }
 

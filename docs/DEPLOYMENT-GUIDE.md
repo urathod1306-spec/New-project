@@ -116,7 +116,7 @@ Edit with Notepad, save, then restart the intranet (close and reopen the window,
 | `Compliance:DefaultOfficerCodeFormat` | `Code` | Dealing person in the internal-audit sheet: `Code`, `Name` or `NameAndCode` |
 | `DataFolder`, `DocumentsFolder`, `BackupFolder`, `LogFolder` | relative | May be absolute paths, e.g. `D:\\NABCONSData\\documents` |
 
-**Compliance access (v1.6).** Compliance is not given through the intranet roles: Compliance Admins (the Compliance Cell) grant it on *Compliance → Access*. To create the **first** Compliance Admin (or recover when none is left), run `Grant-Compliance-Admin.bat` in the program folder on the server and type the person's sign-in name (in Windows mode they must have signed in once). The grant is audited and existing Compliance Admins are notified.
+**Compliance access (v1.6).** Compliance is not given through the intranet roles: Compliance Admins (the Compliance Cell) grant it on *Compliance → Access*. To create the **first** Compliance Admin (or recover when none is left), run `Grant-Compliance-Admin.bat` in the program folder on the server and type the person's sign-in name (in Windows mode they must have signed in once). The grant is audited, existing Compliance Admins are notified, and it takes effect within 30 seconds (no restart needed).
 
 The `Notifications`, `ENote`, (from 1.4) `MessageBoard` and (from 1.6) `Compliance` sections sit at the top level of `appsettings.json`, next to `"Intranet"`. If a section or setting is missing, the default above applies.
 

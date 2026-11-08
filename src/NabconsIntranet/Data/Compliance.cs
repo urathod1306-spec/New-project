@@ -345,13 +345,27 @@ public sealed class PersonOption
 /// </summary>
 public sealed class ComplianceAccess(Db db, ComplianceOptions o)
 {
+    // Grants are cached for at most 30 seconds, so changes made outside this process (the --grant-compliance-admin
+    // command) or by deactivating/reactivating a user take effect without a restart; in-process changes call Invalidate().
     private volatile Dictionary<long, string>? _grants;
+    private long _loadedTicks;
+    private static readonly long Ttl = TimeSpan.FromSeconds(30).Ticks;
 
     public ComplianceOptions Options => o;
 
-    private Dictionary<long, string> Grants => _grants ??= db.Query<ComplianceMember>(
-            "SELECT m.UserId, m.Role FROM ComplianceMembers m JOIN Users u ON u.Id = m.UserId WHERE u.IsActive = 1")
-        .ToDictionary(m => m.UserId, m => m.Role);
+    private Dictionary<long, string> Grants
+    {
+        get
+        {
+            var g = _grants;
+            if (g != null && DateTime.UtcNow.Ticks - Interlocked.Read(ref _loadedTicks) < Ttl) return g;
+            g = db.Query<ComplianceMember>("SELECT m.UserId, m.Role FROM ComplianceMembers m JOIN Users u ON u.Id = m.UserId WHERE u.IsActive = 1")
+                .ToDictionary(m => m.UserId, m => m.Role);
+            Interlocked.Exchange(ref _loadedTicks, DateTime.UtcNow.Ticks);
+            _grants = g;
+            return g;
+        }
+    }
 
     public void Invalidate() => _grants = null;
 

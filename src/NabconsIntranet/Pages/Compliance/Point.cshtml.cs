@@ -57,9 +57,9 @@ public class PointModel(ComplianceRepository repo, ComplianceWorkflow workflow) 
 
     public IActionResult OnPostUpdate(long id, string? asOn, string? text, string? proposed, string? papers, long rv) =>
         Act(id, () => workflow.SubmitUpdate(id, asOn, text, proposed, papers, rv, User), "Compliance submitted to the Compliance Cell for review.");
-    public IActionResult OnPostWithdrawUpdate(long id, long updateId) => Act(id, () => workflow.WithdrawUpdate(id, updateId, User), "Update withdrawn.");
+    public IActionResult OnPostWithdrawUpdate(long id, long updateId, long rv) => Act(id, () => workflow.WithdrawUpdate(id, updateId, User, rv), "Update withdrawn.");
     public IActionResult OnPostRevision(long id, string? newDate, string? reason, long rv) => Act(id, () => workflow.RequestRevision(id, newDate, reason, rv, User), "New due date requested.");
-    public IActionResult OnPostWithdrawRevision(long id, long revisionId) => Act(id, () => workflow.WithdrawRevision(id, revisionId, User), "Request withdrawn.");
+    public IActionResult OnPostWithdrawRevision(long id, long revisionId, long rv) => Act(id, () => workflow.WithdrawRevision(id, revisionId, User, rv), "Request withdrawn.");
     public IActionResult OnPostAccept(long id, long updateId, string? atrText, long rv) => Act(id, () => workflow.AcceptUpdate(id, updateId, atrText, rv, User), "Update accepted.");
     public IActionResult OnPostReturn(long id, long updateId, string? remarks, long rv) => Act(id, () => workflow.ReturnUpdate(id, updateId, remarks, rv, User), "Update returned to the officer.");
     public IActionResult OnPostRejectProposal(long id, string? remarks, long rv) => Act(id, () => workflow.RejectClosureProposal(id, remarks, rv, User), "Closure proposal not accepted; the point is ongoing.");

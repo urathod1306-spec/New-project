@@ -254,10 +254,10 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
 
     private List<ComplianceQueueRow> CellRows(ClaimsPrincipal u)
     {
-        var (updates, revisions, proposed, _) = complianceRepo.Queue(u, 10);
+        var (updates, revisions, proposed, _) = complianceRepo.Queue(u, 60);
         return updates.Select(r => { r.Detail = "Update awaiting review"; return r; })
             .Concat(revisions.Select(r => { r.Detail = "New due date requested: " + r.Detail; return r; }))
             .Concat(proposed.Select(r => { r.Detail = "Proposed for closure"; return r; }))
-            .Where(r => !r.Own).Take(10).ToList();
+            .Where(r => !r.Own).DistinctBy(r => r.PointId).Take(10).ToList();
     }
 }

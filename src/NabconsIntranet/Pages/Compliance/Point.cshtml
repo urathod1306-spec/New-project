@@ -59,7 +59,7 @@
                 @if (!string.IsNullOrEmpty(u.PapersKeptAt)) { <p class="small">Papers kept at: @u.PapersKeptAt</p> }
                 @if (u.SubmittedByUserId == User.UserId())
                 {
-                    <form method="post" asp-page-handler="WithdrawUpdate"><input type="hidden" name="updateId" value="@u.Id" /><button class="btn small" type="submit">Withdraw this update</button></form>
+                    <form method="post" asp-page-handler="WithdrawUpdate"><input type="hidden" name="updateId" value="@u.Id" /><input type="hidden" name="rv" value="@rv" /><button class="btn small" type="submit">Withdraw this update</button></form>
                 }
                 @if (Model.CanCell && u.SubmittedByUserId != User.UserId())
                 {
@@ -131,7 +131,7 @@
             @if (Model.PendingRevision is { } pr)
             {
                 <div class="alert info">Requested by @pr.RequestedByName: @F.DateDot(pr.OldDate) → <strong>@F.DateDot(pr.NewDate)</strong><div class="pre small">@pr.Reason</div></div>
-                @if (pr.RequestedByUserId == User.UserId()) { <form method="post" asp-page-handler="WithdrawRevision"><input type="hidden" name="revisionId" value="@pr.Id" /><button class="btn small" type="submit">Withdraw request</button></form> }
+                @if (pr.RequestedByUserId == User.UserId()) { <form method="post" asp-page-handler="WithdrawRevision"><input type="hidden" name="revisionId" value="@pr.Id" /><input type="hidden" name="rv" value="@rv" /><button class="btn small" type="submit">Withdraw request</button></form> }
                 @if (Model.CanCell)
                 {
                     <form method="post" asp-page-handler="Decide">

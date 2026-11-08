@@ -117,3 +117,28 @@ Verdict: R1 almost buildable in one pass; 2 blocking gaps, 19 clarifications. Al
 | R2G3-21 | R2 fenced | — | Confirmed |
 
 No blocking questions remain for R1. Implementation proceeds from v2.1.
+
+## Post-build — Prompt R (hostile review of the 1.6.0 diff)
+
+A fresh reviewer read DD-07 and `git diff origin/main..HEAD`. It confirmed the clean areas: parameterised SQL, no inline script or style, no outbound calls or new packages, no file storage (the CSV stays in memory), append-only triggers, audit texts without compliance content, 404 on every handler for anything not visible, and no restricted-data leaks through lists, counts, exports, ATRs, snapshots, notifications, My Desk or the poll. It reported 18 findings, all resolved:
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| R-1 | High | Grant cache never refreshed for the server command or user (de)activation | Cache at most 30 s old; `UserChanged()` on user edits; test `Deactivating_a_Compliance_Admin_removes_access_at_once` |
+| R-2 | High | Merge target checked outside the transaction; target history in a second transaction | Target re-read, checked and its history written inside the merge transaction |
+| R-3 | Medium | Busy/oversized download redirected to itself | Redirects to the page without the download handler |
+| R-4 | Medium | Transfer could not select a deactivated officer | "From" list includes inactive users |
+| R-5 | Medium | Final refused when "completed since" was cleared | Default applies only on the first GET |
+| R-6 | Medium | Reminders in one long transaction | Read first, then batches of 200, then one short notification transaction |
+| R-7 | Medium | Untested transitions | 6 more tests (edits, reassign, reject proposal, withdraw/reject revision, transfer plan, daily marker, inactive officers, double final, double void) |
+| R-8 | Medium | Version and docs not yet committed | Committed (version 1.6.0, all guides); grant takes effect within 30 s |
+| R-9 | Low | Supporting-officer transfer did not bump RowVersion | Bumped |
+| R-10 | Low | Concurrent void gave 500; double final | INSERT OR IGNORE + message; duplicate final refused |
+| R-11 | Low | Withdraw forms posted no RowVersion | Posted and checked |
+| R-12 | Low | Notification links to pages the recipient cannot open | Access-change notifications have no link; removed officers go to My action points |
+| R-13 | Low | No index on pending update/revision | Partial indexes added to migration 7 (unreleased) |
+| R-14 | Low | Desk Cell card could be empty while the badge showed a number | Larger window, own points removed, one row per point |
+| R-15 | Low | Events list capped at 500 | Cap raised to 5,000 (design volume ~1,500 in 5 years) |
+| R-16 | Trivial | `<progress>` vs width classes | Design updated to `<progress>` |
+| R-17 | Trivial | Two unclear lines | Commented |
+| R-18 | Trivial | Import register deletable | Append-only triggers added |

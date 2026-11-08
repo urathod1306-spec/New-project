@@ -423,7 +423,7 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
         var added = after.Except(before).ToList();
         if (added.Count > 0) notifications.Notify(c, tx, added, Actor(u), Msg(p, "Assigned", "assigned to you"));
         var removed = before.Except(after).ToList();
-        if (removed.Count > 0) notifications.Notify(c, tx, removed, Actor(u), Msg(p, "Reassigned", "reassigned to another officer"));
+        if (removed.Count > 0) notifications.Notify(c, tx, removed, Actor(u), Msg(p, "Reassigned", "reassigned to another officer", "/Compliance/Mine"));
         return before.Concat(after).Distinct().ToList();
     }
 
@@ -439,7 +439,7 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
             if (primary == u.UserId() || support.Contains(u.UserId())) throw new WorkflowException("You cannot make yourself a dealing officer on a point you manage.");
             if (Db.Scalar<long>(c, tx, "SELECT COUNT(*) FROM Users WHERE Id = @primary AND IsActive = 1", new { primary }) == 0) throw new WorkflowException("Choose an active primary officer.");
             foreach (var s in support) if (Db.Scalar<long>(c, tx, "SELECT COUNT(*) FROM Users WHERE Id = @s AND IsActive = 1", new { s }) == 0) throw new WorkflowException("Supporting officers must be active users.");
-            Bump(c, tx, p, rowVersion, "Seq = Seq", new());
+            Bump(c, tx, p, rowVersion, "Seq = Seq", new());     // no field change: only checks and bumps RowVersion
             var changes = new List<string>();
             touched = SetOfficers(c, tx, p, primary, support, u, changes);
             History(c, tx, p.Id, p.EventId, u, "Reassigned", p.Status, p.Status, changes.Count == 0 ? "no change" : string.Join("; ", changes));
@@ -520,7 +520,7 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
         return updateId;
     }
 
-    public void WithdrawUpdate(long pointId, long updateId, ClaimsPrincipal u)
+    public void WithdrawUpdate(long pointId, long updateId, ClaimsPrincipal u, long? rowVersion = null)
     {
         CompliancePoint? p = null;
         InTx(db, (c, tx) =>
@@ -530,6 +530,7 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
                       ?? throw new WorkflowException("Update not found.");
             if (upd.SubmittedByUserId != u.UserId()) throw new WorkflowException("Only the officer who submitted it can withdraw an update.");
             if (upd.ReviewState != "Pending") throw new WorkflowException("This update has already been reviewed.");
+            if (rowVersion != null && rowVersion != p.RowVersion) throw new WorkflowException(Changed);
             Db.Exec(c, tx, "UPDATE ComplianceUpdates SET ReviewState = 'Withdrawn', ReviewedAt = @now, ReviewedByName = @name, ReviewedByUserId = @uid WHERE Id = @updateId",
                 new { updateId, now = Db.Now(), name = u.DisplayName(), uid = u.UserId() });
             Db.Exec(c, tx, "UPDATE CompliancePoints SET PendingUpdateId = NULL, RowVersion = RowVersion + 1, UpdatedAt = @now WHERE Id = @pointId AND PendingUpdateId = @updateId",
@@ -647,7 +648,7 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
         return id;
     }
 
-    public void WithdrawRevision(long pointId, long revisionId, ClaimsPrincipal u)
+    public void WithdrawRevision(long pointId, long revisionId, ClaimsPrincipal u, long? rowVersion = null)
     {
         CompliancePoint? p = null;
         InTx(db, (c, tx) =>
@@ -657,6 +658,7 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
                     ?? throw new WorkflowException("Revision request not found.");
             if (r.RequestedByUserId != u.UserId()) throw new WorkflowException("Only the officer who asked can withdraw a revision request.");
             if (r.Status != "Pending") throw new WorkflowException("This request has already been decided.");
+            if (rowVersion != null && rowVersion != p.RowVersion) throw new WorkflowException(Changed);
             Db.Exec(c, tx, "UPDATE ComplianceRevisions SET Status = 'Withdrawn', DecidedAt = @now, DecidedByName = @name, DecidedByUserId = @uid WHERE Id = @revisionId",
                 new { revisionId, now = Db.Now(), name = u.DisplayName(), uid = u.UserId() });
             Db.Exec(c, tx, "UPDATE CompliancePoints SET PendingRevisionId = NULL, RowVersion = RowVersion + 1, UpdatedAt = @now WHERE Id = @pointId AND PendingRevisionId = @revisionId",
@@ -743,7 +745,8 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
         Db.Exec(c, tx, "UPDATE ComplianceRevisions SET Status = 'Superseded', DecidedAt = @now, DecidedByName = @name, DecidedByUserId = @uid WHERE PointId = @Id AND Status = 'Pending'", a);
     }
 
-    private void Finish(long pointId, string toStatus, string action, string? remarks, string? authority, long? mergeInto, long rowVersion, ClaimsPrincipal u, string what)
+    private void Finish(long pointId, string toStatus, string action, string? remarks, string? authority, long? mergeInto, long rowVersion, ClaimsPrincipal u, string what,
+        Action<SqliteConnection, SqliteTransaction, CompliancePoint>? inTransaction = null)
     {
         CompliancePoint? p = null;
         var touched = new List<long>();
@@ -752,6 +755,7 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
             p = Load(c, tx, pointId);
             RequireCell(c, tx, p, u);
             RequireOpen(p);
+            inTransaction?.Invoke(c, tx, p);
             SupersedePending(c, tx, p, u);
             Bump(c, tx, p, rowVersion, """
                 Status = @to, ClosedAt = @now2, ClosedByName = @name, ClosureRemarks = @remarks, ClosureAuthority = @authority, MergedIntoId = @into,
@@ -779,18 +783,18 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
     {
         var why = ComplianceText.Required("Reason", reason, ComplianceText.Remarks);
         var number = ComplianceText.Required("Merge into (point number)", targetNumber, 30);
-        var src = repo.Point(pointId) ?? throw new WorkflowException("Action point not found.");
         var target = repo.PointByNumber(number);
         if (target == null || !access.CanViewPoint(target, u)) throw new WorkflowException($"Point {number} was not found.");
-        if (target.Id == pointId) throw new WorkflowException("A point cannot be merged into itself.");
-        if (!target.IsOpen) throw new WorkflowException("Points can only be merged into an open point.");
-        if (access.IsRestricted(src.SourceType, src.IsConfidential) != access.IsRestricted(target.SourceType, target.IsConfidential))
-            throw new WorkflowException("A point can only be merged into a point with the same restriction (restricted / not restricted).");
-        Finish(pointId, CStatus.Merged, "Merged", why, $"Merged into {target.Number}", target.Id, rowVersion, u, $"merged into {target.Number}");
-        using var c = db.Open();
-        using var tx = c.BeginTransaction();
-        History(c, tx, target.Id, target.EventId, u, "MergedFrom", target.Status, target.Status, $"{src.Number} merged into this point: {why}");
-        tx.Commit();
+        // the target is re-read and checked inside the same write transaction, so two merges at the same moment cannot form a chain
+        Finish(pointId, CStatus.Merged, "Merged", why, $"Merged into {target.Number}", target.Id, rowVersion, u, $"merged into {target.Number}", (c, tx, src) =>
+        {
+            var t = Load(c, tx, target.Id);
+            if (t.Id == src.Id) throw new WorkflowException("A point cannot be merged into itself.");
+            if (!t.IsOpen) throw new WorkflowException("Points can only be merged into an open point.");
+            if (access.IsRestricted(src.SourceType, src.IsConfidential) != access.IsRestricted(t.SourceType, t.IsConfidential))
+                throw new WorkflowException("A point can only be merged into a point with the same restriction (restricted / not restricted).");
+            History(c, tx, t.Id, t.EventId, u, "MergedFrom", t.Status, t.Status, $"{src.Number} merged into this point: {why}");
+        });
     }
 
     public void Reopen(long pointId, string? reason, long rowVersion, ClaimsPrincipal u)
@@ -837,7 +841,7 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
     {
         using var c = db.Open();
         var pts = TransferScope(c, null, fromId, scope, u);
-        var own = pts.Count(p => ComplianceAccess.IsOfficer(c, null!, p.Id, u.UserId()));
+        var own = pts.Count(p => ComplianceAccess.IsOfficer(c, null!, p.Id, u.UserId()));     // read only: no transaction needed
         return new TransferPlan(pts.Count(p => p.PrimaryOfficerUserId == fromId), pts.Count(p => p.PrimaryOfficerUserId != fromId), own);
     }
 
@@ -866,6 +870,8 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
                 }
                 if (scope != "primary" && Db.Exec(c, tx, "DELETE FROM ComplianceSupportOfficers WHERE PointId = @Id AND UserId = @fromId", new { p.Id, fromId }) > 0)
                 {
+                    // officers are part of the point's state: open edit forms must see a conflict
+                    Db.Exec(c, tx, "UPDATE CompliancePoints SET RowVersion = RowVersion + 1, UpdatedAt = @now WHERE Id = @Id", new { p.Id, now = Db.Now() });
                     if (p.PrimaryOfficerUserId != toId && p.PrimaryOfficerUserId != fromId)
                         Db.Exec(c, tx, "INSERT OR IGNORE INTO ComplianceSupportOfficers (PointId, UserId) VALUES (@Id, @toId)", new { p.Id, toId });
                     detail.Add($"Supporting officer #{fromId} → #{toId}");
@@ -911,7 +917,7 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
                 """, new { userId, role, actorName, now });
             Db.Exec(c, tx, "INSERT INTO ComplianceMemberHistory (UserId, Action, Role, ActorName, At) VALUES (@userId, 'Granted', @role, @actorName, @now)", new { userId, role, actorName, now });
             notifications.Notify(c, tx, admins.Append(userId), new NotificationActor(actorId, actorName),
-                new NotificationMessage("Compliance.AccessChanged", $"Compliance access: {ComplianceGrant.Labels[role]} granted to user #{userId}", $"by {actorName}", "/Compliance/Members"));
+                new NotificationMessage("Compliance.AccessChanged", $"Compliance access: {ComplianceGrant.Labels[role]} granted to user #{userId}", $"by {actorName}", null));
             return 0;
         });
         access.Invalidate();
@@ -933,7 +939,7 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
             Db.Exec(c, tx, "DELETE FROM ComplianceMembers WHERE UserId = @userId", new { userId });
             Db.Exec(c, tx, "INSERT INTO ComplianceMemberHistory (UserId, Action, Role, ActorName, At) VALUES (@userId, 'Revoked', @role, @name, @now)", new { userId, role, name = u.DisplayName(), now });
             notifications.Notify(c, tx, admins.Append(userId), Actor(u),
-                new NotificationMessage("Compliance.AccessChanged", $"Compliance access revoked for user #{userId}", $"by {u.DisplayName()}", "/Compliance/Members"));
+                new NotificationMessage("Compliance.AccessChanged", $"Compliance access revoked for user #{userId}", $"by {u.DisplayName()}", null));
             return 0;
         });
         access.Invalidate();
@@ -949,10 +955,13 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
         using var c = db.Open();
         using var tx = c.BeginTransaction();
         notifications.Notify(c, tx, access.ActiveAdminIds().Append(userId), Actor(admin),
-            new NotificationMessage("Compliance.AccessChanged", $"Password of compliance member #{userId} was reset by an administrator", $"by {admin.DisplayName()}", "/Compliance/Members"));
+            new NotificationMessage("Compliance.AccessChanged", $"Password of compliance member #{userId} was reset by an administrator", $"by {admin.DisplayName()}", null));
         tx.Commit();
         audit.Log("Compliance.MemberPasswordReset", "User", userId, $"user #{userId}; Compliance Cell notified");
     }
+
+    /// <summary>Called when an administrator changes a user (e.g. deactivates them): compliance access is re-read.</summary>
+    public void UserChanged() => access.Invalidate();
 
     /// <summary>The Auditor role reads non-restricted compliance data, so the Cell is told whenever someone gains it (DD-07 R-6).</summary>
     public void NotifyAuditorGranted(long userId, ClaimsPrincipal admin)
@@ -961,7 +970,7 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
         using var c = db.Open();
         using var tx = c.BeginTransaction();
         notifications.Notify(c, tx, access.ActiveAdminIds(), Actor(admin),
-            new NotificationMessage("Compliance.AccessChanged", $"User #{userId} was given the Auditor role (reads non-restricted compliance data)", $"by {admin.DisplayName()}", "/Compliance/Members"));
+            new NotificationMessage("Compliance.AccessChanged", $"User #{userId} was given the Auditor role (reads non-restricted compliance data)", $"by {admin.DisplayName()}", null));
         tx.Commit();
     }
 
@@ -1002,14 +1011,17 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
         var t = D(0);
         var perOfficer = new Dictionary<long, (int overdue, int soon, int tomorrow, int update)>();
         int sent = 0, digests = 0;
-        InTx(db, (c, tx) =>
-        {
-            var due = Db.Query<Due>(c, tx, $"""
+        // read the candidates first, then set the markers in short transactions of 200 points, so the write lock is never
+        // held for long; the per-officer summaries and the Cell digest follow in one last short transaction
+        var due = db.Query<Due>($"""
                 SELECT p.Id, p.PrimaryOfficerUserId, p.CurrentDueDate, p.NextUpdateDue, p.PendingUpdateId, p.Reminded7For, p.Reminded1For, p.LastOverdueReminderOn, p.UpdateRemindedFor
                 FROM CompliancePoints p JOIN Users u ON u.Id = p.PrimaryOfficerUserId
                 WHERE p.Status IN {CStatus.OpenSql} AND u.IsActive = 1 AND (p.CurrentDueDate <= @soon OR p.NextUpdateDue <= @t)
                 """, new { soon = D(o.DueSoonDays), t });
-            foreach (var p in due)
+        foreach (var batch in due.Chunk(200))
+        InTx(db, (c, tx) =>
+        {
+            foreach (var p in batch)
             {
                 var (ov, so, tm, up) = perOfficer.GetValueOrDefault(p.PrimaryOfficerUserId);
                 var any = false;
@@ -1032,6 +1044,10 @@ public sealed class ComplianceWorkflow(Db db, ComplianceAccess access, Complianc
                 { up++; any = true; Db.Exec(c, tx, "UPDATE CompliancePoints SET UpdateRemindedFor = NextUpdateDue WHERE Id = @Id", new { p.Id }); }
                 if (any) perOfficer[p.PrimaryOfficerUserId] = (ov, so, tm, up);
             }
+            return 0;
+        });
+        InTx(db, (c, tx) =>
+        {
             var system = new NotificationActor(0, "NABCONS Intranet");
             foreach (var (uid, (ov, so, tm, up)) in perOfficer)
             {

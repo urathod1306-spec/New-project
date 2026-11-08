@@ -350,6 +350,12 @@ public sealed class AtrBuilder(Db db, ComplianceAccess access, ComplianceReposit
             b = Build(opt, u);                          // no one can write while this transaction holds the lock
             if (!string.Equals(b.Hash, expectedHash, StringComparison.OrdinalIgnoreCase))
                 throw new WorkflowException("The data has changed since your preview. Preview the report again, check it, and then mark it final.");
+            // a double click must not create two identical final ATRs
+            var same = Db.Scalar<long>(c, tx, """
+                SELECT COALESCE((SELECT s.Id FROM ComplianceSnapshots s WHERE s.Sha256 = @h AND s.Template = @t AND s.SubmittedOn = @on
+                  AND NOT EXISTS (SELECT 1 FROM ComplianceSnapshotVoids v WHERE v.SnapshotId = s.Id) ORDER BY s.Id DESC LIMIT 1), 0)
+                """, new { h = b.Hash, t = b.Options.Template, on });
+            if (same > 0) throw new WorkflowException($"This ATR is already marked final as snapshot #{same}.");
             var now = Db.Now();
             id = Db.Insert(c, tx, """
                 INSERT INTO ComplianceSnapshots (Template, ForumId, Forum, Title, SubmittedTo, SubmittedOn, AsOn, OptionsJson, HeaderJson, ItemCount, Sha256, CreatedByUserId, CreatedByName, CreatedAt)
@@ -419,8 +425,9 @@ public sealed class AtrBuilder(Db db, ComplianceAccess access, ComplianceReposit
         var why = ComplianceText.Required("Reason", reason, ComplianceText.Remarks);
         var s = Snapshot(id);
         if (s == null || !CanView(s, u)) throw new WorkflowException("Snapshot not found.");
-        if (s.IsVoided) throw new WorkflowException("This snapshot is already void.");
-        db.Exec("INSERT INTO ComplianceSnapshotVoids (SnapshotId, Reason, VoidedByName, VoidedAt) VALUES (@id, @why, @name, @now)", new { id, why, name = u.DisplayName(), now = Db.Now() });
+        // INSERT OR IGNORE: if two people void it at the same moment, the second one is simply told it is already void
+        var n = db.Exec("INSERT OR IGNORE INTO ComplianceSnapshotVoids (SnapshotId, Reason, VoidedByName, VoidedAt) VALUES (@id, @why, @name, @now)", new { id, why, name = u.DisplayName(), now = Db.Now() });
+        if (s.IsVoided || n == 0) throw new WorkflowException("This snapshot is already void.");
         audit.Log("Compliance.SnapshotVoided", "ComplianceSnapshot", id, $"snapshot #{id} voided");
     }
 }

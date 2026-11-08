@@ -92,6 +92,7 @@ public class UserEditModel(UserRepository users, MasterRepository masters, Audit
         Existing.Roles = Infrastructure.Roles.Join(roles);
         Existing.IsActive = Input.IsActive;
         users.Update(Existing, User.UserName(), rotateStamp: rolesChanged);
+        compliance.UserChanged();          // a deactivated Compliance Admin loses access at once
         // the vertical changes with the linked directory entry, and is recorded in the profile history
         profiles.SetVerticalByAdmin(Existing.Id, Existing.StaffId, oldVertical, vertical, User.UserName());
         Existing.Vertical = vertical;
