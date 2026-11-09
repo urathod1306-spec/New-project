@@ -1,5 +1,13 @@
 # NABCONS Intranet — Setup Guide
 
+## Upgrading to 1.7.0 (from 1.6.x): Inward register and invoices
+1. Download `release/NABCONS-Intranet-v1.7.0-win-x64.zip` and check its SHA-256. Extract it to a new folder, then right-click `Upgrade-Existing-Intranet.bat` → *Run as administrator*. The database goes from schema 7 to 8 after a full backup; nothing existing is changed and your settings are kept.
+2. Check *Administration → System information*: version 1.7.0, schema 8.
+3. Set the inward code of each office: *Administration → Master lists → Offices / Locations* (e.g. `HO` for Mumbai, `DEL` for New Delhi).
+4. As Administrator, on *Inward → Access*: grant **Inward Operator** to the registry clerk of each office, **Inward Viewer** to the COO (and others who must see all inward), and **Invoice Accounts** to the Accounts staff who record payments.
+5. Accounts: import the project codes (*Inward → Project codes*, CSV template on the page).
+6. Tell staff: see *Inward* in `docs/STAFF-GUIDE.md`.
+
 ## Upgrading to 1.6.0 (from 1.5.x): Compliance Management
 
 1. Download `release/NABCONS-Intranet-v1.6.0-win-x64.zip` and check its SHA-256. Extract it to a new folder, then right-click `Upgrade-Existing-Intranet.bat` → *Run as administrator*. The database goes from schema 6 to 7 after a full backup; nothing existing is changed and your settings are kept.

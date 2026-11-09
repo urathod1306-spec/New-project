@@ -1,5 +1,13 @@
 # NABCONS Intranet — Quick guide for staff
 
+## Inward (letters, e-mails and invoices)
+- When the registry marks an item to you, it appears on **My Desk** and under **Inward → My items**. Open it and click **Accept** when you have the papers.
+- To pass it on, use **Re-mark**; if it is not your subject, **Return to the registry** with a remark.
+- When done, **Close** it: *Replied* (with the reply date and outward reference), *Filed* (file number), *Forwarded* (to whom) or *Duplicate*. The item can be reopened if more action is needed.
+- Received something directly (for example by e-mail)? Use **Inward an item**: it gets an inward number of your office and stays with you.
+- **Invoices marked to you:** check the goods or services and click **Certify**, then **Send to Accounts**. You cannot certify an invoice you inwarded yourself. Put it **on hold** or **return it to the vendor** if something is wrong.
+- Reply-due reminders come once a day as a single message.
+
 ## Compliance (action points)
 If an action point from a Board or committee meeting, an audit or an inspection is assigned to you, **Compliance** appears in the menu and the point is listed on **My Desk** when it needs attention.
 - Open the point and use **Submit compliance**: what has been done, the *as on* date, and the status (*Ongoing*, *Pending with an external party*, or *Complied — propose closure*). Record where the supporting papers are kept; files are not uploaded.

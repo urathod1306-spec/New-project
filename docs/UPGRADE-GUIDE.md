@@ -62,6 +62,12 @@ On a spare PC, or in a different folder on the same PC while the live intranet i
 3. Run `Upgrade-Existing-Intranet.bat` from the new version, pointing it at the **copy**.
 4. Test with your real data. When satisfied, confirm the merge and upgrade the live installation.
 
+## Upgrading to 1.7.0 (Inward register and invoices)
+- The database goes from schema 7 to **8**: new inward and invoice tables, one new column on e-Notes (`SourceInwardId`, empty for existing notes) and eight inward categories in the master lists. Nothing existing changes; the upgrade takes a backup first.
+- No demo data is added to your database.
+- After the upgrade: set office codes (*Master lists → Offices / Locations*) and grant Inward access (*Inward → Access*), see the Deployment Guide.
+- **Roll-back:** 1.6.0 runs on the upgraded database and ignores the inward tables; inward data and grants reappear when 1.7.0 is reinstalled.
+
 ## Upgrading to 1.6.0 (Compliance Management)
 - The database goes from schema 6 to **7** (new compliance tables only; nothing existing changes). The upgrade takes a backup first, as always.
 - After the upgrade nobody sees Compliance until the first Compliance Admin is created with `Grant-Compliance-Admin.bat` (see the Deployment Guide, section 5).

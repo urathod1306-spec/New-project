@@ -38,6 +38,10 @@ Work items are spread across modules; staff miss what is waiting for them, and t
 
 ### Compliance (v1.6, DD-07 §8)
 - Two more counts in the single count query: `ComplianceMine` (own action points overdue, due soon, returned or with an update due) and `ComplianceCell` (for Compliance Admins: pending updates, revision requests and closure proposals, excluding their own points). Both are part of *My Desk (n)* and of the poll's `compliance` value, which drives the Compliance tab badge. The Cell queue uses the change marker `t:compliance`; the user's compliance grant is part of the cache key.
+
+### Inward (v1.7, DD-08 §8)
+- Four more members in the single count query: `InwardMine` (items held by the user that are overdue, due within a day or not yet accepted, and invoices they hold), `InwardUnassigned` (operators: unassigned items in their offices), `InvoiceQueue` (Invoice Accounts: items with Accounts) and `InwardAssigned` (the user takes part in any item). The first three are part of *My Desk (n)* and of the poll's `inward` value (Inward tab badge). Operators and Accounts watch the change marker `t:inward`; the user's inward grants are part of the cache key.
+- A daily job (`InwardScheduler`, at `Inward:ReminderHour`) sends one summary per holder, a digest per office registry and one to Accounts; its markers never change an item's row version.
 - Daily compliance reminders run from their own scheduler (not the backup job): one aggregated notification per officer per day, plus a digest to the Cell.
 
 ## Alternatives Considered

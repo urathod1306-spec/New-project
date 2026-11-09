@@ -54,6 +54,39 @@ Run on the isolated test PC with the demo data (password for all demo accounts: 
 | 49 | Pin / remove | As `admin`, pin 3 posts, try a 4th; remove a post with a reason; as `staff`, try to pin | 4th refused ("Unpin one first"); removed post and its photos gone for everyone, `Board.Removed` in the audit log; staff see no Pin button ✔ | |
 | 26 | No egress | With an outbound "block all" firewall rule for `NabconsIntranet.exe`, use every page | Everything works; no blocked-connection events | |
 
+## Inward register and invoices (v1.7)
+| # | Area | Steps | Expected | Result |
+|---|---|---|---|---|
+| N1 | Office codes and access | Set codes `HO`, `DEL` on *Master lists → Offices / Locations*; as `admin` grant Inward Operator (HO), Inward Viewer, Invoice Accounts on *Inward → Access*; try to grant yourself | Grants listed with history; yourself not offered ✔ | |
+| N2 | Inward and slip | As the HO operator inward a letter marked to an officer; download the acknowledgement slip | Number `NCS/IN/HO/<FY>/00001`; slip is A4 portrait PDF ✔ | |
+| N3 | Holder | As the officer: accept; close as *Replied* with outward reference | Item closed; trail shows each step ✔ | |
+| N4 | Reminder letter | Inward a letter as "reminder of" the closed item | New number closed as reminder; original reopened with the officer, reminder count 1 ✔ | |
+| N5 | Confidential | Inward a confidential legal notice marked to an officer; open it as another user, as the Auditor, as the Inward Viewer | Other user: page not found; Auditor: "Confidential", no text; Viewer: full ✔ | |
+| N6 | Self-inward | As an ordinary user use *Inward an item* | Number of their office; held by them ✔ | |
+| N7 | Duplicate invoice | Inward an invoice twice (same GSTIN, number, FY); then tick "not a duplicate" with a reason | Second refused with the first number; override saved and flagged; first payment asks for "checked" ✔ | |
+| N8 | Segregation | Inwarder tries to certify / mark the invoice to themselves | Refused ✔ | |
+| N9 | Payment cycle | Verifier certifies and sends to Accounts; Accounts records a part payment, an overpayment, a reversal and the same voucher again | Part-paid; overpay refused; reversal reopens; voucher accepted after reversal; Paid when settled ✔ | |
+| N10 | MSME report | *Invoices → MSME / 43B(h) report* as on 31 March | Excel with Micro & Small and "class not recorded" sheets ✔ | |
+| N11 | ERP import | Upload the payment template with one good row, one overpaying row and one unknown number | Preview categories; only the good row recorded; same file refused again ✔ | |
+| N12 | No files | Post a file to an inward item page | 415, nothing stored ✔ (xUnit `Files_are_refused_except_on_the_import_pages`) | |
+| N13 | Upgrade | Upgrade a copy of a 1.6.0 database | Schema 8; existing row counts unchanged; no demo items added; `--verify-audit` passes; 1.6.0 still starts on it ✔ | |
+
+## Performance (v1.7, inward)
+Run with `NABCONS_BENCH=1 dotnet test tests/NabconsIntranet.Tests --filter InwardBenchTests`.
+- **Data:** 250,000 items over 12 offices (10% invoices, 12% open), ~500 holders, full search index; operator of 3 offices.
+- **Machine:** development container with 4 vCPU.
+
+| Measure | p50 | p95 | Budget |
+|---|---|---|---|
+| Dashboard, Inward Viewer (all offices) | 204 ms | 244 ms | < 300 ms |
+| Dashboard, operator of 3 offices | 141 ms | 162 ms | < 300 ms |
+| Invoice dashboard (Accounts) | 177 ms | 184 ms | < 300 ms |
+| Register page 1 (operator / participant only) | 5.1 / 6.0 ms | 5.8 / 6.7 ms | < 300 ms |
+| Text search (viewer) | 31.7 ms | 44.6 ms | < 400 ms |
+| My Desk | 2.1 ms | 4.3 ms | < 300 ms |
+| Re-mark (write) | 1.1 ms | 1.8 ms | < 50 ms |
+| Register PDF, one day | 28.6 ms | 33.7 ms | < 3 s |
+
 ## Compliance (v1.6)
 | # | Area | Steps | Expected | Result |
 |---|---|---|---|---|
