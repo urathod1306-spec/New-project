@@ -13,8 +13,8 @@ namespace NabconsIntranet.Infrastructure.Reports;
 /// </summary>
 public static class DocxWriter
 {
-    private const int PageW = 16838, PageH = 11906, Margin = 850;           // twips: A4 landscape, 1.5 cm margins
-    private const int TextW = PageW - 2 * Margin;
+    private const int Long = 16838, Short = 11906, Margin = 850;           // twips: A4, 1.5 cm margins
+    private static int TextW(ReportDocument d) => (d.Portrait ? Short : Long) - 2 * Margin;
 
     public static void Write(ReportDocument doc, Stream output)
     {
@@ -32,7 +32,7 @@ public static class DocxWriter
         Add("_rels/.rels", head + """<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>""");
         Add("word/_rels/document.xml.rels", head + """<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>""");
         Add("word/styles.xml", head + """<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Mangal" w:eastAsia="Calibri"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="en-IN"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="60" w:line="252" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:tblPr><w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="80" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style></w:styles>""");
-        Add("word/footer1.xml", head + Footer(doc.Footer));
+        Add("word/footer1.xml", head + Footer(doc.Footer, TextW(doc)));
         Add("word/document.xml", head + Body(doc));
     }
 
@@ -67,17 +67,17 @@ public static class DocxWriter
         foreach (var section in doc.Sections)
         {
             if (!string.IsNullOrWhiteSpace(section.Heading)) sb.Append(Para(section.Heading, "left", true, 22, 80, keepNext: true));
-            sb.Append(Table(section));
+            sb.Append(Table(section, TextW(doc)));
             sb.Append(Para("", after: 120));
         }
         if (!string.IsNullOrWhiteSpace(doc.Signature)) sb.Append(Para(doc.Signature, "right", true, 20, 0));
-        sb.Append($"""<w:sectPr><w:footerReference w:type="default" r:id="rId2"/><w:pgSz w:w="{PageW}" w:h="{PageH}" w:orient="landscape"/><w:pgMar w:top="{Margin}" w:right="{Margin}" w:bottom="{Margin}" w:left="{Margin}" w:header="425" w:footer="425" w:gutter="0"/></w:sectPr></w:body></w:document>""");
+        sb.Append($"""<w:sectPr><w:footerReference w:type="default" r:id="rId2"/><w:pgSz w:w="{(doc.Portrait ? Short : Long)}" w:h="{(doc.Portrait ? Long : Short)}"{(doc.Portrait ? "" : " w:orient=\"landscape\"")}/><w:pgMar w:top="{Margin}" w:right="{Margin}" w:bottom="{Margin}" w:left="{Margin}" w:header="425" w:footer="425" w:gutter="0"/></w:sectPr></w:body></w:document>""");
         return sb.ToString();
     }
 
-    private static string Table(ReportSection s)
+    private static string Table(ReportSection s, int textW)
     {
-        var total = s.IsSummary ? TextW * 0.45 : TextW;
+        var total = s.IsSummary ? textW * 0.45 : textW;
         var sum = s.Columns.Sum(c => c.Width);
         var widths = s.Columns.Select(c => (int)Math.Round(total * c.Width / (sum <= 0 ? 1 : sum))).ToList();
         var sb = new StringBuilder("<w:tbl><w:tblPr>");
@@ -106,11 +106,11 @@ public static class DocxWriter
         return sb.ToString();
     }
 
-    private static string Footer(string text)
+    private static string Footer(string text, int textW)
     {
         static string Field(string code) =>
             $"<w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText xml:space=\"preserve\"> {code} </w:instrText></w:r><w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType=\"end\"/></w:r>";
-        var tab = (TextW).ToString(CultureInfo.InvariantCulture);
+        var tab = textW.ToString(CultureInfo.InvariantCulture);
         return "<w:ftr xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:p><w:pPr><w:tabs><w:tab w:val=\"right\" w:pos=\"" + tab + "\"/></w:tabs></w:pPr>"
              + $"<w:r><w:rPr><w:sz w:val=\"16\"/></w:rPr><w:t xml:space=\"preserve\">{X(text)}</w:t></w:r><w:r><w:tab/></w:r>"
              + "<w:r><w:rPr><w:sz w:val=\"16\"/></w:rPr><w:t xml:space=\"preserve\">Page </w:t></w:r>" + Field("PAGE")

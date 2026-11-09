@@ -9,7 +9,7 @@ namespace NabconsIntranet.Infrastructure.Reports;
 /// </summary>
 public static class ReportPdfWriter
 {
-    private const float W = 842, H = 595, ML = 40, MR = 40, MT = 36, MB = 44, CW = W - ML - MR;
+    private const float ML = 40, MR = 40, MT = 36, MB = 44;
     private const float Size = 8.5f, HeadSize = 8.5f, Pad = 3f;
     private static readonly SKColor Ink = new(0x1d, 0x27, 0x33), Muted = new(0x5d, 0x6b, 0x7a), Brand = new(0x0b, 0x4b, 0x28),
         Grid = new(0x80, 0x80, 0x80), HeadFill = new(0xe7, 0xee, 0xf5);
@@ -18,8 +18,9 @@ public static class ReportPdfWriter
     private sealed record TextOp(float X, float Y, string Text, bool Bold, float Size, SKColor Color) : Op;
     private sealed record RectOp(SKRect R, SKColor? Fill, bool Stroke) : Op;
 
-    private sealed class Layout(PdfFonts f)
+    private sealed class Layout(PdfFonts f, float W, float H)
     {
+        private float CW => W - ML - MR;
         public readonly List<List<Op>> Pages = new() { new() };
         public float Y = MT;
         public void NewPage() { Pages.Add(new()); Y = MT; }
@@ -37,13 +38,14 @@ public static class ReportPdfWriter
             }
         }
 
-        public void Left(string text, bool bold, float size, SKColor color, float x = 0, float width = CW, bool right = false)
+        public void Left(string text, bool bold, float size, SKColor color, float x = 0, float? width = null, bool right = false)
         {
-            foreach (var line in f.Wrap(text, bold, size, width))
+            var w = width ?? CW;
+            foreach (var line in f.Wrap(text, bold, size, w))
             {
                 var lh = size * 1.4f;
                 if (Room < lh) NewPage();
-                var px = right ? ML + x + width - f.Width(line, bold, size) : ML + x;
+                var px = right ? ML + x + w - f.Width(line, bold, size) : ML + x;
                 Add(new TextOp(px, Y + size, line, bold, size, color));
                 Y += lh;
             }
@@ -103,7 +105,9 @@ public static class ReportPdfWriter
     public static void Write(ReportDocument doc, Stream output)
     {
         using var fonts = new PdfFonts();
-        var L = new Layout(fonts);
+        var (W, H) = doc.Portrait ? (595f, 842f) : (842f, 595f);
+        var CW = W - ML - MR;
+        var L = new Layout(fonts, W, H);
         if (!string.IsNullOrWhiteSpace(doc.OrganisationLine)) L.Centered(doc.OrganisationLine, true, 12, Brand);
         L.Centered(doc.Title, true, 11.5f, Ink);
         foreach (var s in doc.Subtitles) L.Centered(s, false, 9.5f, Muted);
