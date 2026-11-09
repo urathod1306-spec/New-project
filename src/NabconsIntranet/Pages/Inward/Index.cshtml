@@ -1,0 +1,85 @@
+@page
+@model NabconsIntranet.Pages.Inward.IndexModel
+@{
+    ViewData["Title"] = "Inward register";
+    var d = Model.D;
+    var months = Enumerable.Range(0, 12).Select(i => F.Today.AddMonths(-11 + i).ToString("yyyy-MM")).ToList();
+    var maxMonth = Math.Max(1, d.Received.Concat(d.Closed).Select(x => x.N).DefaultIfEmpty(0).Max());
+    var buckets = new[] { "0–7", "8–15", "16–30", "> 30" };
+    var maxAge = Math.Max(1, d.Ageing.Select(x => x.N).DefaultIfEmpty(0).Max());
+    var off = Model.OfficeId is long o ? "&OfficeId=" + o : "";
+}
+<div class="page-head">
+    <div><h1>Inward register</h1><p>Letters, e-mails and invoices received, and who is dealing with them. As on @F.DateDot(F.Today.ToString("yyyy-MM-dd")).</p></div>
+    <div class="actions"><a class="btn primary" href="/Inward/New">+ Inward an item</a></div>
+</div>
+<partial name="_InwardTabs" />
+@if (Model.Offices.Count > 1)
+{
+    <form class="card filters" method="get">
+        <div class="field"><label for="office">Office</label><select id="office" name="office"><option value="">All my offices</option>@foreach (var x in Model.Offices) { <option value="@x.Id" selected="@(Model.OfficeId == x.Id)">@x.Name</option> }</select></div>
+        <div class="actions"><button class="btn" type="submit">Show</button></div>
+    </form>
+}
+<div class="grid stats">
+    <a class="stat" href="/Inward/Register?Status=open@(off)"><div class="n">@d.Open</div><div class="l">Open</div></a>
+    <a class="stat" href="/Inward/Register?Status=overdue@(off)"><div class="n">@d.Overdue</div><div class="l">Overdue (reply due passed)</div></a>
+    <div class="stat"><div class="n">@d.DueSoon</div><div class="l">Due today or tomorrow</div></div>
+    <a class="stat" href="/Inward/Register?Status=unassigned@(off)"><div class="n">@d.UnassignedOld</div><div class="l">Unassigned for more than a working day</div></a>
+    <div class="stat"><div class="n">@d.HeldByInactive</div><div class="l">Held by inactive users</div></div>
+    <a class="stat" href="/Inward/Register?Status=all&From=@F.Today.ToString("yyyy-MM-dd")@(off)"><div class="n">@d.ReceivedToday</div><div class="l">Inwarded today</div></a>
+</div>
+<div class="grid halves mt">
+    <div class="card">
+        <h2>Open items by age (days since received)</h2>
+        <table class="table compact">
+            @foreach (var b in buckets)
+            {
+                var n = d.Ageing.FirstOrDefault(x => x.Key == b)?.N ?? 0;
+                <tr><td class="nowrap">@b</td><td class="bar-cell"><progress max="@maxAge" value="@n" aria-label="@b days: @n"></progress></td><td class="right">@n</td></tr>
+            }
+        </table>
+    </div>
+    <div class="card">
+        <h2>Received and closed per month</h2>
+        <table class="table compact">
+            <thead><tr><th>Month</th><th>Received</th><th class="right">n</th><th>Closed</th><th class="right">n</th></tr></thead>
+            @foreach (var m in months)
+            {
+                var r = d.Received.FirstOrDefault(x => x.Key == m)?.N ?? 0;
+                var c = d.Closed.FirstOrDefault(x => x.Key == m)?.N ?? 0;
+                <tr><td class="nowrap">@DateTime.ParseExact(m, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture).ToString("MMM yyyy")</td>
+                    <td class="bar-cell"><progress max="@maxMonth" value="@r" aria-label="@m received: @r"></progress></td><td class="right">@r</td>
+                    <td class="bar-cell"><progress max="@maxMonth" value="@c" aria-label="@m closed: @c"></progress></td><td class="right">@c</td></tr>
+            }
+        </table>
+    </div>
+</div>
+<div class="grid halves mt">
+    <div class="card table-wrap">
+        <h2>Pending by holder (top 20)</h2>
+        @if (d.ByHolder.Count == 0) { <p class="empty">Nothing pending.</p> }
+        else
+        {
+            <table class="table compact">
+                <thead><tr><th>Holder</th><th class="right">Open</th><th class="right">Overdue</th></tr></thead>
+                @foreach (var v in d.ByHolder)
+                {
+                    <tr><td>@if (v.Key2 != null) { <a href="/Inward/Register?HolderId=@v.Key2@(off)">@v.Key</a> } else { @v.Key }</td><td class="right">@v.N</td><td class="right">@(v.N2 > 0 ? v.N2.ToString() : "—")</td></tr>
+                }
+            </table>
+        }
+    </div>
+    <div class="card table-wrap">
+        <h2>Pending by vertical and office</h2>
+        <table class="table compact">
+            <thead><tr><th>Holder's vertical</th><th class="right">Open</th></tr></thead>
+            @foreach (var v in d.ByVertical) { <tr><td>@v.Key</td><td class="right">@v.N</td></tr> }
+        </table>
+        <table class="table compact mt">
+            <thead><tr><th>Office</th><th class="right">Open</th></tr></thead>
+            @foreach (var v in d.ByOffice) { <tr><td>@v.Key</td><td class="right">@v.N</td></tr> }
+        </table>
+        @if (d.ByOffice.Count == 0) { <p class="empty">Nothing pending.</p> }
+    </div>
+</div>

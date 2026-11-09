@@ -1,0 +1,296 @@
+@page "{id:long}"
+@model NabconsIntranet.Pages.Inward.ItemModel
+@{
+    var i = Model.I;
+    var v = Model.Inv;
+    ViewData["Title"] = i.Number;
+    var rv = i.RowVersion;
+    var today = F.Today.ToString("yyyy-MM-dd");
+    var m = i.Masked;
+    var msme45 = v != null && v.IsMsme && !InvStatus.IsFinal(v.InvoiceStatus) && string.CompareOrdinal(v.InvoiceDate, F.Today.AddDays(-Model.Options.MsmeMaxDays).ToString("yyyy-MM-dd")) < 0;
+}
+<div class="page-head">
+    <div>
+        <h1>@i.Number</h1>
+        <p><span class="badge @NabconsIntranet.Pages.Inward.InwardPage.StatusCss(i, F.Today)">@NabconsIntranet.Pages.Inward.InwardPage.StatusText(i)</span>
+            · @InwardType.Label(i.ItemType) · @i.OfficeName @if (i.IsConfidential) { <span class="badge warning">confidential</span> } @if (i.SelfInward) { <span class="badge neutral">self-inwarded</span> }
+            @if (i.ReminderCount > 0) { <span class="badge info">@i.ReminderCount reminder(s)</span> }</p>
+    </div>
+    <div class="actions">
+        @if (Model.CanAck) { <a class="btn" href="/Inward/Item/@i.Id?handler=Ack">Acknowledgement slip (PDF)</a> }
+        @if (Model.CanEdit) { <a class="btn" href="/Inward/Edit/@i.Id">Edit details</a> }
+    </div>
+</div>
+<partial name="_InwardTabs" />
+@if (m) { <div class="alert info">This item is confidential. You see its register details only.</div> }
+@if (i.IsOverdue(F.Today)) { <div class="alert danger">Reply was due on <strong>@F.DateDot(i.ReplyDueOn)</strong>.</div> }
+@if (msme45) { <div class="alert danger">MSME invoice unpaid more than @Model.Options.MsmeMaxDays days after the invoice date (MSMED Act; section 43B(h)).</div> }
+@if (v?.OverrideReason != null && v.DuplicateCheckedBy == null && !InvStatus.IsFinal(v.InvoiceStatus)) { <div class="alert warning">Saved as "not a duplicate" of an existing invoice@(i.Full ? ": " + v.OverrideReason : "."). The first payment needs the "checked" confirmation.</div> }
+
+<div class="grid two">
+    <div class="stack">
+        <div class="card">
+            <h2>@i.ShownSubject</h2>
+            <dl class="meta-grid">
+                <dt>Received</dt><dd>@F.DateTime(i.ReceivedAt) · @InwardMode.Label(i.Mode)</dd>
+                <dt>From</dt><dd>@i.ShownSender</dd>
+                @if (!m && i.SenderRef != null) { <dt>Sender's reference</dt><dd>@i.SenderRef@(i.SenderRefDate != null ? " dated " + F.DateDot(i.SenderRefDate) : "")</dd> }
+                @if (!m && i.Category != null) { <dt>Category</dt><dd>@i.Category</dd> }
+                <dt>Priority / action</dt><dd>@i.Priority · @(InwardAction.Labels.GetValueOrDefault(i.ActionRequired, i.ActionRequired))@(i.ReplyDueOn != null ? " · reply due " + F.DateDot(i.ReplyDueOn) : "")</dd>
+                <dt>With</dt><dd>@(i.Status == ItemStatus.WithAccounts ? "Accounts" : i.Status == ItemStatus.Unassigned ? "Registry (unassigned)" : i.HolderName ?? "—")@if (i.HolderSince != null && i.IsOpen && i.Status == ItemStatus.WithHolder) { <span class="muted"> since @F.DateTime(i.HolderSince)@(i.AcceptedAt == null ? ", not yet accepted" : "")</span> }</dd>
+                <dt>Papers kept at</dt><dd>@i.KeptAt@(i.Pages != null ? $" · {i.Pages} page(s)" : "")</dd>
+                <dt>Inwarded by</dt><dd>@i.InwardedByName, @F.DateTime(i.InwardedAt)</dd>
+                @if (!m && i.Irn != null) { <dt>IRN</dt><dd class="small">@i.Irn</dd> }
+                @if (Model.Linked != null) { <dt>@(i.ItemType == InwardType.CreditDebitNote ? "Against invoice" : "Reminder of")</dt><dd><a href="/Inward/Item/@Model.Linked.Id">@Model.Linked.Number</a></dd> }
+                @if (!i.IsOpen)
+                {
+                    <dt>Closed</dt><dd>@Closure.Label(i.ClosureType) · @i.ClosedByName, @F.DateTime(i.ClosedAt)</dd>
+                    @if (!m && i.ClosureRemarks != null) { <dt>Closure remarks</dt><dd class="pre">@i.ClosureRemarks</dd> }
+                    @if (i.ReplyDate != null) { <dt>Replied on</dt><dd>@F.DateDot(i.ReplyDate)@(i.OutwardRef != null ? " · outward " + i.OutwardRef : "")</dd> }
+                    @if (i.FiledFileNo != null) { <dt>Filed in</dt><dd>@i.FiledFileNo</dd> }
+                    @if (!m && i.ForwardedTo != null) { <dt>Forwarded to</dt><dd>@i.ForwardedTo</dd> }
+                    @if (i.ENoteId != null) { <dt>e-Note</dt><dd><a href="/ENotes/@i.ENoteId">Draft #@i.ENoteId</a></dd> }
+                }
+            </dl>
+            @if (!m && !string.IsNullOrEmpty(i.Summary)) { <h3 class="mt">Summary</h3><p class="pre">@i.Summary</p> }
+        </div>
+
+        @if (v != null)
+        {
+            <div class="card">
+                <h2>Invoice @(m ? "" : "— " + v.VendorName)</h2>
+                <dl class="meta-grid">
+                    <dt>Invoice</dt><dd>@v.InvoiceNo dated @F.DateDot(v.InvoiceDate) (FY @v.InvoiceFy)</dd>
+                    @if (!m) { <dt>GSTIN</dt><dd>@(v.VendorGstin ?? "—")</dd> }
+                    <dt>MSME</dt><dd>@(v.IsMsme ? "Yes" + (v.MsmeClass != null ? " — " + v.MsmeClass : "") + (v.IsTrader ? " (trader)" : "") + (!m && v.UdyamNo != null ? " · " + v.UdyamNo : "") : "No")</dd>
+                    @if (v.ProjectCode != null) { <dt>Project</dt><dd>@v.ProjectCode</dd> }
+                    @if (!m && v.PoRef != null) { <dt>PO</dt><dd>@v.PoRef</dd> }
+                    @if (v.TaxablePaise != null || v.GstPaise != null) { <dt>Taxable + GST + other</dt><dd>@Paise.Format(v.TaxablePaise ?? 0) + @Paise.Format(v.GstPaise ?? 0) + @Paise.Format(v.OtherPaise ?? 0)</dd> }
+                    <dt>Total</dt><dd><strong>@Paise.Format(v.TotalPaise)</strong></dd>
+                    @if (v.AdjustPaise != 0) { <dt>Credit / debit notes</dt><dd>@(v.AdjustPaise > 0 ? "+" : "−") @Paise.Format(Math.Abs(v.AdjustPaise)) → effective @Paise.Format(v.EffectiveTotal)</dd> }
+                    <dt>Settled</dt><dd>@Paise.Format(v.SettledPaise)</dd>
+                    <dt>Outstanding</dt><dd><strong>@Paise.Format(v.Outstanding)</strong></dd>
+                    <dt>Payment due</dt><dd>@F.DateDot(v.PaymentDueOn) (@v.TermsDays days' terms@(v.IsMsme ? $", MSME limit {Model.Options.MsmeMaxDays} days" : ""))</dd>
+                    @if (v.CertifiedOn != null) { <dt>Certified</dt><dd>@v.CertifiedByName on @F.DateDot(v.CertifiedOn)</dd> }
+                    @if (v.InvoiceStatus == InvStatus.OnHold) { <dt>On hold from</dt><dd>@InvStatus.Label(v.HoldFromStatus ?? "")</dd> }
+                    @if (!m && v.StatusReason != null) { <dt>Last reason</dt><dd class="pre">@v.StatusReason</dd> }
+                </dl>
+                @if (Model.Payments.Count > 0)
+                {
+                    <h3 class="mt">Payments</h3>
+                    <table class="table compact">
+                        <thead><tr><th>Paid on</th><th class="right">Net</th><th class="right">TDS</th><th class="right">Other</th><th>Voucher / UTR</th><th>Entered</th><th></th></tr></thead>
+                        @foreach (var p in Model.Payments)
+                        {
+                            <tr class="@(p.ReversesId != null ? "muted" : "")">
+                                <td class="nowrap">@F.DateDot(p.PaidOn)</td><td class="right">@Paise.Format(p.NetPaise)</td><td class="right">@Paise.Format(p.TdsPaise)</td><td class="right">@Paise.Format(p.OtherDeductionsPaise)</td>
+                                <td>@p.VoucherRef@(p.ReversesId != null ? " (reversal)" : "")@(p.Reversed ? " — reversed" : "")</td><td class="small">@p.EnteredByName, @F.DateTime(p.EnteredAt)@(p.Source == "Import" ? " · ERP" : "")</td>
+                                <td>@if (Model.IsAccounts && p.ReversesId == null && !p.Reversed)
+                                    {
+                                        <details><summary>Reverse</summary>
+                                            <form method="post" asp-page-handler="Reverse"><input type="hidden" name="rv" value="@rv" /><input type="hidden" name="paymentId" value="@p.Id" />
+                                                <input name="reason" maxlength="500" required placeholder="Reason" aria-label="Reason for reversal" /><button class="btn sm danger" type="submit">Reverse</button></form>
+                                        </details>
+                                    }</td>
+                            </tr>
+                        }
+                    </table>
+                }
+                @if (Model.Adjustments.Count > 0)
+                {
+                    <h3 class="mt">Credit / debit notes</h3>
+                    <table class="table compact">
+                        <thead><tr><th>Kind</th><th>No.</th><th>Date</th><th class="right">Amount</th><th>Entered</th></tr></thead>
+                        @foreach (var a in Model.Adjustments)
+                        {
+                            <tr><td>@(a.Kind == "CreditNote" ? "Credit note" : "Debit note")</td><td>@a.DocNo</td><td>@F.DateDot(a.DocDate)</td><td class="right">@Paise.Format(a.AmountPaise)</td><td class="small">@a.EnteredByName, @F.DateTime(a.EnteredAt)</td></tr>
+                        }
+                    </table>
+                }
+            </div>
+        }
+
+        <div class="card">
+            <h2>Movement</h2>
+            <ol class="timeline">
+                @foreach (var mv in Model.Movements)
+                {
+                    <li><strong>@mv.Action</strong>@(mv.ToName != null ? " → " + mv.ToName : "") <span class="when">by @mv.ActorName, @F.DateTime(mv.At)</span>
+                        @if (!m && !string.IsNullOrEmpty(mv.Remarks)) { <div class="remarks">@mv.Remarks</div> }</li>
+                }
+            </ol>
+        </div>
+
+        @if (Model.Full || Model.CanNote)
+        {
+            <div class="card">
+                <h2>Notes</h2>
+                @if (Model.Notes.Count == 0) { <p class="empty">No notes.</p> }
+                @foreach (var n in Model.Notes) { <div class="inward-note"><p class="pre">@n.Text</p><p class="small muted">@n.Name, @F.DateTime(n.At)</p></div> }
+                @if (Model.CanNote)
+                {
+                    <form method="post" asp-page-handler="Note" class="mt">
+                        <div class="field"><label for="ntext">Add a note</label><textarea id="ntext" name="text" rows="2" maxlength="2000" required></textarea></div>
+                        <button class="btn" type="submit">Add note</button>
+                    </form>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="stack">
+        @if (Model.IsHolder && i.AcceptedAt == null)
+        {
+            <form method="post" asp-page-handler="Accept" class="card highlight"><input type="hidden" name="rv" value="@rv" />
+                <h2>Marked to you</h2><p>Accept to confirm you have received the papers.</p><button class="btn primary" type="submit">Accept</button></form>
+        }
+        @if (Model.CanCertify)
+        {
+            <form method="post" asp-page-handler="Certify" class="card"><input type="hidden" name="rv" value="@rv" />
+                <h2>Certify the invoice</h2><p class="small">Certify that the goods or services were received as invoiced.</p>
+                <div class="field"><label for="con">Certified on *</label><input type="date" id="con" name="on" value="@today" min="@v!.InvoiceDate" max="@today" required /></div>
+                <button class="btn primary" type="submit">Certify</button></form>
+        }
+        @if (Model.IsHolder && v?.InvoiceStatus == InvStatus.WithVerifier && Model.IsInwarder) { <div class="alert info">You inwarded this invoice, so another officer must certify it. Re-mark it.</div> }
+        @if (Model.CanSend)
+        {
+            <form method="post" asp-page-handler="Send" class="card"><input type="hidden" name="rv" value="@rv" /><h2>Send to Accounts</h2><button class="btn primary" type="submit">Send the certified invoice to Accounts</button></form>
+        }
+        @if (Model.CanPay)
+        {
+            var needCheck = v!.OverrideReason != null && v.DuplicateCheckedBy == null;
+            <form method="post" asp-page-handler="Payment" class="card"><input type="hidden" name="rv" value="@rv" />
+                <h2>Record a payment</h2>
+                <div class="form-grid">
+                    <div class="field"><label for="pon">Paid on *</label><input type="date" id="pon" name="PaidOn" value="@today" min="@v.InvoiceDate" max="@today" required /></div>
+                    <div class="field"><label for="pnet">Net paid (₹) *</label><input id="pnet" name="Net" inputmode="decimal" required /></div>
+                    <div class="field"><label for="ptds">TDS (₹)</label><input id="ptds" name="Tds" inputmode="decimal" /></div>
+                    <div class="field"><label for="poth">Other deductions (₹)</label><input id="poth" name="OtherDeductions" inputmode="decimal" /></div>
+                    <div class="field full"><label for="pv">Voucher / UTR *</label><input id="pv" name="VoucherRef" maxlength="60" required /></div>
+                    <div class="field full"><label for="prem">Remarks</label><input id="prem" name="Remarks" maxlength="500" /></div>
+                    @if (needCheck) { <div class="field full"><label class="check"><input type="checkbox" name="CheckedNotDuplicate" value="true" /> Checked: not a duplicate payment</label></div> }
+                </div>
+                <p class="small muted">Outstanding @Paise.Format(v.Outstanding). Net + TDS + other deductions counts against it.</p>
+                <button class="btn primary" type="submit">Record payment</button></form>
+            <details class="card"><summary><strong>Credit / debit note</strong></summary>
+                <form method="post" asp-page-handler="Adjust"><input type="hidden" name="rv" value="@rv" />
+                    <div class="form-grid">
+                        <div class="field"><label for="ak">Kind *</label><select id="ak" name="Kind"><option value="CreditNote">Credit note (reduces)</option><option value="DebitNote">Debit note (increases)</option></select></div>
+                        <div class="field"><label for="ano">Document no. *</label><input id="ano" name="DocNo" maxlength="50" required /></div>
+                        <div class="field"><label for="adt">Date *</label><input type="date" id="adt" name="DocDate" max="@today" required /></div>
+                        <div class="field"><label for="aam">Amount (₹) *</label><input id="aam" name="Amount" inputmode="decimal" required /></div>
+                        <div class="field full"><label for="anote">Inwarded as (optional)</label><input id="anote" name="NoteNumber" maxlength="40" placeholder="Inward no. of the credit / debit note; it will be closed" /></div>
+                        <div class="field full"><label for="arem">Remarks</label><input id="arem" name="Remarks" maxlength="500" /></div>
+                    </div>
+                    <button class="btn" type="submit">Record</button></form>
+            </details>
+            <details class="card"><summary><strong>Close short</strong></summary>
+                <form method="post" asp-page-handler="CloseShort"><input type="hidden" name="rv" value="@rv" />
+                    <p class="small">Closes the invoice without paying the balance (@Paise.Format(v.Outstanding)). The Inward Viewers are told.</p>
+                    <div class="field"><label for="csr">Reason *</label><textarea id="csr" name="reason" rows="2" maxlength="1000" required></textarea></div>
+                    <button class="btn danger" type="submit">Close short</button></form>
+            </details>
+        }
+        @if (Model.CanSendBack)
+        {
+            <details class="card"><summary><strong>Send back to the verifier</strong></summary>
+                <form method="post" asp-page-handler="SendBack"><input type="hidden" name="rv" value="@rv" />
+                    <div class="field"><label for="sbr">Remarks *</label><textarea id="sbr" name="remarks" rows="2" maxlength="1000" required></textarea></div>
+                    <button class="btn" type="submit">Send back</button></form>
+            </details>
+        }
+        @if (Model.CanMark)
+        {
+            <form method="post" asp-page-handler="Mark" class="card"><input type="hidden" name="rv" value="@rv" />
+                <h2>@(i.Status == ItemStatus.Unassigned ? "Mark to an officer" : "Re-mark")</h2>
+                <div class="field"><label for="mto">Officer *</label><select id="mto" name="to" required><option value="">Choose…</option>@foreach (var u in Model.Users.Where(x => x.Id != i.HolderUserId && !(i.IsInvoice && x.Id == i.InwardedByUserId))) { <option value="@u.Id">@u.DisplayName</option> }</select></div>
+                <div class="field"><label for="mrem">Remarks</label><input id="mrem" name="remarks" maxlength="1000" /></div>
+                <button class="btn primary" type="submit">Mark</button></form>
+        }
+        @if (Model.CanClose)
+        {
+            <form method="post" asp-page-handler="Close" class="card"><input type="hidden" name="rv" value="@rv" />
+                <h2>Close</h2>
+                <div class="field"><label for="ctype">How was it disposed of? *</label>
+                    <select id="ctype" name="ClosureType" data-switch="closure" required>@foreach (var c in Closure.ByHolder.Where(c => c != Closure.ConvertedToENote)) { <option value="@c">@Closure.Label(c)</option> }</select></div>
+                <div class="form-grid">
+                    <div class="field" data-when-closure="Replied"><label for="crd">Reply date</label><input type="date" id="crd" name="ReplyDate" value="@today" max="@today" /></div>
+                    <div class="field" data-when-closure="Replied"><label for="cout">Outward reference</label><input id="cout" name="OutwardRef" maxlength="100" /></div>
+                    <div class="field" data-when-closure="Filed"><label for="cfile">File number</label><input id="cfile" name="FiledFileNo" maxlength="100" /></div>
+                    <div class="field" data-when-closure="Forwarded"><label for="cfwd">Forwarded to</label><input id="cfwd" name="ForwardedTo" maxlength="200" /></div>
+                    <div class="field" data-when-closure="Duplicate"><label for="cdup">Duplicate of inward no.</label><input id="cdup" name="DuplicateOfNumber" maxlength="40" /></div>
+                </div>
+                <div class="field"><label for="crem">Remarks *</label><textarea id="crem" name="Remarks" rows="2" maxlength="1000" required></textarea></div>
+                <button class="btn primary" type="submit">Close the item</button></form>
+        }
+        @if (Model.CanConvert)
+        {
+            <details class="card"><summary><strong>Convert to an e-Note</strong></summary>
+                <form method="post" asp-page-handler="Convert"><input type="hidden" name="rv" value="@rv" />
+                    <p class="small">Creates a draft e-Note "Inward @i.Number…" for you to complete, and closes this item. @(Model.Options.ConvertedNotesAllowFiles ? "" : "Files cannot be attached to it; the papers stay where they are kept.")</p>
+                    <div class="field"><label for="ecat">e-Note category *</label><select id="ecat" name="category" required><option value="">Choose…</option>@foreach (var c in Model.ENoteCategories) { <option>@c</option> }</select></div>
+                    <div class="field"><label for="erem">Remarks *</label><input id="erem" name="remarks" maxlength="1000" required /></div>
+                    <label class="check"><input type="checkbox" name="declaration" value="true" required /> I confirm the note contains no classified information beyond what this intranet may hold.</label>
+                    <button class="btn" type="submit">Create the e-Note draft</button></form>
+            </details>
+        }
+        @if (Model.CanCopy)
+        {
+            <details class="card"><summary><strong>Copy to others</strong></summary>
+                <form method="post" asp-page-handler="Copy">
+                    <div class="field"><label for="cusers">People</label><select id="cusers" name="users" multiple size="5" required>@foreach (var u in Model.Users) { <option value="@u.Id">@u.DisplayName</option> }</select></div>
+                    @if (i.IsConfidential) { <label class="check"><input type="checkbox" name="confirm" value="true" required /> I confirm copying this confidential item</label> }
+                    <button class="btn" type="submit">Copy</button></form>
+            </details>
+        }
+        @if (Model.CanHold)
+        {
+            <details class="card"><summary><strong>Put on hold</strong></summary>
+                <form method="post" asp-page-handler="Hold"><input type="hidden" name="rv" value="@rv" />
+                    <div class="field"><label for="hr">Reason *</label><input id="hr" name="reason" maxlength="1000" required /></div><button class="btn" type="submit">Hold</button></form>
+            </details>
+        }
+        @if (Model.CanRelease)
+        {
+            <form method="post" asp-page-handler="Release" class="card"><input type="hidden" name="rv" value="@rv" /><h2>On hold</h2><button class="btn primary" type="submit">Release from hold</button></form>
+        }
+        @if (Model.CanReturnVendor)
+        {
+            <details class="card"><summary><strong>Return to vendor / reject</strong></summary>
+                <form method="post" asp-page-handler="ReturnVendor"><input type="hidden" name="rv" value="@rv" />
+                    <div class="field"><label for="rvr">Reason *</label><textarea id="rvr" name="reason" rows="2" maxlength="1000" required></textarea></div>
+                    <label class="check"><input type="checkbox" name="reject" value="true" /> Reject (not payable) rather than return for correction</label>
+                    <button class="btn danger" type="submit">Return / reject</button></form>
+            </details>
+        }
+        @if (Model.CanReturn)
+        {
+            <details class="card"><summary><strong>Return to the registry</strong></summary>
+                <form method="post" asp-page-handler="Return"><input type="hidden" name="rv" value="@rv" />
+                    <div class="field"><label for="rr">Remarks *</label><input id="rr" name="remarks" maxlength="1000" required placeholder="e.g. not my subject" /></div><button class="btn" type="submit">Return</button></form>
+            </details>
+        }
+        @if (Model.CanReopen)
+        {
+            <details class="card"><summary><strong>Reopen</strong></summary>
+                <form method="post" asp-page-handler="Reopen"><input type="hidden" name="rv" value="@rv" />
+                    <div class="field"><label for="ror">Reason *</label><input id="ror" name="reason" maxlength="1000" required /></div><button class="btn" type="submit">Reopen</button></form>
+            </details>
+        }
+        @if (Model.CanCancel)
+        {
+            <details class="card"><summary><strong>Cancel — entered in error</strong></summary>
+                <form method="post" asp-page-handler="Cancel"><input type="hidden" name="rv" value="@rv" />
+                    <div class="field"><label for="cr">Reason *</label><input id="cr" name="reason" maxlength="1000" required /></div><button class="btn danger" type="submit">Cancel the entry</button></form>
+            </details>
+        }
+        @if (Model.Copies.Count > 0)
+        {
+            <div class="card"><h2>Copied to</h2><ul class="list">@foreach (var c in Model.Copies) { <li>@c.DisplayName</li> }</ul></div>
+        }
+        @if (Model.Reminders.Count > 0)
+        {
+            <div class="card"><h2>Reminders received</h2><ul class="list">@foreach (var r in Model.Reminders) { <li><a href="/Inward/Item/@r.Id">@r.Number</a> · @F.DateTime(r.ReceivedAt)</li> }</ul></div>
+        }
+    </div>
+</div>

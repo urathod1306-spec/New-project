@@ -1,0 +1,16 @@
+@page "{id:long}"
+@model NabconsIntranet.Pages.Inward.EditModel
+@{ ViewData["Title"] = "Edit " + Model.I.Number; }
+<div class="page-head"><div><p class="muted"><a href="/Inward/Item/@Model.I.Id">← @Model.I.Number</a></p><h1>Edit details</h1>
+    <p>The number, office and type cannot change: cancel the entry and inward it again instead. The movement trail records which fields were changed.</p></div></div>
+@if (Model.Error != null) { <div class="alert danger" role="alert">@Model.Error</div> }
+@if (Model.Warnings.Count > 0) { <div class="alert @(Model.Blocked ? "danger" : "warning")" role="alert"><ul>@foreach (var w in Model.Warnings) { <li>@w</li> }</ul></div> }
+<form method="post" class="card">
+    <input type="hidden" name="rv" value="@Model.I.RowVersion" />
+    <partial name="_InwardForm" model="Model.Form" />
+    <div class="actions mt">
+        @if (Model.Warnings.Count > 0 && !Model.Blocked) { <input type="hidden" name="confirmed" value="true" /><button class="btn primary" type="submit">Confirm and save</button> }
+        else { <button class="btn primary" type="submit">Save</button> }
+        <a class="btn" href="/Inward/Item/@Model.I.Id">Cancel</a>
+    </div>
+</form>

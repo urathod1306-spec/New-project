@@ -1,0 +1,114 @@
+@model NabconsIntranet.Pages.Inward.InwardFormModel
+@{
+    var i = Model.Input;
+    var inv = i.Invoice;
+    var today = F.Today.ToString("yyyy-MM-dd");
+    var minDay = F.Today.AddDays(-Model.MaxBackdateDays).ToString("yyyy-MM-dd");
+    var locked = Model.MetadataOnly;
+    bool Show(string types) => !Model.Edit || types.Split('|').Contains(i.ItemType);
+}
+<div class="form-grid">
+    @if (!Model.Edit)
+    {
+        <div class="field"><label for="type">Type *</label>
+            <select id="type" name="Input.ItemType" data-switch="type" required>@foreach (var t in InwardType.Labels) { <option value="@t.Key" selected="@(i.ItemType == t.Key)">@t.Value</option> }</select></div>
+        <div class="field"><label for="office">Office *</label>
+            @if (Model.Offices.Count == 1) { <input type="hidden" name="Input.OfficeId" value="@Model.Offices[0].Id" /><input id="office" value="@Model.Offices[0].Name" readonly /> }
+            else { <select id="office" name="Input.OfficeId" required>@foreach (var o in Model.Offices) { <option value="@o.Id" selected="@(i.OfficeId == o.Id)">@o.Name</option> }</select> }
+        </div>
+    }
+    else
+    {
+        <input type="hidden" name="Input.ItemType" value="@i.ItemType" />
+        <div class="field"><label>Type</label><input value="@InwardType.Label(i.ItemType)" readonly /></div>
+    }
+    <div class="field"><label for="mode">Received by (mode) *</label>
+        <select id="mode" name="Input.Mode" required>@foreach (var t in InwardMode.Labels) { <option value="@t.Key" selected="@(i.Mode == t.Key)">@t.Value</option> }</select></div>
+    <div class="field"><label for="rcvd">Received on *</label>
+        <div class="inline"><input type="date" id="rcvd" name="Input.ReceivedOn" value="@i.ReceivedOn" min="@minDay" max="@today" required /><input type="time" name="Input.ReceivedTime" value="@i.ReceivedTime" aria-label="Received time (optional)" /></div>
+        <span class="hint">Time is optional (today: now). At most @Model.MaxBackdateDays days back.</span></div>
+    @if (!locked)
+    {
+        <div class="field"><label for="sname">Sender's name *</label><input id="sname" name="Input.SenderName" value="@i.SenderName" maxlength="150" required /></div>
+        <div class="field"><label for="sorg">Sender's organisation</label><input id="sorg" name="Input.SenderOrg" value="@i.SenderOrg" maxlength="200" /></div>
+        <div class="field"><label for="sref">Sender's reference</label><input id="sref" name="Input.SenderRef" value="@i.SenderRef" maxlength="100" /></div>
+        <div class="field"><label for="sdate">Reference date</label><input type="date" id="sdate" name="Input.SenderRefDate" value="@i.SenderRefDate" max="@today" /></div>
+        <div class="field full"><label for="subj">Subject *</label><input id="subj" name="Input.Subject" value="@i.Subject" maxlength="300" required /></div>
+        <div class="field full"><label for="summ">Summary</label><textarea id="summ" name="Input.Summary" rows="3" maxlength="2000">@i.Summary</textarea>
+            <span class="hint">Plain text only. Do not paste the letter: record where the papers are kept.</span></div>
+        <div class="field"><label for="cat">Category</label><select id="cat" name="Input.Category"><option value="">—</option>@foreach (var c in Model.Categories) { <option selected="@(i.Category == c)">@c</option> }</select></div>
+    }
+    else
+    {
+        <div class="field full"><p class="alert info">This item is confidential: you can change its register details (mode, dates, priority, location) but not its content.</p></div>
+    }
+    <div class="field"><label for="prio">Priority</label><select id="prio" name="Input.Priority">@foreach (var p in InwardPriority.All) { <option selected="@(i.Priority == p)">@p</option> }</select></div>
+    @if (Show("Letter|Email|CreditDebitNote|GovtOrder|LegalNotice|Other"))
+    {
+        <div class="field" data-when-type="Letter|Email|CreditDebitNote|GovtOrder|LegalNotice|Other"><label for="act">Action required *</label>
+            <select id="act" name="Input.ActionRequired">@foreach (var a in InwardAction.Labels) { <option value="@a.Key" selected="@(i.ActionRequired == a.Key)">@a.Value</option> }</select></div>
+        <div class="field" data-when-type="Letter|Email|CreditDebitNote|GovtOrder|LegalNotice|Other"><label for="due">Reply due</label><input type="date" id="due" name="Input.ReplyDueOn" value="@i.ReplyDueOn" />
+            <span class="hint">Leave blank for the default: @Model.ReplyDaysHint after receipt. Not used for "information only".</span></div>
+    }
+    <div class="field full"><label for="kept">Papers kept at *</label><input id="kept" name="Input.KeptAt" value="@i.KeptAt" maxlength="300" required placeholder="File no., almirah / shelf, or the mailbox folder" /></div>
+    <div class="field"><label for="pages">Pages</label><input type="number" id="pages" name="Input.Pages" value="@i.Pages" min="0" max="10000" /></div>
+    @if (!locked)
+    {
+        <div class="field"><label class="check"><input type="checkbox" name="Input.IsConfidential" value="true" checked="@i.IsConfidential" /> Confidential</label>
+            <span class="hint">Others with register access see only the number, dates and status.</span></div>
+        if (Show("Invoice"))
+        {
+            <div class="field full" data-when-type="Invoice"><label for="irn">IRN (e-invoice)</label><input id="irn" name="Input.Irn" value="@i.Irn" maxlength="64" /></div>
+        }
+    }
+    @if (!Model.Edit)
+    {
+        <div class="field" data-when-type="Letter|Email|GovtOrder|LegalNotice|Other|CreditDebitNote"><label for="link">Reminder / follow-up of inward no. <span class="muted" data-when-type="CreditDebitNote">(credit / debit note: the invoice's inward no. *)</span></label>
+            <input id="link" name="Input.LinkedNumber" value="@i.LinkedNumber" maxlength="40" placeholder="e.g. NCS/IN/HO/2026-27/00012" /></div>
+        <div class="field"><label for="mark">Mark to</label>
+            <select id="mark" name="Input.MarkToUserId"><option value="">@(Model.SelfInward ? "Myself (letters) / registry (invoices)" : "Leave with the registry")</option>
+                @foreach (var u in Model.Users) { <option value="@u.Id" selected="@(i.MarkToUserId == u.Id)">@u.DisplayName</option> }</select>
+            <span class="hint">An invoice is never marked to the person inwarding it.</span></div>
+        <div class="field full"><label for="copy">Copy to</label>
+            <select id="copy" name="Input.CopyToIds" multiple size="4">@foreach (var u in Model.Users) { <option value="@u.Id" selected="@i.CopyToIds.Contains(u.Id)">@u.DisplayName</option> }</select>
+            <label class="check small"><input type="checkbox" name="Input.ConfirmConfidentialCopy" value="true" checked="@i.ConfirmConfidentialCopy" /> I confirm the copies of a confidential item</label></div>
+    }
+</div>
+@if (Model.ShowInvoice)
+{
+    <fieldset class="fieldset mt" data-when-type="Invoice">
+        <legend>Invoice details</legend>
+        @if (Model.AmountsOnly) { <p class="alert info">As Invoice Accounts you can correct the amounts and terms until the first payment.</p> }
+        <div class="form-grid">
+            @if (!Model.AmountsOnly)
+            {
+                <div class="field"><label for="vname">Vendor name *</label><input id="vname" name="Input.Invoice.VendorName" value="@inv.VendorName" maxlength="200" /></div>
+                <div class="field"><label for="gstin">Vendor GSTIN</label><input id="gstin" name="Input.Invoice.VendorGstin" value="@inv.VendorGstin" maxlength="15" class="upper" placeholder="27AAPFU0939F1ZV" /></div>
+                <div class="field"><label class="check"><input type="checkbox" name="Input.Invoice.IsMsme" value="true" checked="@inv.IsMsme" /> Vendor is an MSME (Udyam registered)</label>
+                    <label class="check"><input type="checkbox" name="Input.Invoice.IsTrader" value="true" checked="@inv.IsTrader" /> Trader (outside the 45-day rule for 43B(h))</label></div>
+                <div class="field"><label for="udyam">Udyam no. and class</label>
+                    <div class="inline"><input id="udyam" name="Input.Invoice.UdyamNo" value="@inv.UdyamNo" maxlength="30" placeholder="UDYAM-MH-01-0001234" />
+                        <select name="Input.Invoice.MsmeClass" aria-label="MSME class"><option value="">Class —</option>@foreach (var c in InvoiceRules.MsmeClasses) { <option selected="@(inv.MsmeClass == c)">@c</option> }</select></div></div>
+                <div class="field"><label for="ino">Invoice no. *</label><input id="ino" name="Input.Invoice.InvoiceNo" value="@inv.InvoiceNo" maxlength="50" /></div>
+                <div class="field"><label for="idate">Invoice date *</label><input type="date" id="idate" name="Input.Invoice.InvoiceDate" value="@inv.InvoiceDate" max="@today" /></div>
+                <div class="field"><label for="pc">Project code</label><select id="pc" name="Input.Invoice.ProjectCode"><option value="">—</option>
+                    @foreach (var p in Model.ProjectCodes) { <option value="@p.Code" selected="@(string.Equals(inv.ProjectCode, p.Code, StringComparison.OrdinalIgnoreCase))">@p.Code — @p.Name@(p.OwnerName != null ? " (verifier: " + p.OwnerName + ")" : "")</option> }</select>
+                    <span class="hint">The project owner is shown as the usual verifier; choose them under "Mark to".</span></div>
+                <div class="field"><label for="po">PO / work order ref.</label><input id="po" name="Input.Invoice.PoRef" value="@inv.PoRef" maxlength="100" /></div>
+            }
+            <div class="field"><label for="tax">Taxable value (₹)</label><input id="tax" name="Input.Invoice.Taxable" value="@inv.Taxable" inputmode="decimal" /></div>
+            <div class="field"><label for="gst">GST (₹)</label><input id="gst" name="Input.Invoice.Gst" value="@inv.Gst" inputmode="decimal" /></div>
+            <div class="field"><label for="oth">Other charges (₹)</label><input id="oth" name="Input.Invoice.Other" value="@inv.Other" inputmode="decimal" /><span class="hint">TCS, cess, round-off.</span></div>
+            <div class="field"><label for="tot">Invoice total (₹) *</label><input id="tot" name="Input.Invoice.Total" value="@inv.Total" inputmode="decimal" /></div>
+            <div class="field"><label for="terms">Payment terms (days)</label><input type="number" id="terms" name="Input.Invoice.TermsDays" value="@(inv.TermsDays ?? Model.DefaultTerms)" min="0" max="365" />
+                <span class="hint">MSME invoices are due within 45 days of the invoice date whatever the terms.</span></div>
+            @if (Model.Blocked || inv.NotDuplicate)
+            {
+                <div class="field full highlight">
+                    <label class="check"><input type="checkbox" name="Input.Invoice.NotDuplicate" value="true" checked="@inv.NotDuplicate" /> This is not a duplicate</label>
+                    <label for="ovr">Reason *</label><input id="ovr" name="Input.Invoice.OverrideReason" value="@inv.OverrideReason" maxlength="500" />
+                </div>
+            }
+        </div>
+    </fieldset>
+}
