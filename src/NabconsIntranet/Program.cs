@@ -40,6 +40,9 @@ builder.Services.AddSingleton(boardOptions);
 var complianceOptions = builder.Configuration.GetSection("Compliance").Get<ComplianceOptions>() ?? new ComplianceOptions();
 complianceOptions.Resolve();
 builder.Services.AddSingleton(complianceOptions);
+var inwardOptions = builder.Configuration.GetSection("Inward").Get<InwardOptions>() ?? new InwardOptions();
+inwardOptions.Resolve();
+builder.Services.AddSingleton(inwardOptions);
 // One request may carry several attachments: allow the larger of the circular and e-Note limits.
 var maxBody = Math.Max(Math.Max(options.MaxUploadBytes * 5, enoteOptions.MaxFileBytes * 10), boardOptions.MaxPhotoMB * 1024L * 1024L * boardOptions.MaxPhotosPerPost) + 1024 * 1024;
 builder.Logging.AddProvider(new FileLoggerProvider(options.LogPath));
@@ -88,6 +91,9 @@ builder.Services.AddSingleton<ComplianceWorkflow>();
 builder.Services.AddSingleton<ComplianceImport>();
 builder.Services.AddSingleton<AtrBuilder>();
 builder.Services.AddHostedService<ComplianceScheduler>();
+builder.Services.AddSingleton<InwardAccess>();
+builder.Services.AddSingleton<InwardRepository>();
+builder.Services.AddSingleton<InwardWorkflow>();
 builder.Services.AddTransient<Seeder>();
 builder.Services.AddHostedService<BackupScheduler>();
 

@@ -363,7 +363,6 @@ public sealed class InwardRepository(Db db, InwardAccess access, InwardOptions o
         if (!string.IsNullOrWhiteSpace(f.Project)) w.Add("d.ProjectCode = @project COLLATE NOCASE");
         var fts = SearchText.ToFtsQuery(f.Q);
         if (fts != null) w.Add("i.Id IN (SELECT rowid FROM InwardSearch WHERE InwardSearch MATCH @fts ORDER BY rowid DESC LIMIT 5000)");
-        var a = InvArgs(u);
         return (string.Join(" AND ", w), new { uid = u.UserId(), today = Today, msmeCut = Day(-o.MsmeMaxDays), msmeSoon = Day(o.MsmeDueSoonDays), project = f.Project, fts });
     }
 

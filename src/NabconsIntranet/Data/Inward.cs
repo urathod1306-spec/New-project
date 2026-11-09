@@ -212,6 +212,8 @@ public sealed class InwardItem
 
     public bool IsOpen => Status != ItemStatus.Closed;
     public bool IsInvoice => ItemType == InwardType.Invoice;
+    /// <summary>Invoice Accounts see invoices and credit / debit notes (DD-08 R2-1).</summary>
+    public bool IsAccountsType => ItemType is InwardType.Invoice or InwardType.CreditDebitNote;
     public bool Masked => IsConfidential && !Full;
     public string ShownSubject => Masked ? "Confidential" : Subject;
     public string ShownSender => Masked ? "Confidential" : SenderName + (string.IsNullOrEmpty(SenderOrg) ? "" : ", " + SenderOrg);
@@ -403,7 +405,7 @@ public sealed class InwardAccess(Db db, InwardOptions o)
         var parts = new List<string> { string.Format(Participant, i) };
         var offices = OperatorOffices(u);
         if (offices.Count > 0) parts.Add($"{i}.OfficeId IN ({string.Join(",", offices)})");
-        if (IsAccounts(u)) parts.Add($"{i}.ItemType = 'Invoice'");
+        if (IsAccounts(u)) parts.Add($"{i}.ItemType IN ('Invoice','CreditDebitNote')");
         return "(" + string.Join(" OR ", parts) + ")";
     }
 
@@ -412,7 +414,7 @@ public sealed class InwardAccess(Db db, InwardOptions o)
     {
         if (IsViewer(u)) return "1 = 1";
         var parts = new List<string> { string.Format(Participant, i) };
-        if (IsAccounts(u)) parts.Add($"{i}.ItemType = 'Invoice'");
+        if (IsAccounts(u)) parts.Add($"{i}.ItemType IN ('Invoice','CreditDebitNote')");
         return "(" + string.Join(" OR ", parts) + ")";
     }
 
@@ -423,10 +425,10 @@ public sealed class InwardAccess(Db db, InwardOptions o)
         db.Scalar<long>("SELECT COUNT(*) FROM InwardParticipants WHERE ItemId = @itemId AND UserId = @userId", new { itemId, userId }) > 0;
 
     public bool CanView(InwardItem it, ClaimsPrincipal u) =>
-        o.Enabled && (IsViewer(u) || IsAuditor(u) || IsOperatorOf(u, it.OfficeId) || (IsAccounts(u) && it.IsInvoice) || IsParticipant(it.Id, u.UserId()));
+        o.Enabled && (IsViewer(u) || IsAuditor(u) || IsOperatorOf(u, it.OfficeId) || (IsAccounts(u) && it.IsAccountsType) || IsParticipant(it.Id, u.UserId()));
 
     public bool HasFull(InwardItem it, ClaimsPrincipal u) =>
-        IsViewer(u) || (IsAccounts(u) && it.IsInvoice) || IsParticipant(it.Id, u.UserId());
+        IsViewer(u) || (IsAccounts(u) && it.IsAccountsType) || IsParticipant(it.Id, u.UserId());
 
     /// <summary>Show the Inward tab: any grant, the Auditor role, self-inward, or a participant in any item.</summary>
     public bool ShowsMenu(ClaimsPrincipal u, bool participant) => o.Enabled && (SeesRegister(u) || o.SelfInwardEnabled || participant);
