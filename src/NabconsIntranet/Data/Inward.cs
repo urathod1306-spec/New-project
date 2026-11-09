@@ -396,7 +396,8 @@ public sealed class InwardAccess(Db db, InwardOptions o)
     /// <summary>Part of the My Desk cache key: the user's grants in a fixed order.</summary>
     public string RoleKey(ClaimsPrincipal u) => string.Join(",", Of(u).Select(g => g.Role + ":" + g.OfficeId).OrderBy(x => x, StringComparer.Ordinal));
 
-    private const string Participant = "EXISTS (SELECT 1 FROM InwardParticipants ip WHERE ip.ItemId = {0}.Id AND ip.UserId = @uid)";
+    /// <summary>Written as IN (…) so SQLite can answer "participant OR office" with two index lookups (multi-index OR).</summary>
+    private const string Participant = "{0}.Id IN (SELECT ip.ItemId FROM InwardParticipants ip WHERE ip.UserId = @uid)";
 
     /// <summary>SQL: the user (@uid) may see the item aliased <paramref name="i"/> (full or metadata only).</summary>
     public string VisibleSql(ClaimsPrincipal u, string i = "i")

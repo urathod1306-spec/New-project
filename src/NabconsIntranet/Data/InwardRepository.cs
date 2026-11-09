@@ -172,10 +172,10 @@ public sealed class InwardRepository(Db db, InwardAccess access, InwardOptions o
             "unassigned" => "i.Status = 'Unassigned'",
             "withholder" => "i.Status = 'WithHolder'",
             "withaccounts" => "i.Status = 'WithAccounts'",
-            "overdue" => "i.Status <> 'Closed' AND i.ReplyDueOn IS NOT NULL AND i.ReplyDueOn < @today",
+            "overdue" => "i.Status IN ('Unassigned','WithHolder','WithAccounts') AND i.ReplyDueOn IS NOT NULL AND i.ReplyDueOn < @today",
             "closed" => "i.Status = 'Closed'",
             "all" => "1 = 1",
-            _ => "i.Status <> 'Closed'",
+            _ => "i.Status IN ('Unassigned','WithHolder','WithAccounts')",
         });
         var fts = SearchText.ToFtsQuery(f.Q);
         // FTS first, newest first and capped, so a broad word never drags in the whole register
@@ -229,54 +229,94 @@ public sealed class InwardRepository(Db db, InwardAccess access, InwardOptions o
 
     // ---------------------------------------------------------------- dashboards
 
-    private sealed class Tiles
+    private sealed class OpenGroup
     {
-        public long Open { get; set; }
+        public long? H { get; set; }
+        public long O { get; set; }
+        public string OfficeName { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string Age { get; set; } = "";
+        public long N { get; set; }
         public long Overdue { get; set; }
         public long DueSoon { get; set; }
-        public long UnassignedOld { get; set; }
-        public long HeldByInactive { get; set; }
-        public long ReceivedToday { get; set; }
+        public long Old { get; set; }
     }
 
+    private sealed class UserRow { public long Id { get; set; } public string DisplayName { get; set; } = ""; public string? Vertical { get; set; } public bool IsActive { get; set; } }
+
+    /// <summary>
+    /// Dashboard (§6.1). The open items are grouped twice (by holder and status; by office and age bucket) and every tile
+    /// and breakdown is summed from those groups; age buckets compare the stored UTC times with day boundaries (no date
+    /// functions per row). Benchmarked at 250,000 items (InwardBenchTests).
+    /// </summary>
     public InwardDashboard Dashboard(ClaimsPrincipal u, long? officeId)
     {
         var vis = access.VisibleSql(u) + (officeId > 0 ? " AND i.OfficeId = @officeId" : "");
+        var t = fmt.Today;
         var a = new
         {
             uid = u.UserId(), officeId, today = Today, soon = Day(1),
-            oldCut = DayStartUtc(WorkingDaysBefore(fmt.Today, Math.Max(1, o.UnassignedAlertWorkingDays)).AddDays(1)),
-            todayUtc = DayStartUtc(fmt.Today), mod = Mod, fromMonth = fmt.Today.AddMonths(-11).ToString("yyyy-MM", CultureInfo.InvariantCulture),
-            fromUtc = DayStartUtc(new DateOnly(fmt.Today.AddMonths(-11).Year, fmt.Today.AddMonths(-11).Month, 1)),
+            oldCut = DayStartUtc(WorkingDaysBefore(t, Math.Max(1, o.UnassignedAlertWorkingDays)).AddDays(1)),
+            a7 = DayStartUtc(t.AddDays(-7)), a15 = DayStartUtc(t.AddDays(-15)), a30 = DayStartUtc(t.AddDays(-30)),
+            todayUtc = DayStartUtc(t), mod = Mod,
+            fromUtc = DayStartUtc(new DateOnly(t.AddMonths(-11).Year, t.AddMonths(-11).Month, 1)),
         };
-        const string j = "FROM InwardItems i LEFT JOIN Users h ON h.Id = i.HolderUserId";
-        var t = db.Query<Tiles>($"""
-            SELECT COALESCE(SUM(i.Status <> 'Closed'), 0) AS Open,
-                   COALESCE(SUM(i.Status <> 'Closed' AND i.ReplyDueOn IS NOT NULL AND i.ReplyDueOn < @today), 0) AS Overdue,
-                   COALESCE(SUM(i.Status <> 'Closed' AND i.ReplyDueOn BETWEEN @today AND @soon), 0) AS DueSoon,
-                   COALESCE(SUM(i.Status = 'Unassigned' AND i.InwardedAt < @oldCut), 0) AS UnassignedOld,
-                   COALESCE(SUM(i.Status = 'WithHolder' AND h.IsActive = 0), 0) AS HeldByInactive,
-                   COALESCE(SUM(i.InwardedAt >= @todayUtc), 0) AS ReceivedToday
-            {j} WHERE {vis} AND (i.Status <> 'Closed' OR i.InwardedAt >= @todayUtc)
-            """, a).First();
-        var d = new InwardDashboard { Open = t.Open, Overdue = t.Overdue, DueSoon = t.DueSoon, UnassignedOld = t.UnassignedOld, HeldByInactive = t.HeldByInactive, ReceivedToday = t.ReceivedToday };
-        d.ByHolder = db.Query<CountRow>($"""
-            SELECT COALESCE(h.DisplayName, '(unassigned)') AS Key, CAST(i.HolderUserId AS TEXT) AS Key2, COUNT(*) AS N,
-                   COALESCE(SUM(i.ReplyDueOn IS NOT NULL AND i.ReplyDueOn < @today), 0) AS N2
-            {j} WHERE {vis} AND i.Status <> 'Closed' GROUP BY i.HolderUserId ORDER BY N DESC LIMIT 20
+        // two small groupings of the open items: by holder (≤ users × statuses rows) and by office × age (≤ offices × 12 rows)
+        var groups = db.Query<OpenGroup>($"""
+            SELECT i.HolderUserId AS H, 0 AS O, '' AS OfficeName, i.Status, '' AS Age,
+                   COUNT(*) AS N, COALESCE(SUM(i.ReplyDueOn < @today), 0) AS Overdue, COALESCE(SUM(i.ReplyDueOn BETWEEN @today AND @soon), 0) AS DueSoon,
+                   COALESCE(SUM(i.Status = 'Unassigned' AND i.InwardedAt < @oldCut), 0) AS Old
+            FROM InwardItems i WHERE {vis} AND i.Status IN ('Unassigned','WithHolder','WithAccounts')
+            GROUP BY i.HolderUserId, i.Status
             """, a);
-        d.ByVertical = db.Query<CountRow>($"""
-            SELECT COALESCE(NULLIF(h.Vertical, ''), CASE WHEN i.Status = 'Unassigned' THEN '(registry)' WHEN i.Status = 'WithAccounts' THEN '(Accounts)' ELSE '(not set)' END) AS Key, COUNT(*) AS N
-            {j} WHERE {vis} AND i.Status <> 'Closed' GROUP BY Key ORDER BY N DESC LIMIT 30
+        var places = db.Query<OpenGroup>($"""
+            SELECT i.OfficeId AS O, MAX(i.OfficeName) AS OfficeName,
+                   CASE WHEN i.ReceivedAt >= @a7 THEN '0–7' WHEN i.ReceivedAt >= @a15 THEN '8–15' WHEN i.ReceivedAt >= @a30 THEN '16–30' ELSE '> 30' END AS Age, COUNT(*) AS N
+            FROM InwardItems i WHERE {vis} AND i.Status IN ('Unassigned','WithHolder','WithAccounts')
+            GROUP BY i.OfficeId + 0, Age
             """, a);
-        d.ByOffice = db.Query<CountRow>($"SELECT i.OfficeName AS Key, COUNT(*) AS N FROM InwardItems i WHERE {vis} AND i.Status <> 'Closed' GROUP BY i.OfficeId ORDER BY N DESC", a);
-        d.Ageing = db.Query<CountRow>($"""
-            SELECT CASE WHEN g <= 7 THEN '0–7' WHEN g <= 15 THEN '8–15' WHEN g <= 30 THEN '16–30' ELSE '> 30' END AS Key, COUNT(*) AS N
-            FROM (SELECT julianday(@today) - julianday(date(i.ReceivedAt, @mod)) AS g FROM InwardItems i WHERE {vis} AND i.Status <> 'Closed') GROUP BY Key
-            """, a);
-        d.Received = db.Query<CountRow>($"SELECT strftime('%Y-%m', i.InwardedAt, @mod) AS Key, COUNT(*) AS N FROM InwardItems i WHERE {vis} AND i.InwardedAt >= @fromUtc GROUP BY Key", a);
-        d.Closed = db.Query<CountRow>($"SELECT strftime('%Y-%m', i.ClosedAt, @mod) AS Key, COUNT(*) AS N FROM InwardItems i WHERE {vis} AND i.ClosedAt >= @fromUtc GROUP BY Key", a);
+        var people = db.Query<UserRow>("SELECT Id, DisplayName, Vertical, IsActive FROM Users").ToDictionary(x => x.Id);
+        UserRow? P(long? id) => id is long k && people.TryGetValue(k, out var p) ? p : null;
+        var d = new InwardDashboard
+        {
+            Open = groups.Sum(g => g.N), Overdue = groups.Sum(g => g.Overdue), DueSoon = groups.Sum(g => g.DueSoon), UnassignedOld = groups.Sum(g => g.Old),
+            HeldByInactive = groups.Where(g => g.Status == ItemStatus.WithHolder && P(g.H) is { IsActive: false }).Sum(g => g.N),
+            // a separate index-only count: an OR with the open-status condition would make SQLite scan the whole register
+            ReceivedToday = db.Scalar<long>($"SELECT COUNT(*) FROM InwardItems i WHERE {vis} AND i.InwardedAt >= @todayUtc", a),
+        };
+        d.ByHolder = groups.GroupBy(g => g.Status == ItemStatus.WithHolder ? g.H : null)
+            .Select(x => new CountRow
+            {
+                Key = x.Key is long h ? P(h)?.DisplayName ?? "#" + h : "(unassigned / Accounts)", Key2 = x.Key?.ToString(CultureInfo.InvariantCulture),
+                N = x.Sum(g => g.N), N2 = x.Sum(g => g.Overdue),
+            }).OrderByDescending(r => r.N).Take(20).ToList();
+        d.ByVertical = groups.GroupBy(g => g.Status switch
+            {
+                ItemStatus.Unassigned => "(registry)", ItemStatus.WithAccounts => "(Accounts)",
+                _ => string.IsNullOrEmpty(P(g.H)?.Vertical) ? "(not set)" : P(g.H)!.Vertical!,
+            })
+            .Select(x => new CountRow { Key = x.Key, N = x.Sum(g => g.N) }).OrderByDescending(r => r.N).Take(30).ToList();
+        d.ByOffice = places.GroupBy(g => g.O).Select(x => new CountRow { Key = x.First().OfficeName, N = x.Sum(g => g.N) }).OrderByDescending(r => r.N).ToList();
+        d.Ageing = places.GroupBy(g => g.Age).Select(x => new CountRow { Key = x.Key, N = x.Sum(g => g.N) }).ToList();
+        d.Received = db.Query<CountRow>($"SELECT {MonthCase("i.InwardedAt")} AS Key, COUNT(*) AS N FROM InwardItems i WHERE {vis} AND i.InwardedAt >= @fromUtc GROUP BY Key", a);
+        d.Closed = db.Query<CountRow>($"SELECT {MonthCase("i.ClosedAt")} AS Key, COUNT(*) AS N FROM InwardItems i WHERE {vis} AND i.ClosedAt >= @fromUtc GROUP BY Key", a);
         return d;
+    }
+
+    /// <summary>
+    /// SQL giving the office month (yyyy-MM) of a stored UTC time over the last 12 months, by comparing with the months'
+    /// UTC start times (cheaper than strftime per row). The boundaries are generated here, never user input.
+    /// </summary>
+    private string MonthCase(string col)
+    {
+        var sb = new System.Text.StringBuilder("CASE");
+        var first = new DateOnly(fmt.Today.Year, fmt.Today.Month, 1);
+        for (var k = 0; k < 12; k++)
+        {
+            var m = first.AddMonths(-k);
+            sb.Append($" WHEN {col} >= '{DayStartUtc(m)}' THEN '{m:yyyy-MM}'");
+        }
+        return sb.Append(" END").ToString();
     }
 
     private sealed class InvTiles
