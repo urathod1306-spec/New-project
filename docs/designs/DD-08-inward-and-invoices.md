@@ -1,575 +1,641 @@
 # DD-08: Inward Register with Invoice Inward and tracking (release 1.7.0)
 
-**Status:** v1. Elephant draft for Goldfish review.
-**Date:** 09.11.2026.
-**Baseline:** release 1.6.0, schema 7.
-**Scope:** this is R2 of `DD-07-compliance-and-inward.md`, which only outlined it (DD-07 §16). This document replaces that outline. It is the single source of truth for 1.7.0.
+**Status:** v2.
+- v1 was reviewed by fresh Goldfish reviewers (G1 comprehension, G2 critic, G3 readiness), and their findings are resolved here. The record of every finding is in `docs/designs/reviews/DD-08_consolidated_review_report.md`.
+- The owner answered six questions (§0.1).
+- This document is the single source of truth for 1.7.0 and describes what is built.
 
-Paths are relative to `src/NabconsIntranet/` unless they start with `docs/` or `tests/`. The register-only rule, the offline and CSP rules, the audit and migration rules, and the patterns established in 1.6.0 all apply: grants held in the module, the upload guard, report writers, the scheduler, and desk counts (DD-07 §3, §7.1).
+**Date:** 09.11.2026. **Baseline:** release 1.6.0, schema 7. **Supersedes:** DD-07 §16 (R2 outline).
+
+Paths are relative to `src/NabconsIntranet/` unless they start with `docs/` or `tests/`. These 1.6.0 rules and patterns all apply (DD-07 §3, §7.1):
+- **Rules:** register-only; offline; CSP; audit and migration rules.
+- **Patterns:** grants held in the module, `UploadGuard`, report writers, scheduler, desk counts, `ComplianceText` limits.
 
 ## 0. Decisions
 
-### 0.1 Interview answers from the owner (09.11.2026)
-
+### 0.1 Owner's answers (09.11.2026)
 | # | Question | Answer |
 |---|---|---|
-| D6 | Numbering | **One series per office**: `NCS/IN/<office code>/<FY>/<serial 5 digits>`. The serial restarts every April. |
-| D7 | Reply-due default | **Calendar days**: Normal 7, Urgent 3, Immediate 1 (settings). The person inwarding can change the date for each item. |
-| D8 | Invoice certification and terms | The **officer the invoice is marked to** certifies it. The registry is shown the project-code owner as a suggestion. Default terms are **30 days** from the invoice date. For MSME vendors, the payment due date can never be later than **45 days from acceptance**. |
+| D6 | Numbering | **One series per office:** `NCS/IN/<office code>/<FY>/<serial, 5 digits minimum>`. The serial restarts every April. Offices without a code share the series `GEN`. |
+| D7 | Reply-due default | **Calendar days:** Normal 7, Urgent 3, Immediate 1. These are settings, and the date can be changed on each item. |
+| D8 | Invoice certification and terms | **The officer the invoice is marked to certifies it.** The project-code owner is suggested as that officer. Default terms are **30 days** from the invoice date. |
 | D10 | Self-inward | **Open to all staff from day one** (setting `SelfInwardEnabled`, default true). |
+| D15 | MSME rule | **Simple rule:** an MSME invoice is due on the invoice date + the shorter of the terms and **45 days**. It is flagged when unpaid past invoice date + 45. The flag counts from receipt, not from certification. |
+| D16 | Files on e-Notes created from inward items | **No files.** A note converted from an inward item can never carry attachments (a setting can allow them later). The note also takes the item's confidential flag. |
 
-### 0.2 Decisions taken by the Elephant (owner may change before merge)
-
-**E1. Office codes**
-- Codes come from the existing **Offices / Locations** master list.
-- The Master lists page gains a code column for offices: 2–8 letters or digits, the same rules as vertical codes.
-- An office without a code numbers its items with `GEN`.
-- No existing data is changed.
-
-**E2. Item types**
-- The types are a **fixed list in code**: Letter, E-mail, Invoice, Government order / notice, Legal notice, Other.
-- This is not a master list as the brief suggests, because "Invoice" drives its own lifecycle and must not be renamable.
-- Categories are a master list (`InwardCategory`).
-
-**E3. Who manages access**
-- Registry staff (*Inward Operator*, per office), *Inward Viewer* (COO, MD) and *Invoice Accounts* are **grants held in the module**, managed by the intranet **Administrator** on *Inward → Access*.
-- This is unlike compliance: inward is an office-administration register, not a Board matter. Every change is audited.
-- Grants live in their own table, so a roll-back to 1.6 does not strip them (finding G2-22 from DD-07).
-
-**E4. Reminder letters**
-- A reminder or follow-up letter is **inwarded with its own number** and immediately closed as *"Reminder of {original}"*.
-- The original's reminder count goes up, and the original is reopened (to its last holder) if it was closed.
-- Tracking therefore continues in one place.
-
-**E5. Converted to e-Note**
-- This option is **only offered when e-Note is enabled**. The owner's live server has e-Note off, so it is hidden there.
-- It creates a **draft** e-Note for the holder. The draft carries the inward number and details as text.
-- The new nullable column `ENotes.SourceInwardId` links the note back to the inward item.
-- Documents may be attached in the e-Note, as the brief allows. **Owner to confirm** (risk R-3).
-
-**E6. Money**
-- All amounts are stored as **integer paise**, so the "paid + deductions = total" comparison is exact.
-
-**E7. ERP payment CSV**
-- There is **our own template**, because no ERP sample was available. The columns are listed in §6.11.
-- Matching is on the inward number, or on vendor GSTIN/name plus invoice number plus invoice FY.
-- The voucher/UTR reference is unique, so importing the same file again changes nothing.
-- When an ERP sample arrives, a column-mapping change can be made.
-
-**E8. Confidential items**
-- In registers, lists, exports and prints, a confidential item shows **metadata only**: number, dates, type, mode, office, holder and status. The subject, summary, sender and sender's reference are replaced by "Confidential".
-- Full details are shown only to participants (§5) and to Inward Viewers.
-- The subject and summary of a confidential item are not put in the search index.
-
-**E9. Holder for Accounts**
-- When an invoice is *Sent to Accounts*, the item has **no personal holder**. It sits in the Accounts queue, which every Invoice Accounts user sees.
+### 0.2 Elephant decisions (owner may change before merge)
+- **E1 Office codes.** These are the codes of the **Offices / Locations** master list. They are edited on the Master lists page and are unique within the list. `GEN` is reserved. An office is always referred to by its **id**.
+- **E2 Types and modes.** Both are fixed lists in code, without database CHECK constraints, so new values can be added without rewriting a table.
+  - **Types:** Letter, E-mail, Invoice, Credit / debit note, Government order / notice, Legal notice, Other.
+  - **Modes:** Post, Registered post, Speed Post, Courier, By hand, E-mail, Fax, Portal (GeM / e-procurement).
+  - **Categories:** a master list, `InwardCategory`.
+- **E3 Access grants.** Inward Operator (per office), Inward Viewer and Invoice Accounts are **grants held in the module**.
+  - They are managed by the intranet **Administrator** on *Inward → Access*.
+  - An Administrator cannot grant to themselves.
+  - Every change is audited and notified to the Inward Viewers.
+- **E4 Reminder letters.**
+  - A reminder or follow-up letter is inwarded with its own number and closed at once as *Reminder of {original}*, held by the person who inwarded it.
+  - The original's reminder count goes up, and the original's holder (or Accounts) is notified.
+  - A **non-invoice** original is reopened (to its last holder) if it was closed. An **invoice** is never reopened this way.
+  - Linking is allowed only to items the user may see (§5). For any other number the message is the same "not found". Links are followed to the root item.
+  - A reminder takes the original's confidential flag.
+- **E5 Converted to e-Note.**
+  - Offered only while e-Note is enabled; the owner's live server has e-Note off, so the action is hidden there.
+  - The holder chooses an e-Note category and accepts the usual declaration.
+  - A **draft** e-Note is created with `SourceInwardId`. It takes the item's confidential flag. Its subject is "Inward {number}: {subject}"; for a confidential item, only "Inward {number}".
+  - The inward item is then closed (`ConvertedToENote`, `ENoteId`). If the close fails, a retry reuses the existing draft found by `SourceInwardId`, so the step is idempotent.
+  - `ENoteWorkflow.AttachAsync` refuses files on notes with `SourceInwardId` unless `Inward:ConvertedNotesAllowFiles` = true (default false; D16).
+  - The e-Note page shows "Created from inward …" only to viewers who can open the item.
+- **E6 Money.** Amounts are stored as **integer paise** (`Infrastructure/Gstin.cs`, class `Paise`).
+- **E7 ERP payment CSV.** It uses our own template (§6.11) because no sample exists. `Amount` is the **net** amount paid. When a real ERP sample arrives, a column-mapping change can be made.
+- **E8 Confidential items.**
+  - **Metadata only.** In lists, exports, prints, aggregates and search results, a user without full access (§5) sees only the number, dates, type, mode, office, holder and status. Subject, summary, sender, sender's reference and vendor read "Confidential".
+  - **Search.** The search index holds only the number and the invoice number of a confidential item.
+  - **Copies.** Copying a confidential item to someone needs an extra confirmation and is audited.
+- **E9 Accounts queue.** An invoice sent to Accounts has no personal holder. It sits in the Accounts queue (item status `WithAccounts`).
+- **E10 Segregation.**
+  - The person who inwarded an invoice cannot certify it.
+  - A self-inwarded invoice goes to the registry as *Received*, or to another officer chosen on the form, never to the person inwarding it.
+  - Every close-short is notified to the Inward Viewers and shown on the invoice dashboard.
 
 ## 1. The Problem
-Letters and e-mails go unanswered because nobody records receiving them, gives them to someone, or follows them up. Invoices arrive, but nobody can say how many are unpaid, for how long, or whether MSME vendors are being paid within the law (MSMED Act s.15; Income-tax s.43B(h)).
+Letters and e-mails go unanswered because nobody records receiving them, gives them to someone, or follows them up. Invoices arrive, but nobody can say how many are unpaid, for how long, or whether MSME vendors are being paid on time.
 
-The Inward Register fixes this:
-- **Every item** gets a number, a current holder, a reply-due date, an ageing clock and a closure record.
-- **Invoices** also get a verification-to-payment lifecycle, duplicate protection and MSME monitoring.
-- **No scans or files are stored** (decided by the COO). The paper stays in the file, the e-mail stays in the mailbox, and the register records where they are kept.
+The Inward Register gives every item:
+- a number;
+- a current holder;
+- a reply-due date;
+- an ageing clock;
+- a closure record.
+
+Invoices also get:
+- a verification-to-payment lifecycle, including credit and debit notes;
+- duplicate protection;
+- MSME 45-day monitoring.
+
+No scans or files are stored (COO decision). The register records where the paper or e-mail is kept.
 
 ## 2. Glossary
 | Term | Meaning |
 |---|---|
-| **Inward item** | One registered letter, e-mail, invoice or notice. |
-| **Office** | The receiving office (a *Location* master item with a code). |
-| **Inwarding** | Registering an item. It is done by an **Inward Operator** for their office, or by any user (**self-inward**) for an item they received directly. |
-| **Holder** | The user who currently has to act on the item. |
-| **Mark to** | Give the item to a holder. **Re-mark:** the holder passes it on. |
-| **Copy-to** | Users told about the item for information. They can see it and add notes, but cannot act on it. |
-| **Participant** | Anyone who inwarded the item, held it, or was copied on it. |
-| **Return to registry** | The holder says the item was marked to them wrongly. It goes back to *Unassigned*. |
-| **Closure type** | How the item ended: Replied, Action completed, Filed (no reply needed), Forwarded, Converted to e-Note, Duplicate, Reminder of another item, or Invoice settled / returned / rejected. |
-| **Reply due** | The date by which a reply or action is due. Items marked "Information only" have none. |
-| **Invoice status** | Received → With verifier → Certified → Sent to Accounts → Part-paid → Paid. Side states: On hold, Returned to vendor, Rejected, Closed short. |
-| **Acceptance** | The date the verifier certifies the invoice. The MSME 45-day limit (MSMED Act s.15) runs from this date. |
-| **Paise** | 1/100 rupee. All amounts are stored as whole paise. |
-| **Project code** | Master list kept by Accounts, imported from an ERP CSV. It may name an owner officer, who is suggested as verifier. |
+| **Inward item** | One registered letter, e-mail, invoice, credit/debit note or notice. |
+| **Office** | The receiving office: a *Location* master item, which may have a code. |
+| **Inward date** | The office date (`Fmt.Today`) on which the item is registered. It decides the FY of the number. |
+| **Received at** | When the item actually arrived. It can be up to 90 days earlier than the inward date, but never in the future. |
+| **Holder** | The user who currently has to act. |
+| **Mark to** / **re-mark** | Give the item to a holder. |
+| **Copy-to** | Users told for information. They can see the item and add notes. |
+| **Participant** | Someone with **full** access to an item: the person who inwarded it, the current holder, past holders (unless they *returned it to the registry*), and copy-to users. Kept in `InwardParticipants`. |
+| **Return to registry** | The holder says the item was marked to them by mistake. It goes back to *Unassigned*, and that holder stops being a participant. |
+| **Closure type** | How the item ended: `Replied`, `ActionCompleted`, `Filed`, `Forwarded`, `ConvertedToENote`, `Duplicate`, `Reminder`, `Cancelled` (entered in error), `InvoiceSettled`, `InvoiceClosedShort`, `InvoiceReturned`, `InvoiceRejected`. |
+| **Invoice status** | `Received`, `WithVerifier`, `Certified`, `SentToAccounts`, `PartPaid`, `Paid`, `OnHold`, `ReturnedToVendor`, `Rejected`, `ClosedShort`, `Cancelled`. |
+| **Effective total** | Invoice total + Σ debit notes − Σ credit notes. |
+| **Settled** | Σ (net + TDS + other deductions) over all payment rows; reversals count negative. |
+| **Outstanding** | Effective total − settled. |
+| **MSME due** | Invoice date + min(terms, 45) days (D15). |
+| **Paise** | 1/100 rupee. All amounts are stored in paise. |
 
 ## 3. Technical plan
 
 ### 3.1 Components
 ```
-Pages/Inward/*  ──►  InwardAccess      (grants cache ≤30 s, visibility SQL, per-action checks)
-                     InwardRepository  (queries: registers, dashboards, invoice reports, desk rows)
-                     InwardWorkflow    (every state change; numbering; reminders link; e-Note conversion)
-                     InvoiceWorkflow   (invoice lifecycle, duplicate key, payments, reversals, auto-close)
-                     Gstin             (offline format + mod-36 check digit)
-                     InwardImport      (project codes CSV, ERP payments CSV; in memory)
-                     InwardReports     (acknowledgement slip, register PDF/XLSX, invoice exports → ReportDocument)
-        ▼
-Infrastructure: Db · AuditService · INotificationService · ChangeTracker · DeskService · UploadGuard · ReportGate/writers · InwardScheduler (daily)
+Pages/Inward/*  ──►  InwardAccess      grants (multi-valued: roles × offices, cache ≤30 s), visibility SQL, full-access SQL, checks
+                     InwardRepository  queries: registers, dashboards, invoice reports, mine, desk rows
+                     InwardWorkflow    item transitions (§3.2), numbering, participants, FTS upkeep, reminder link, e-Note conversion,
+                                       edit / cancel, transfer, grants, daily reminders
+                     InvoiceWorkflow   invoice transitions (§3.3), duplicate key and warnings, payments, adjustments, reversals
+                     InwardImport      project codes CSV, ERP payments CSV (in memory)
+                     InwardReports     acknowledgement slip, register PDF/XLSX, invoice list, MSME / 43B(h) exports
+Infrastructure: Gstin + Paise (done) · Reports writers with Portrait (done) · UploadGuard · InwardScheduler · Desk · Notifications
 ```
-- **Reused from 1.6.0:**
-  - grants pattern (`ComplianceAccess`);
-  - `UploadGuard` (the prefix list gains `/Inward`);
-  - `ReportDocument` writers, extended with a **portrait** option for the acknowledgement slip;
-  - the scheduler pattern (`ComplianceScheduler`);
-  - text limits (`ComplianceText`);
-  - desk count embedding;
-  - FTS5 pattern (`ENoteSearch`);
-  - `LeadRepository.FinancialYear`;
-  - `Fmt`.
-- **No new package.**
 
-### 3.2 Item states (`InwardItems.Status`)
-| From | Action | Who | Required | To / effect |
+### 3.2 Item transitions (non-invoice items)
+| From | Action | Who | Required | Effect |
 |---|---|---|---|---|
-| — | Inward (operator) | Operator of the office | §6.3 fields | **Unassigned**, or **WithHolder** if a holder is chosen |
-| — | Self-inward | Any user (setting) | §6.3 fields | **WithHolder**, held by the user unless another holder is chosen |
-| Unassigned | Mark to | Operator of the office | holder (active user) | **WithHolder** |
+| — | Inward | Operator of the office | §6.3 fields | **Unassigned**, or **WithHolder** if marked |
+| — | Self-inward | Any user (setting) | §6.3 fields; office = the user's own office (§6.3) | **WithHolder**; held by the user unless another holder is chosen |
+| Unassigned | Mark to | Operator of the office, or Inward Viewer | active holder | **WithHolder** |
 | WithHolder | Accept | Holder | — | `AcceptedAt` set |
-| WithHolder | Re-mark | Holder or operator of the office | holder, optional remarks | **WithHolder** (new holder; `AcceptedAt` cleared) |
-| WithHolder | Return to registry | Holder | remarks | **Unassigned** |
-| any not Closed | Add copy-to | Holder or operator | users | Copies added (append-only) |
-| any | Add note | Participant or operator | text ≤ 2,000 | Note appended |
-| WithHolder (non-invoice) | Close | Holder | closure type, remarks, plus the type's fields (§6.5) | **Closed** |
-| Closed (non-invoice) | Reopen | Last holder, operator of the office, or Inward Viewer | reason | **WithHolder** (last holder; if inactive, **Unassigned**) |
-| — | Inward as reminder of N | Operator / self | original number | New item **Closed** (type Reminder); original `ReminderCount + 1`; original reopened if closed |
+| WithHolder | Re-mark | Holder, operator of the office, or Inward Viewer | active holder; remarks optional | New holder; `AcceptedAt` cleared |
+| WithHolder | Return to registry | Holder | remarks | **Unassigned**; the holder stops being a participant |
+| open | Edit details | Operator of the office, the person who inwarded it, or the holder | changed fields | Fields updated. A movement records **field names only**. The search index is re-indexed. |
+| open | Copy to | Holder or operator of the office | users (confirmation if confidential) | Copies added; the copied users become participants |
+| any | Add note | Participant or operator of the office | text ≤ 2,000 | Note appended |
+| WithHolder | Close | Holder | closure type, remarks, plus that type's fields (§6.5) | **Closed** |
+| open | Cancel (entered in error) | Operator of the office, or the person who inwarded it | reason | **Closed** (`Cancelled`) |
+| Closed (not Cancelled or Reminder) | Reopen | Last holder, operator of the office, or Inward Viewer | reason | **WithHolder** (the last holder; **Unassigned** if they are inactive). The reply-due date is kept. |
 
 Every action:
-- writes one `InwardMovements` row (append-only);
-- writes an audit entry (`Inward.*`, numbers only);
-- checks `RowVersion`.
+- runs in one `BEGIN IMMEDIATE` transaction;
+- checks and bumps `RowVersion`;
+- writes one movement;
+- writes one audit entry (`Inward.*`, number and type only, never free text).
 
-### 3.3 Invoice states (`InvoiceDetails.InvoiceStatus`)
-| From | Action | Who | Required | To / item effect |
+### 3.3 Invoice items: one combined transition table
+Item status follows the invoice status:
+
+| Invoice status | Item status |
+|---|---|
+| Received | Unassigned |
+| WithVerifier, Certified | WithHolder (the verifier) |
+| SentToAccounts, PartPaid | WithAccounts |
+| Paid, ClosedShort, ReturnedToVendor, Rejected, Cancelled | Closed |
+| OnHold | keeps the item status of `HoldFromStatus` |
+
+For invoices, `ActionRequired` is *Action* and there is no reply-due date. Invoices have their own alerts (§8).
+
+| From | Action | Who | Required | To |
 |---|---|---|---|---|
-| — | Inward as Invoice | Operator or self | invoice fields (§6.3); duplicate check | **Received** (item Unassigned), or **WithVerifier** if marked |
-| Received | Mark to verifier | Operator | holder | **WithVerifier** (item WithHolder) |
-| WithVerifier | Re-mark | Holder | holder | **WithVerifier** (new holder) |
-| WithVerifier | Certify | Holder | acceptance date (≤ today, ≥ invoice date) | **Certified**; `AcceptedOn` set; `PaymentDueOn` computed (§3.4) |
-| Certified | Send to Accounts | Holder | — | **SentToAccounts**; item **WithAccounts** (no personal holder) |
-| SentToAccounts, PartPaid | Record payment | Invoice Accounts | §6.10 | **PartPaid**; or **Paid** when paid + deductions = total, which **closes** the item (type InvoiceSettled) |
-| SentToAccounts, PartPaid | Close short | Invoice Accounts | reason | **ClosedShort**; item **Closed** |
-| Paid, PartPaid, ClosedShort | Reverse a payment | Invoice Accounts | payment, reason | Status recomputed (§3.4); item **reopened** (WithAccounts) if it was closed |
-| Received, WithVerifier, Certified, SentToAccounts, PartPaid | Put on hold | Holder, or Accounts if WithAccounts | reason | **OnHold**; `HoldFromStatus` remembered |
-| OnHold | Release | Same | — | Back to `HoldFromStatus` |
-| Received, WithVerifier, Certified, SentToAccounts (no payment) | Return to vendor / Reject | Holder, Accounts, or operator (if Received) | reason | **ReturnedToVendor** / **Rejected**; item **Closed** |
+| — | Inward as Invoice | Operator, or self-inward (holder never the person inwarding it) | invoice fields; duplicate check (§3.5) | **Received**, or **WithVerifier** if marked |
+| Received | Mark to verifier | Operator or Inward Viewer | holder ≠ the person who inwarded it | **WithVerifier** |
+| WithVerifier, Certified | Re-mark | Holder, operator, or Inward Viewer | holder ≠ the person who inwarded it | Same status, new holder (certification cleared if Certified) |
+| WithVerifier | Accept | Holder | — | `AcceptedAt` |
+| WithVerifier, Certified | Return to registry | Holder | remarks | **Received** (certification cleared) |
+| WithVerifier | Certify | Holder (≠ the person who inwarded it) | certification date (between invoice date and today) | **Certified** |
+| Certified | Send to Accounts | Holder | — | **SentToAccounts** |
+| SentToAccounts (no payments) | Send back to verifier | Invoice Accounts | remarks | **WithVerifier** (to the certifying officer, or Received if they are inactive) |
+| SentToAccounts, PartPaid | Record payment | Invoice Accounts | §6.10; first payment of an overridden duplicate needs *"checked: not a duplicate payment"* | **PartPaid**, or **Paid** when outstanding = 0 |
+| SentToAccounts, PartPaid | Credit / debit note | Invoice Accounts | document number, date, amount (a credit note ≤ outstanding) | Status recomputed |
+| SentToAccounts, PartPaid | Close short | Invoice Accounts | reason | **ClosedShort**; Inward Viewers notified |
+| any status with payments (including OnHold, Paid, ClosedShort) | Reverse a payment | Invoice Accounts | payment, reason | Status recomputed. ClosedShort is undone; OnHold keeps OnHold with `HoldFromStatus` recomputed. Item reopened as **WithAccounts** if it was closed. |
+| Received … PartPaid (not OnHold) | Put on hold | Holder; Accounts when WithAccounts; operator when Received | reason | **OnHold**. Nothing but release, notes and reversals is allowed while on hold. |
+| OnHold | Release | Same people | — | `HoldFromStatus` |
+| Received, WithVerifier, Certified, SentToAccounts (no payments) | Return to vendor / Reject | Holder; Accounts when WithAccounts; operator when Received | reason | **ReturnedToVendor** / **Rejected** |
+| any open, no payments | Cancel (entered in error) | Operator or the person who inwarded it | reason | **Cancelled** |
+| open | Edit details | Operator, the person who inwarded it, or the holder (before Certified); Invoice Accounts (amounts, until the first payment) | fields | Recompute `DupKey`, `InvoiceFy`, `PaymentDueOn`; duplicate check again; re-index |
 
-Rules:
-- The generic Close action is not available for invoice items. They close only through these transitions.
-- Reopen of an invoice is only through payment reversal.
-- A returned or rejected invoice that comes back is a **new** inward item. The duplicate check then needs an override reason (§3.5).
+The generic Close action is not offered for invoices. A returned or rejected invoice that comes back is a new item, and its duplicate check needs an override reason.
 
 ### 3.4 Invoice calculations
-- **Totals.** `TotalPaise` is mandatory and greater than 0. Taxable and GST are optional. If both are given, taxable + GST must equal total (± 100 paise for rounding).
-- **Payments.** For each payment row: `NetPaise` (amount paid) + `TdsPaise` + `OtherDeductionsPaise` = **settled**. The status is recomputed from Σ settled:
-  - 0 → **SentToAccounts**;
-  - between 0 and total → **PartPaid**;
-  - equal to total → **Paid**;
-  - more than total → **refused**, because an invoice cannot be overpaid.
-- **Payment due date (`PaymentDueOn`).**
-  - Standard: invoice date + terms days (default 30).
-  - MSME: the earlier of the standard date and acceptance + 45 days.
-  - This is set at certification and shown before then as "expected".
-- **MSME flag.** An MSME invoice that is not Paid or ClosedShort is flagged:
-  - **> 45 days**: `AcceptedOn` + 45 < today;
-  - **due ≤ 5 days**: within the final stretch.
-- **FY-end 43B(h) report.** As on 31 March of a chosen FY, it lists invoices from **micro and small** enterprises that are unpaid, or paid after the allowed period. Medium enterprises are excluded under s.43B(h).
+- **Amounts.**
+  - Total is mandatory and > 0.
+  - If taxable or GST is entered: taxable + GST + other charges (TCS, cess, round-off) = total, within ₹ 1.
+- **Payment rows.**
+  - Ordinary rows: net ≥ 0, TDS ≥ 0, deductions ≥ 0, and net + TDS + deductions > 0. Paid-on date between the invoice date and today.
+  - Reversal rows: every amount ≤ 0, exactly equal to minus the original row. The paid-on date is the date of the reversal.
+- **Status after any payment or adjustment.** Computed inside the write transaction from `SUM()`:
+  - outstanding = 0 → **Paid**;
+  - outstanding > 0 with something settled → **PartPaid**;
+  - nothing settled → **SentToAccounts**;
+  - outstanding < 0 is **refused**, so an invoice can never be overpaid.
+- **Due dates (D15).**
+  - Standard: `PaymentDueOn` = invoice date + terms.
+  - MSME: invoice date + min(terms, `MsmeMaxDays` = 45).
+- **MSME flags.** For an MSME invoice that is not Paid, ClosedShort, Returned, Rejected or Cancelled:
+  - **past 45 days** when invoice date + 45 < today;
+  - **due soon** when the MSME due date − today ≤ `MsmeDueSoonDays` (5).
+
+  The flags apply from receipt, whatever the status.
+- **43B(h) / MSME-1 report, as on a chosen date** (default 31 March of a chosen FY). It lists Micro and Small invoices (`IsMsme`, class Micro or Small, not trader) with invoice date ≤ the as-on date where:
+  - the invoice is outstanding on the as-on date (counting payments and reversals dated on or before it), **or**
+  - it was paid after its MSME due date.
+
+  Invoices marked MSME without a class are listed separately as "class not recorded". The report also offers an "entered on or before" date, so it can be reproduced later.
 
 ### 3.5 Duplicate invoices
-- **Key.** `DupKey` = (`GSTIN` in upper case, or `N:` + the normalised vendor name if there is no GSTIN) + `|` + the normalised invoice number + `|` + the invoice FY.
-  - Normalised vendor name: lower case, letters and digits only, common suffixes (pvt, ltd, private, limited, llp) removed.
-  - Normalised invoice number: upper case, letters and digits only.
-- **Uniqueness.** A partial unique index on `InvoiceDetails(DupKey) WHERE OverrideReason IS NULL` blocks duplicates.
-- **Override.** The person inwarding may tick *"This is not a duplicate"* and must give a reason. The reason is stored and audited, and the existing item's number is shown to them.
-- **Warning.** The same GSTIN and invoice number in a **different FY** gives a warning only. Invoice numbers restart each FY under GST rule 46.
+- **Key.** `DupKey` = (GSTIN in upper case, or `N:` + normalised vendor name) + `|` + normalised invoice number + `|` + invoice FY.
+  - Vendor name normalisation: lower case, letters and digits only; the suffixes pvt / private / ltd / limited / llp / co are removed.
+  - Invoice number normalisation: upper case, letters and digits only.
+- **Blocking.** A partial unique index on `DupKey`, excluding overridden and cancelled rows, blocks a duplicate. The existing inward number is shown, and an override needs *"This is not a duplicate"* plus a reason.
+  - The reason is stored on the invoice. The audit log records only "override of #N".
+  - An overridden invoice is flagged on the Accounts dashboard. Its first payment needs a *checked* confirmation.
+- **Warnings only** (the user confirms and saves again):
+  - the same GSTIN and invoice number in another FY;
+  - the same GSTIN and total with an invoice date within 30 days;
+  - for any item, the same sender reference and date.
+- **MSME hint.** If an earlier invoice from the same GSTIN was MSME, its Udyam number and class are offered as a warning.
 
 ## 4. Data model: migration 8, "Inward register and invoices (v1.7.0)"
-Additive only. Older programs ignore the new tables. The new column `ENotes.SourceInwardId` is nullable, and older programs ignore it.
+Additive only. Nothing existing changes, except one nullable column on `ENotes` (default NULL), which older programs ignore. Enum-like columns are validated in code (E2); CHECKs cover lengths, amounts and signs.
 
 ```sql
-ALTER TABLE ENotes ADD COLUMN SourceInwardId INTEGER;
+ALTER TABLE ENotes ADD COLUMN SourceInwardId INTEGER DEFAULT NULL;
 
-CREATE TABLE IF NOT EXISTS InwardSerials (OfficeCode TEXT NOT NULL, FinancialYear TEXT NOT NULL, LastSerial INTEGER NOT NULL, PRIMARY KEY (OfficeCode, FinancialYear));
-CREATE TABLE IF NOT EXISTS InwardState (Key TEXT PRIMARY KEY, Value TEXT);
+CREATE TABLE InwardSerials (OfficeCode TEXT NOT NULL, FinancialYear TEXT NOT NULL, LastSerial INTEGER NOT NULL, PRIMARY KEY (OfficeCode, FinancialYear));
+CREATE TABLE InwardState (Key TEXT PRIMARY KEY, Value TEXT);
 
-CREATE TABLE IF NOT EXISTS InwardMembers (
-  Id INTEGER PRIMARY KEY, UserId INTEGER NOT NULL REFERENCES Users(Id),
-  Role TEXT NOT NULL CHECK (Role IN ('InwardOperator','InwardViewer','InvoiceAccounts')),
-  OfficeId INTEGER,                         -- operators only (Location master id)
-  GrantedByName TEXT NOT NULL, GrantedAt TEXT NOT NULL, UNIQUE (UserId, Role, OfficeId));
-CREATE TABLE IF NOT EXISTS InwardMemberHistory (Id INTEGER PRIMARY KEY, UserId INTEGER NOT NULL, Action TEXT NOT NULL, Role TEXT, OfficeId INTEGER, ActorName TEXT NOT NULL, At TEXT NOT NULL);
--- + no-update / no-delete triggers on InwardMemberHistory
+CREATE TABLE InwardMembers (
+  Id INTEGER PRIMARY KEY, UserId INTEGER NOT NULL REFERENCES Users(Id), Role TEXT NOT NULL,   -- InwardOperator | InwardViewer | InvoiceAccounts
+  OfficeId INTEGER NOT NULL DEFAULT 0,                                                          -- operator: Location id; others: 0
+  GrantedByName TEXT NOT NULL, GrantedAt TEXT NOT NULL,
+  CHECK ((Role = 'InwardOperator') = (OfficeId > 0)), UNIQUE (UserId, Role, OfficeId));
+CREATE TABLE InwardMemberHistory (Id INTEGER PRIMARY KEY, UserId INTEGER NOT NULL, Action TEXT NOT NULL, Role TEXT, OfficeId INTEGER, ActorName TEXT NOT NULL, At TEXT NOT NULL);
 
-CREATE TABLE IF NOT EXISTS InwardItems (
-  Id INTEGER PRIMARY KEY,
-  Number TEXT NOT NULL UNIQUE, OfficeId INTEGER NOT NULL, OfficeName TEXT NOT NULL, OfficeCode TEXT NOT NULL,
-  FinancialYear TEXT NOT NULL, Serial INTEGER NOT NULL,
-  ItemType TEXT NOT NULL CHECK (ItemType IN ('Letter','Email','Invoice','GovtOrder','LegalNotice','Other')),
-  Mode TEXT NOT NULL CHECK (Mode IN ('Post','SpeedPost','Courier','Hand','Email','Fax')),
-  ReceivedAt TEXT NOT NULL,                 -- ISO UTC
+CREATE TABLE InwardItems (
+  Id INTEGER PRIMARY KEY, Number TEXT NOT NULL UNIQUE,
+  OfficeId INTEGER NOT NULL, OfficeName TEXT NOT NULL, OfficeCode TEXT NOT NULL, FinancialYear TEXT NOT NULL, Serial INTEGER NOT NULL,
+  ItemType TEXT NOT NULL, Mode TEXT NOT NULL, ReceivedAt TEXT NOT NULL,
   SenderName TEXT NOT NULL CHECK (length(SenderName) <= 150), SenderOrg TEXT CHECK (length(SenderOrg) <= 200),
   SenderRef TEXT CHECK (length(SenderRef) <= 100), SenderRefDate TEXT,
   Subject TEXT NOT NULL CHECK (length(Subject) <= 300), Summary TEXT CHECK (length(Summary) <= 2000),
-  Category TEXT CHECK (length(Category) <= 150),
-  Priority TEXT NOT NULL DEFAULT 'Normal' CHECK (Priority IN ('Normal','Urgent','Immediate')),
-  IsConfidential INTEGER NOT NULL DEFAULT 0,
-  ActionRequired TEXT NOT NULL CHECK (ActionRequired IN ('Reply','Action','Information')),
-  ReplyDueOn TEXT, KeptAt TEXT NOT NULL CHECK (length(KeptAt) <= 300), Pages INTEGER CHECK (Pages IS NULL OR Pages BETWEEN 0 AND 10000),
-  Status TEXT NOT NULL CHECK (Status IN ('Unassigned','WithHolder','WithAccounts','Closed')),
-  HolderUserId INTEGER REFERENCES Users(Id), HolderSince TEXT, AcceptedAt TEXT, LastHolderUserId INTEGER,
+  Category TEXT CHECK (length(Category) <= 150), Priority TEXT NOT NULL DEFAULT 'Normal', IsConfidential INTEGER NOT NULL DEFAULT 0,
+  ActionRequired TEXT NOT NULL, ReplyDueOn TEXT, KeptAt TEXT NOT NULL CHECK (length(KeptAt) <= 300),
+  Pages INTEGER CHECK (Pages IS NULL OR Pages BETWEEN 0 AND 10000), Irn TEXT CHECK (length(Irn) <= 64),
+  Status TEXT NOT NULL,                                  -- Unassigned | WithHolder | WithAccounts | Closed
+  HolderUserId INTEGER, HolderSince TEXT, AcceptedAt TEXT, LastHolderUserId INTEGER,
   InwardedByUserId INTEGER NOT NULL, InwardedByName TEXT NOT NULL, InwardedAt TEXT NOT NULL, SelfInward INTEGER NOT NULL DEFAULT 0,
   ClosureType TEXT, ClosureRemarks TEXT CHECK (length(ClosureRemarks) <= 1000), ReplyDate TEXT, OutwardRef TEXT CHECK (length(OutwardRef) <= 100),
   FiledFileNo TEXT CHECK (length(FiledFileNo) <= 100), ForwardedTo TEXT CHECK (length(ForwardedTo) <= 200),
-  DuplicateOfId INTEGER, ENoteId INTEGER, ClosedAt TEXT, ClosedByName TEXT,
-  LinkedToId INTEGER, ReminderCount INTEGER NOT NULL DEFAULT 0,
-  LastDueReminderOn TEXT, LastOverdueReminderOn TEXT,
-  RowVersion INTEGER NOT NULL DEFAULT 1, UpdatedAt TEXT NOT NULL);
--- indexes: (OfficeId, ReceivedAt DESC); (HolderUserId, Status, ReplyDueOn); (Status, ReplyDueOn); (Status, OfficeId, InwardedAt);
---          (ReceivedAt); (ClosedAt) WHERE ClosedAt IS NOT NULL; (LinkedToId) WHERE LinkedToId IS NOT NULL; (ItemType, Status)
--- triggers: Number, OfficeId, OfficeCode, FinancialYear, Serial, InwardedAt, InwardedByUserId never change; no delete
+  DuplicateOfId INTEGER, ENoteId INTEGER, ClosedAt TEXT, ClosedByName TEXT, LinkedToId INTEGER, ReminderCount INTEGER NOT NULL DEFAULT 0,
+  LastDueReminderOn TEXT, LastOverdueReminderOn TEXT, RowVersion INTEGER NOT NULL DEFAULT 1, UpdatedAt TEXT NOT NULL);
+-- indexes: (OfficeId, ReceivedAt DESC); (HolderUserId, Status); (Status, ReplyDueOn); (Status, OfficeId, InwardedAt); (InwardedAt);
+--          (InwardedByUserId, Id); (ClosedAt) WHERE ClosedAt IS NOT NULL; (LinkedToId) WHERE LinkedToId IS NOT NULL; (ItemType, Status)
+-- triggers: Number, OfficeId, OfficeCode, FinancialYear, Serial, InwardedAt, InwardedByUserId never change (WHEN new.X IS NOT old.X); no delete
 
-CREATE TABLE IF NOT EXISTS InwardMovements (
-  Id INTEGER PRIMARY KEY, ItemId INTEGER NOT NULL, At TEXT NOT NULL, ActorUserId INTEGER, ActorName TEXT NOT NULL,
+CREATE TABLE InwardParticipants (ItemId INTEGER NOT NULL, UserId INTEGER NOT NULL, PRIMARY KEY (ItemId, UserId)) WITHOUT ROWID;   -- current full access
+CREATE INDEX IX_InwardParticipants_User ON InwardParticipants(UserId, ItemId);
+CREATE TABLE InwardMovements (Id INTEGER PRIMARY KEY, ItemId INTEGER NOT NULL, At TEXT NOT NULL, ActorUserId INTEGER, ActorName TEXT NOT NULL,
   Action TEXT NOT NULL, ToUserId INTEGER, ToName TEXT, Remarks TEXT CHECK (length(Remarks) <= 1000));
-CREATE TABLE IF NOT EXISTS InwardCopies (ItemId INTEGER NOT NULL, UserId INTEGER NOT NULL, AddedAt TEXT NOT NULL, AddedByName TEXT NOT NULL, PRIMARY KEY (ItemId, UserId));
-CREATE TABLE IF NOT EXISTS InwardNotes (Id INTEGER PRIMARY KEY, ItemId INTEGER NOT NULL, At TEXT NOT NULL, UserId INTEGER NOT NULL, Name TEXT NOT NULL, Text TEXT NOT NULL CHECK (length(Text) <= 2000));
--- indexes: InwardMovements(ItemId, Id); InwardMovements(ToUserId, ItemId) (participation); InwardCopies(UserId, ItemId); InwardNotes(ItemId, Id)
--- triggers: no update / no delete on all three
+CREATE TABLE InwardCopies (ItemId INTEGER NOT NULL, UserId INTEGER NOT NULL, AddedAt TEXT NOT NULL, AddedByName TEXT NOT NULL, PRIMARY KEY (ItemId, UserId));
+CREATE TABLE InwardNotes (Id INTEGER PRIMARY KEY, ItemId INTEGER NOT NULL, At TEXT NOT NULL, UserId INTEGER NOT NULL, Name TEXT NOT NULL, Text TEXT NOT NULL CHECK (length(Text) <= 2000));
+-- indexes on ItemId; append-only triggers on Movements, Copies, Notes and MemberHistory
 
-CREATE TABLE IF NOT EXISTS ProjectCodes (Code TEXT PRIMARY KEY, Name TEXT NOT NULL, OwnerUserId INTEGER, IsActive INTEGER NOT NULL DEFAULT 1, UpdatedAt TEXT NOT NULL, UpdatedBy TEXT NOT NULL);
+CREATE TABLE ProjectCodes (Code TEXT PRIMARY KEY COLLATE NOCASE, Name TEXT NOT NULL CHECK (length(Name) <= 200), OwnerUserId INTEGER, IsActive INTEGER NOT NULL DEFAULT 1, UpdatedAt TEXT NOT NULL, UpdatedBy TEXT NOT NULL);
 
-CREATE TABLE IF NOT EXISTS InvoiceDetails (
+CREATE TABLE InvoiceDetails (
   ItemId INTEGER PRIMARY KEY REFERENCES InwardItems(Id),
-  VendorName TEXT NOT NULL CHECK (length(VendorName) <= 200), VendorGstin TEXT, VendorPan TEXT,
-  IsMsme INTEGER NOT NULL DEFAULT 0, UdyamNo TEXT, MsmeClass TEXT CHECK (MsmeClass IS NULL OR MsmeClass IN ('Micro','Small','Medium')),
+  VendorName TEXT NOT NULL CHECK (length(VendorName) <= 200), VendorGstin TEXT, IsMsme INTEGER NOT NULL DEFAULT 0, IsTrader INTEGER NOT NULL DEFAULT 0,
+  UdyamNo TEXT CHECK (length(UdyamNo) <= 30), MsmeClass TEXT,
   InvoiceNo TEXT NOT NULL CHECK (length(InvoiceNo) <= 50), InvoiceDate TEXT NOT NULL, InvoiceFy TEXT NOT NULL,
   ProjectCode TEXT, PoRef TEXT CHECK (length(PoRef) <= 100),
-  TaxablePaise INTEGER, GstPaise INTEGER, TotalPaise INTEGER NOT NULL CHECK (TotalPaise > 0),
-  TermsDays INTEGER NOT NULL DEFAULT 30, AcceptedOn TEXT, PaymentDueOn TEXT,
-  InvoiceStatus TEXT NOT NULL CHECK (InvoiceStatus IN ('Received','WithVerifier','Certified','SentToAccounts','PartPaid','Paid','OnHold','ReturnedToVendor','Rejected','ClosedShort')),
-  HoldFromStatus TEXT, StatusReason TEXT CHECK (length(StatusReason) <= 1000),
-  SettledPaise INTEGER NOT NULL DEFAULT 0, CertifiedByName TEXT, CertifiedAt TEXT, SentToAccountsAt TEXT, SettledAt TEXT,
-  DupKey TEXT NOT NULL, OverrideReason TEXT CHECK (length(OverrideReason) <= 500));
-CREATE UNIQUE INDEX IF NOT EXISTS UX_Invoice_Dup ON InvoiceDetails(DupKey) WHERE OverrideReason IS NULL;
--- indexes: (InvoiceStatus, InvoiceDate); (ProjectCode, InvoiceStatus); (VendorGstin); (IsMsme, InvoiceStatus, AcceptedOn)
+  TaxablePaise INTEGER CHECK (TaxablePaise IS NULL OR TaxablePaise >= 0), GstPaise INTEGER CHECK (GstPaise IS NULL OR GstPaise >= 0),
+  OtherPaise INTEGER CHECK (OtherPaise IS NULL OR OtherPaise >= 0), TotalPaise INTEGER NOT NULL CHECK (TotalPaise > 0),
+  AdjustPaise INTEGER NOT NULL DEFAULT 0,                -- Σ debit − Σ credit notes
+  SettledPaise INTEGER NOT NULL DEFAULT 0, TermsDays INTEGER NOT NULL DEFAULT 30 CHECK (TermsDays BETWEEN 0 AND 365), PaymentDueOn TEXT NOT NULL,
+  InvoiceStatus TEXT NOT NULL, HoldFromStatus TEXT, StatusReason TEXT CHECK (length(StatusReason) <= 1000),
+  CertifiedByUserId INTEGER, CertifiedByName TEXT, CertifiedOn TEXT, SentToAccountsAt TEXT, SettledAt TEXT,
+  DupKey TEXT NOT NULL, OverrideReason TEXT CHECK (length(OverrideReason) <= 500), DuplicateCheckedBy TEXT);
+CREATE UNIQUE INDEX UX_Invoice_Dup ON InvoiceDetails(DupKey) WHERE OverrideReason IS NULL AND InvoiceStatus <> 'Cancelled';
+-- indexes: (InvoiceStatus, InvoiceDate); (ProjectCode, InvoiceStatus); (VendorGstin, InvoiceDate); (IsMsme, InvoiceStatus, InvoiceDate); (DupKey)
 
-CREATE TABLE IF NOT EXISTS InvoicePayments (
+CREATE TABLE InvoicePayments (
   Id INTEGER PRIMARY KEY, ItemId INTEGER NOT NULL, PaidOn TEXT NOT NULL,
   NetPaise INTEGER NOT NULL, TdsPaise INTEGER NOT NULL DEFAULT 0, OtherDeductionsPaise INTEGER NOT NULL DEFAULT 0,
-  VoucherRef TEXT NOT NULL UNIQUE CHECK (length(VoucherRef) <= 60), ReversesId INTEGER UNIQUE, Remarks TEXT CHECK (length(Remarks) <= 500),
-  Source TEXT NOT NULL CHECK (Source IN ('Manual','ErpImport','Reversal')), EnteredByUserId INTEGER NOT NULL, EnteredByName TEXT NOT NULL, EnteredAt TEXT NOT NULL);
--- index (ItemId, Id); triggers: no update / no delete. A reversal is a new row with negative amounts and ReversesId set (at most one reversal per payment).
+  VoucherRef TEXT NOT NULL CHECK (length(VoucherRef) <= 60), ReversesId INTEGER UNIQUE, Remarks TEXT CHECK (length(Remarks) <= 500),
+  Source TEXT NOT NULL, EnteredByUserId INTEGER NOT NULL, EnteredByName TEXT NOT NULL, EnteredAt TEXT NOT NULL,
+  UNIQUE (ItemId, VoucherRef),                           -- one UTR may pay several invoices
+  CHECK ((Source = 'Reversal') = (ReversesId IS NOT NULL)),
+  CHECK ((ReversesId IS NULL AND NetPaise >= 0 AND TdsPaise >= 0 AND OtherDeductionsPaise >= 0 AND NetPaise + TdsPaise + OtherDeductionsPaise > 0)
+      OR (ReversesId IS NOT NULL AND NetPaise <= 0 AND TdsPaise <= 0 AND OtherDeductionsPaise <= 0)));
+CREATE TABLE InvoiceAdjustments (Id INTEGER PRIMARY KEY, ItemId INTEGER NOT NULL, Kind TEXT NOT NULL,     -- CreditNote | DebitNote
+  DocNo TEXT NOT NULL CHECK (length(DocNo) <= 50), DocDate TEXT NOT NULL, AmountPaise INTEGER NOT NULL CHECK (AmountPaise > 0),
+  Remarks TEXT CHECK (length(Remarks) <= 500), EnteredByUserId INTEGER NOT NULL, EnteredByName TEXT NOT NULL, EnteredAt TEXT NOT NULL);
+-- indexes on ItemId; append-only triggers on Payments and Adjustments; reversal voucher = 'REV-' || original Id
 
-CREATE TABLE IF NOT EXISTS InwardImports (Id INTEGER PRIMARY KEY, Kind TEXT NOT NULL, Sha256 TEXT NOT NULL, Rows INTEGER NOT NULL, ByName TEXT NOT NULL, At TEXT NOT NULL, UNIQUE (Kind, Sha256));
--- triggers: no update / no delete
+CREATE TABLE InwardImports (Id INTEGER PRIMARY KEY, Kind TEXT NOT NULL, Sha256 TEXT NOT NULL, Rows INTEGER NOT NULL, ByName TEXT NOT NULL, At TEXT NOT NULL);
+-- append-only; project-code imports refuse a repeated SHA; payment imports record it (idempotency comes from the (item, voucher) key)
 
-CREATE VIRTUAL TABLE IF NOT EXISTS InwardSearch USING fts5(Number, Sender, SenderRef, Subject, Summary, Vendor, InvoiceNo, content='', contentless_delete=1, tokenize='unicode61');
+CREATE VIRTUAL TABLE InwardSearch USING fts5(Number, Sender, SenderRef, Subject, Summary, Vendor, InvoiceNo, content='', contentless_delete=1, tokenize='unicode61');
+-- the same contentless pattern as ENoteSearch (migration 5); a confidential item indexes Number and InvoiceNo only
 
--- master list InwardCategory, seeded once: General correspondence; Client / project; Government / regulator; Legal; Finance & accounts;
--- Human resources; Tenders & procurement; Other
+-- master list InwardCategory, inserted with WHERE NOT EXISTS (the only data insert): General correspondence; Client / project;
+-- Government / regulator; Legal; Finance & accounts; Human resources; Tenders & procurement; Other
 ```
-- **Writing the SQL.** Write the full SQL, with every trigger, in `Schema.cs` migration 8.
-- **Text limits.** Free text without a CHECK above is limited in code: names 150, notes 2,000.
-- **Search index.** It is maintained in the same transaction as the item: insert, then delete and re-insert on edit. A confidential item indexes only the number, sender reference, vendor and invoice number.
 
 ## 5. Permissions
-| Code | Meaning |
+| Code | Who |
 |---|---|
-| **OP** | Inward Operator (per office) |
+| **OP** | Inward Operator of the item's office |
 | **IV** | Inward Viewer |
 | **IA** | Invoice Accounts |
 | **AU** | the Auditor role |
 | **AD** | the Administrator role |
-| **P** | participant: inwarded it, held it (past or current), or copied on it |
+| **P** | participant (§2) |
 | **X** | anyone else |
 
-| Action | OP (own office) | IV | IA | AU | AD | P | X |
+- **Full access** = P, IV, or IA for invoice items.
+- **Visible** = full access, OP, or AU. Everyone else gets 404.
+
+| Action | OP | IV | IA | AU | AD | P | X |
 |---|---|---|---|---|---|---|---|
-| Inward menu tab | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ if `SelfInwardEnabled` |
-| Inward (register) an item | own offices | — | — | — | — | — | self-inward (any office) |
-| Register list, dashboard, exports, register PDF | own offices | all | invoices only | all (read) | — | — | 404 |
-| Open an item | own offices (confidential: metadata) | all, full | invoices, full | all (confidential: metadata) | — | full | 404 |
-| Mark / re-mark / return / close / reopen | §3.2 | reopen | — | — | — | holder | — |
-| Add note / copy-to | ✔ (own office) | — | — | — | — | note: ✔; copy-to: holder | — |
-| Invoice: certify, send, hold, return or reject | if Received | — | when WithAccounts | — | — | holder | — |
-| Payments, close short, reversals, ERP import, project codes | — | — | ✔ | — | — | — | — |
-| Invoice reports, MSME list | — | ✔ | ✔ | ✔ | — | — | 404 |
-| Acknowledgement slip | own offices | ✔ | — | — | — | inwarded-by | 404 |
-| Inward access (grants) | — | — | — | — | ✔ | — | 404 |
+| Inward menu tab | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ if self-inward is on |
+| Inward an item | own offices | — | — | — | — | — | self-inward (own office) |
+| Register, dashboard, exports, register PDF | own offices | all | invoice items | all | — | — | — |
+| Open an item | metadata if confidential | full | invoices: full | metadata if confidential | — | full | 404 |
+| Mark, re-mark, reopen | ✔ (own office) | ✔ | — | — | — | holder: re-mark; last holder: reopen | — |
+| Edit / cancel | ✔ | — | amounts (invoices) | — | — | inwarder (edit, cancel); holder (edit) | — |
+| Invoice: certify, send, hold, return or reject | Received only (hold, return, reject) | — | when WithAccounts | — | — | holder | — |
+| Payments, notes, close short, reversals, ERP import, project codes | — | — | ✔ | — | — | — | — |
+| Invoice reports, MSME / 43B(h) | — | ✔ | ✔ | ✔ | — | — | — |
+| Acknowledgement slip | ✔ | ✔ | — | — | — | inwarder | — |
+| Bulk transfer of a user's open items | — | ✔ | — | — | ✔ (metadata only) | — | — |
+| Access grants | — | — | — | — | ✔ (not to self) | — | — |
 
 Rules:
-- **404 everywhere** for anything the user may not see.
-- **One visibility rule.** Every list, count, export, print and desk count uses the same SQL predicate (`InwardAccess.VisibleSql`).
-- **Confidential items** show metadata only to anyone who is not IV, IA (invoice) or a participant (E8).
-- **No free text outside the module.** Notifications and audit details carry the inward number and type only, never subject or sender.
-- **No site search.** Inward is not added to the site search (`Pages/Search.cshtml.cs`).
+- **One visibility rule.** Every list, count, search, export, print, aggregate and desk count applies the visibility predicate and the E8 masking (`InwardAccess.VisibleSql` / `FullSql`).
+- **Query shape.** The SQL is written so SQLite can use the indexes (office branch, participant branch), and it is benchmarked.
+- **No free text outside the module.** Notifications and audit details carry the inward number and type only.
+- **No site search.** Inward is not added to site search.
+- **No bank details** are stored.
+- **No PAN column** is kept. The GSTIN is shown in full only to full-access users.
 
-## 6. Screens (all under `/Inward`; dates dd.MM.yyyy; amounts ₹ with Indian grouping)
+## 6. Screens (under `/Inward`; dates dd.MM.yyyy; amounts ₹ with Indian grouping)
 | # | Route | Who | Content |
 |---|---|---|---|
-| 6.1 | `/Inward` | OP, IV, IA, AU | Dashboard (detail below). Others are sent to `/Inward/Mine`. |
-| 6.2 | `/Inward/Register` | OP, IV, IA (invoices), AU | Register list (detail below). |
-| 6.3 | `/Inward/New` | OP, any user (self) | Inward form (detail below). |
-| 6.4 | `/Inward/Mine` | anyone | Tabs: with me (open), copied to me, inwarded by me, closed in the last 90 days. |
-| 6.5 | `/Inward/Item/{id}` | per §5 | Item page (detail below). |
-| 6.6 | `/Inward/Ack/{id}` | per §5 | Acknowledgement slip, PDF (A4 portrait, half page). |
-| 6.7 | `/Inward/Invoices` | IV, IA, AU | Invoice dashboard and list (detail below). |
-| 6.8 | `/Inward/ProjectCodes` | IA | List and CSV import (detail below). |
-| 6.9 | `/Inward/Access` | AD | Grants (OP per office, IV, IA), with a history of changes. |
-| 6.10 | (on the item page) | IA | Payment form (detail below). |
-| 6.11 | `/Inward/Payments` | IA | ERP payment import (detail below). |
+| 6.1 | `/Inward` | OP, IV, IA, AU | Dashboard (below). Others go to `/Inward/Mine`. |
+| 6.2 | `/Inward/Register` | OP, IV, IA (invoices), AU | Searchable, filterable register list (below). |
+| 6.3 | `/Inward/New` | OP, any user (self) | The inward form (below). |
+| 6.4 | `/Inward/Mine` | anyone | Tabs: with me (open); copied to me; inwarded by me; closed in the last 90 days. |
+| 6.5 | `/Inward/Item/{id}` | per §5 | The item page (below). |
+| 6.6 | `/Inward/Ack/{id}` | per §5 | Acknowledgement slip: A4 portrait PDF, short content. |
+| 6.7 | `/Inward/Invoices` | IV, IA, AU | Invoice dashboard, list and reports (below). |
+| 6.8 | `/Inward/ProjectCodes` | IA | Project codes: list and CSV import (below). |
+| 6.9 | `/Inward/Access` | AD | Grants (OP per office, IV, IA) with history. Warnings: offices with no active operator; no active Invoice Accounts user. |
+| 6.10 | (on the item page) | IA | Payments, adjustments and reversals (below). |
+| 6.11 | `/Inward/Payments` | IA | ERP payment import (below). |
+| 6.12 | `/Inward/Transfer` | IV, AD | Move every open item held by user A to user B (active, ≠ A). Preview counts, then one transaction with one movement per item. |
 
 **6.1 Dashboard**
-- **Tiles:** open; overdue (reply due passed); due today or tomorrow; unassigned for more than 1 working day; received today.
-- **Pending tables:** by holder (top 20), by holder's vertical, by office.
-- **Ageing of open items since received:** 0–7, 8–15, 16–30, > 30 days.
-- **Trend:** received versus closed per month for the last 12 months (`<progress>` bars).
-- **Filter:** office (operators see only their own offices).
+- **Tiles:** open; overdue (reply due passed); due today or tomorrow; unassigned for more than 1 working day; held by inactive users; received today.
+- **Breakdowns:**
+  - pending by holder (top 20), by holder's vertical, by office;
+  - ageing since received: 0–7, 8–15, 16–30, > 30 days;
+  - received vs closed per month for 12 months (`<progress>` bars).
+- **Office filter.** Operators see only their own offices.
 
-**6.2 Register list**
-- **Filters:** office, date range (received), type, mode, status, holder, priority, overdue only, and a text search (FTS5 over number, sender, sender reference, subject, summary, vendor, invoice number).
-- **Paging:** 50 rows per page.
-- **Export:** Excel (at most 20,000 rows; otherwise the user is asked to narrow the filter).
-- **Print:** register PDF for a date range (§7.2).
+**6.2 Register**
+- **Filters:** office, received from / to, type, mode, status, holder, priority, overdue only.
+- **Search:** text search over the search index (§4).
+- **Paging and export:** 50 rows a page. Excel export up to 20,000 rows.
+- **Register PDF:** at most 31 days or 5,000 rows.
 
 **6.3 Inward form**
-- **Office:** defaults to the user's operator office, else the office of the user's directory entry, else `DefaultOfficeName`.
-- **Fields:** type; mode; received date and time (default now); sender name and organisation; sender's reference and date; subject; summary; category; priority; confidential; action required; reply due (defaulted from priority; changeable); kept at (required); pages.
-- **Reminder link:** optional "reminder or follow-up of inward no."
-- **Mark to:** optional; self-inward defaults to the user. Copy-to users are optional.
-- **Invoice section** (only when Type = Invoice; shown or hidden by `site.js`, and checked on the server anyway):
-  - vendor name, GSTIN, MSME (yes/no) with Udyam number and class;
-  - invoice number and date; project code (active codes); PO reference;
-  - taxable, GST, total (₹); terms (days; default 30).
-  - A duplicate warning or block, with the existing number, comes back from the server. *"Not a duplicate"* needs a reason.
-- **After saving:** the item page, with an *Acknowledgement slip* button.
+- **Office.** Chosen from the user's operator offices. For self-inward it is the user's own office, worked out in this order:
+  1. an operator grant;
+  2. a directory entry whose location matches an office name (case-insensitive);
+  3. `DefaultOfficeName`.
+
+  If none of these gives an office, the user picks any active office.
+- **Fields:** type; mode; received at (default now; up to 90 days earlier); sender name and organisation; sender's reference and date; subject; summary; category; priority; confidential; action required; reply due (defaulted from priority); kept at (required); pages; IRN (optional).
+- **Reminder link:** "Reminder / follow-up of inward no." (optional).
+- **Routing:** mark to (optional; for self-inward the default is the user, but for an invoice never the person inwarding it); copy-to.
+- **Invoice section** (Type = Invoice; shown or hidden by `site.js`; always checked on the server):
+  - vendor name; GSTIN; MSME (yes/no) with Udyam number and class (Micro, Small, Medium); trader;
+  - invoice number and date; project code (active codes; the owner is suggested as verifier); PO reference;
+  - taxable, GST, other charges, total; terms (days).
+- **Warnings** (§3.5): shown with a *Confirm and save* button. Blocks show the existing number, and override needs a reason.
+- **After saving:** the item page opens, with *Acknowledgement slip*.
 
 **6.5 Item page**
-- **Shows:** details (respecting E8); movement trail; notes; copies; linked reminders.
-- **Invoice panel:** status, amounts, payments, due date, and the MSME flag.
-- **Actions:** buttons by role and state, per §3.2 and §3.3. Every form posts `RowVersion`.
-- **Closure form:** the type, then the type's fields:
+- **Content:**
+  - details, masked per E8;
+  - movement trail; notes; copies; linked reminders;
+  - invoice panel: status; amounts (total, adjustments, effective, settled, outstanding); due date; MSME flag; payments; adjustments.
+- **Actions:** buttons by role and state (§3.2, §3.3). Every form posts `RowVersion`.
+- **Closure fields:**
   - Replied: reply date and outward reference;
   - Filed: file number;
   - Forwarded: to whom;
-  - Duplicate: inward number;
-  - Converted to e-Note: no extra fields.
+  - Duplicate: inward number (a visible item only);
+  - Converted to e-Note: category and declaration.
 
   Remarks are always required.
 
 **6.7 Invoices**
-- **Tiles:** received but unpaid (count and ₹); ageing by invoice date (0–30, 31–45, 46–60, 61–90, > 90); MSME over 45 days; MSME due within 5 days; on hold.
-- **Tables:** by project code, by vendor (top 20), by holder or Accounts.
-- **Trend:** received versus paid per month (₹ and count).
-- **List:** filterable and exportable to Excel.
-- **MSME report:** FY-end 43B(h) list, in Excel.
+- **Tiles:** unpaid count and ₹ outstanding; ageing by invoice date (0–30, 31–45, 46–60, 61–90, > 90); MSME past 45 days; MSME due within 5 days; on hold; duplicate overrides awaiting the *checked* step; closed short this month.
+- **Breakdowns:**
+  - by project code, by vendor (top 20, masked per E8), by holder or Accounts;
+  - received vs paid per month.
+- **Exports:** the list, filterable, to Excel; the MSME / 43B(h) report (§3.4) to Excel.
 
 **6.8 Project codes**
-- **List:** every code, with its owner and whether it is active.
-- **CSV import:** columns `Code, Name, OwnerUserName, Active`; upsert by code. A code missing from the file is **not** deactivated unless *"Deactivate codes not in the file"* is ticked.
-- **Limits:** 5,000 rows and 1,900 KB. The file is held in memory only and imported all or nothing; the same file twice is refused.
+- **Import:** a CSV file with columns `Code, Name, OwnerUserName, Active`.
+  - Rows are upserted by code; codes are compared without regard to case. `OwnerUserName` is the sign-in name, and the user must be active.
+  - *"Deactivate codes not in the file"* is optional.
+  - Limits: 5,000 rows and 1,900 KB. The file is read in memory and imported all or nothing; the same file is refused a second time.
 
-**6.10 Payment form**
-- **Fields:** paid on; net amount; TDS; other deductions; voucher or UTR reference (unique); remarks.
-- **Close short:** needs a reason.
-- **Reverse:** done per payment row, with a reason.
+**6.10 Payments (on the item page)**
+- **Payment:** paid on; net; TDS; other deductions; voucher or UTR reference; remarks.
+- **Credit / debit note:** document number, date, amount, remarks.
+- **Reverse:** per payment row, with a reason.
+- **Close short:** with a reason.
 
 **6.11 ERP payment import**
-- **CSV template:** `InwardNo, VendorGstin, VendorName, InvoiceNo, InvoiceDate, PaidOn, Amount, TDS, OtherDeductions, VoucherRef, Remarks`.
+- **Template columns:** `InwardNo, VendorGstin, VendorName, InvoiceNo, InvoiceDate, PaidOn, Amount (net), TDS, OtherDeductions, VoucherRef, Remarks`.
+  - Dates may be dd.MM.yyyy, dd/MM/yyyy or yyyy-MM-dd.
+  - Amounts may use Indian grouping.
 - **Matching:**
-  1. `InwardNo` if given;
-  2. otherwise the duplicate key built from GSTIN or vendor name, invoice number and invoice FY.
-- **Preview** shows matched, unmatched, already imported (voucher exists) and invalid rows.
-- **Confirm** imports the matched new rows in one transaction and skips the rest. Rows that would overpay are refused.
+  1. by `InwardNo`;
+  2. otherwise by the duplicate key.
 
-## 7. Outputs
-Outputs are built as `ReportDocument` (DD-07 §7.1) and streamed, never stored. `ReportDocument` gains `Portrait`, which is supported by the PDF and DOCX writers.
+  Ambiguous matches (overridden duplicates) are treated as unmatched.
+- **Preview categories:**
+  - matched new;
+  - already recorded (same item and voucher);
+  - unmatched;
+  - not payable (status not SentToAccounts or PartPaid, or on hold);
+  - would overpay;
+  - invalid.
+- **Confirm:** imports the matched new rows in one transaction.
 
+## 7. Outputs (as `ReportDocument`; streamed, never stored; two renders at a time; 50 MB cap)
 **7.1 Acknowledgement slip (PDF, portrait).**
-- **Content:**
-  - organisation name;
-  - "Acknowledgement of receipt";
-  - a two-column table of inward number, received date and time, office, from (sender, organisation), sender's reference and date, subject ("Confidential correspondence" if confidential), mode, pages, received by;
-  - footer: "System-generated acknowledgement — no signature required · {number}".
-- **Example:** `NCS/IN/HO/2026-27/00042 · 09.11.2026 11:20 · From: State Rural Livelihood Mission (Ref SRLM/2026/88 dated 05.11.2026) · Subject: Request for proposal — impact evaluation · By hand · 12 pages · Received by Asha Verma`.
+- **Header:** organisation name; "Acknowledgement of receipt".
+- **Table** (two columns):
+  - inward number; received date and time; office;
+  - from (sender, organisation); sender's reference and date;
+  - subject (masked to "Confidential correspondence" if confidential);
+  - mode; pages; received by.
+- **Footer:** "System-generated acknowledgement — no signature required · {number}".
 
-**7.2 Inward register (PDF, landscape, and XLSX).**
-- **Content:** office and date range in the title. Columns: Inward No · Received · Type / Mode · From · Sender ref & date · Subject · Marked to · Status / reply due.
-- **Confidential items:** E8 applies.
+**7.2 Inward register (PDF landscape and XLSX).**
+- **Title:** office and date range.
+- **Columns:** Inward No · Received · Type / Mode · From · Sender ref & date · Subject · Marked to · Status / reply due.
+- **Masking:** E8.
 
-**7.3 Invoice exports (XLSX).**
-- **List columns:** Inward No, Vendor, GSTIN, MSME, Invoice no, Invoice date, Project, PO, Taxable, GST, Total, Settled, Outstanding, Status, Holder, Accepted on, Payment due, Days since invoice, MSME > 45.
-- **43B(h) report columns:** Vendor, Udyam, Class, Invoice, Date, Accepted, Allowed by (acceptance + 45, or the agreed period if shorter), Total, Paid by 31 March, Outstanding on 31 March, Paid late (date).
+**7.3 Invoice list (XLSX).**
+- **Columns:** Inward No, Vendor, GSTIN, MSME, Class, Invoice no., Invoice date, Project, PO, Total, Adjustments, Settled, Outstanding, Status, Holder, Certified on, Payment due, Days since invoice, MSME past 45 days.
+
+**7.4 MSME / 43B(h) report (XLSX).**
+- **Columns:** Vendor, GSTIN, Udyam, Class, Invoice no., Invoice date, Due date (MSME), Total (effective), Paid by the as-on date, Outstanding on the as-on date, Paid late on.
+- **Sections:** Micro/Small; class not recorded.
 
 ## 8. Notifications, reminders, My Desk
-**Notifications.** Module label "Inward"; types `Inward.*`.
+**Notifications** have the module label "Inward". Their text is number and type only.
 
 | Event | Recipients |
 |---|---|
-| Marked or re-marked to someone | new holder |
-| Copy-to added | the copied users |
+| Marked or re-marked | the new holder |
+| Copy-to | the copied users |
 | Returned to registry | operators of the office |
-| Closed or reopened | inwarded-by user, and copies |
-| Invoice certified, sent to Accounts, put on hold or returned | Invoice Accounts users (when sent); the holder (when returned from Accounts) |
-| Invoice paid or closed short | the certifying officer |
-| Grant changed | the user concerned |
-| Daily reminder | each holder gets one aggregated notification: "n overdue, n due today or tomorrow, n not yet accepted for 2 days, n invoices with you > 7 days" |
-| Daily digest to operators | "n unassigned for more than 1 working day" |
-| Daily digest to Accounts | "n MSME invoices due within 5 days, n past 45 days" |
+| Closed, cancelled or reopened | the person who inwarded it, and the copies |
+| Reminder received | the holder of the original, or Accounts |
+| Sent to Accounts | Invoice Accounts users |
+| Sent back to verifier, returned or rejected by Accounts | the certifying officer |
+| Hold, release | the holder, or Accounts |
+| Paid, closed short | the certifying officer; for close short, also the Inward Viewers |
+| Grant changed | the user concerned and the Inward Viewers |
 
-**Daily job (`InwardScheduler`).**
-- **Timing:** same pattern as `ComplianceScheduler`: every 30 minutes; runs once per office day at or after `ReminderHour`, with the marker stored in `InwardState`.
-- **Batching:** markers are set in batches of 200; one final transaction writes the summaries.
-- **Working days:** Monday to Friday. There is no holiday calendar.
-- **Overdue repeats:** an overdue item is reminded again after `OverdueRepeatDays`.
+**Daily job (`InwardScheduler`).** It runs every day (pattern as `ComplianceScheduler`; marker in `InwardState`).
+- **Holders:** one summary each, covering:
+  - overdue (repeating every `OverdueRepeatDays`);
+  - due today or tomorrow;
+  - not accepted for 2 days;
+  - invoices with them for more than 7 days.
+- **Operators:** "n unassigned for more than 1 working day". Working days are Monday to Friday; this is the only place they are used.
+- **Accounts:** "n MSME invoices due within 5 days, n past 45 days, n duplicate overrides to check".
 
-**My Desk.** New counts in the single query (optional named members of `DeskCounts`):
+Markers are set in batches of 200, and the summaries are written in one final transaction.
 
-| Count | Who | What it counts |
-|---|---|---|
-| `InwardMine` | the holder | open items held by the user that are overdue, due within 1 day, or not yet accepted |
-| `InwardUnassigned` | operators | Unassigned items in the operator's offices |
-| `InvoiceQueue` | Invoice Accounts | items WithAccounts |
+**My Desk.** New optional members on `DeskCounts`:
 
-- They are added to `Total`, to the poll JSON (`inward`), to the Inward tab badge and to `site.js`.
-- **Cache keys:** the queue key `t:inward` (for operators and Accounts), and the inward grants in `RoleKey`.
-- **My Desk sections:** "Inward — with me", "Registry — unassigned", "Accounts — invoices to pay".
+| Member | Counts |
+|---|---|
+| `InwardMine` | open items held by the user that are overdue, due within 1 day or not accepted, plus invoices held by the user |
+| `InwardUnassigned` | operators: Unassigned items in their offices |
+| `InvoiceQueue` | Accounts: items WithAccounts |
+| `InwardAssigned` | the user is a participant in any item |
+
+- **Poll and badges:** the counts feed `Total`, the poll value `inward`, the Inward tab badge and the badge list in `site.js`.
+- **Cache keys:** `RoleKey` adds the user's sorted inward grants; the queue key is `t:inward`.
+- **Sections:** "Inward — with me", "Registry — unassigned", "Accounts — invoices to pay".
 
 ## 9. Settings (section `Inward`; all optional)
 | Key | Default | Effect |
 |---|---|---|
-| `Enabled` | `true` | `false` hides the module. Data is kept. |
-| `NumberPrefix` | `NCS/IN` | Prefix of inward numbers |
-| `DefaultOfficeName` | `Mumbai (Head Office)` | Default office when the user has none |
-| `SelfInwardEnabled` | `true` | Any user may inward items they received |
-| `ReplyDueDaysNormal` / `Urgent` / `Immediate` | `7` / `3` / `1` | Default reply-due period (calendar days) |
-| `UnassignedAlertWorkingDays` | `1` | Operators' digest threshold |
-| `OverdueRepeatDays` | `3` | Overdue reminder repeat |
-| `InvoiceTermsDays` | `30` | Default payment terms |
-| `MsmeMaxDays` | `45` | MSME limit from acceptance |
-| `InvoiceHolderAlertDays` | `7` | Reminder to verifiers holding an invoice |
-| `ReminderHour` | `9` | Daily job hour (office time) |
-| `MaxImportRows` / `MaxImportKB` | `5000` / `1900` | CSV import limits |
+| `Enabled` | `true` | Shows or hides the whole module. |
+| `NumberPrefix` | `NCS/IN` | Start of every inward number. |
+| `DefaultOfficeName` | `Mumbai (Head Office)` | Office used when the user has none (§6.3). |
+| `SelfInwardEnabled` | `true` | Lets any user inward items they received (D10). |
+| `ReplyDueDaysNormal` / `Urgent` / `Immediate` | `7` / `3` / `1` | Default reply-due period (D7). |
+| `MaxBackdateDays` | `90` | How far back "received at" may go. |
+| `UnassignedAlertWorkingDays` | `1` | Operators' digest threshold. |
+| `NotAcceptedAlertDays` | `2` | Reminder for items not yet accepted. |
+| `OverdueRepeatDays` | `3` | How often overdue items are reminded again. |
+| `InvoiceTermsDays` | `30` | Default payment terms. |
+| `MsmeMaxDays` | `45` | MSME limit (D15). |
+| `MsmeDueSoonDays` | `5` | "MSME due soon" window. |
+| `InvoiceHolderAlertDays` | `7` | Reminder to verifiers holding an invoice. |
+| `ReminderHour` | `9` | Hour the daily job runs. |
+| `ConvertedNotesAllowFiles` | `false` | Allows files on e-Notes created from inward items (D16). |
+| `MaxImportRows` / `MaxImportKB` | `5000` / `1900` | CSV import limits. `MaxImportKB` is clamped to 1,900, the upload guard's limit. |
 
 ## 10. Storage and backup
-**Design volume (5 years):**
+- **Expected size after 5 years:** about 0.55 GB for inward, and about 0.8–0.9 GB for the whole database with compliance.
 
-| Data | Rows × size | Total |
+| Table | Rows | Approx. size |
 |---|---|---|
-| Inward items | 250,000 × 0.9 KB | 225 MB |
-| Movements | 750,000 × 0.25 KB | 190 MB |
-| Notes | 100,000 × 0.4 KB | 40 MB |
-| Invoices | 25,000 × 0.5 KB | 13 MB |
-| Payments | 40,000 × 0.2 KB | 8 MB |
-| FTS index | | ~60 MB |
-| **Total** | | **≈ 540 MB** |
+| Inward items | 250,000 | 225 MB |
+| Movements | 750,000 | 190 MB |
+| Notes | 100,000 | 40 MB |
+| Participants | 600,000 | 15 MB |
+| Invoices | 25,000 | 13 MB |
+| Payments and adjustments | 45,000 | 9 MB |
+| Search index | — | 60 MB |
 
-- **With compliance** (≈ 225 MB) the whole database is ≈ 0.8–0.9 GB after 5 years.
-- **Backup:** a full backup (`VACUUM INTO` + ZIP) is ≈ 250 MB and takes about a minute.
-- **No new folders**, because no files are stored. The existing backup and restore cover everything unchanged.
+- **Backup:** one full backup takes about a minute.
+- **No new folders**, so the existing backup and restore cover everything.
 
 ## 11. Alternatives considered and rejected
 | Alternative | Why rejected |
 |---|---|
-| Scans / e-mail files stored with items | **Decided by the COO.** Paper stays in the file and e-mail in the mailbox. A "kept at" field gives traceability, avoids malware and leakage risk, and avoids tens of GB of storage. |
-| Separate invoice register and number series | Registry staff use one inward diary. An invoice is an inward item with extra fields (`InvoiceDetails` 1:1) and its own lifecycle. |
-| Building on e-Note | e-Note is approval movement. Inward needs diary numbering, reply-due dates, closure types and payment tracking. Conversion to e-Note covers the cases needing a decision. |
-| Money as REAL | Rounding makes "paid = total" unreliable (finding G2-11). |
-| Mailbox / ERP integration | No outbound connections; there is no API on the LAN. CSV imports instead. |
-| Item types as a master list | "Invoice" drives logic, and renaming it would break the lifecycle (E2). |
-| Holiday calendar for working days | Maintenance burden. Reply-due is in calendar days (D7); only the operator digest uses Monday–Friday. |
-| LIKE search over 250,000 rows | Too slow for the 400 ms budget; FTS5 is already used for circulars and e-Notes. |
+| Storing scans or e-mail files | COO decision. |
+| Separate invoice register | One diary, with invoice details stored 1:1. |
+| Building on e-Note | e-Note is a decision trail; the conversion covers the cases that need one. |
+| Money as REAL | Rounding errors. |
+| Mailbox or ERP integration | No outbound connections. |
+| Item types as a master list | The Invoice type drives logic. |
+| Enum CHECK constraints | They could never be extended without a table rewrite (G2-7). |
+| Holiday calendar | Maintenance burden. |
+| LIKE search | Too slow at 250,000 items; FTS5 instead. |
+| Statutory acceptance-date MSME model | Owner chose the simpler 45-days-from-invoice rule (D15). |
+| s.16 interest calculation | Deferred: it needs the bank-rate history; the report gives the inputs. |
 
 ## 12. Detailed implementation (in order)
+**Already done on the branch:** office codes on the Master lists page (GEN reserved); `Portrait` in the PDF and DOCX writers; `Infrastructure/Gstin.cs` (`Gstin`, `Paise`).
+
 | # | File | Change |
 |---|---|---|
-| 1 | `Infrastructure/Schema.cs` | Migration 8 (§4). |
-| 2 | `Infrastructure/Notifications.cs`, `Data/Models.cs` | "Inward" label; `ChangeTracker.InwardQueue`; `MasterTypes.InwardCategory`. |
-| 3 | `Pages/Admin/Masters.cshtml(.cs)`, `Data/ENotes.cs` (`ENoteMaster.CleanCode` reused) | Office code column for Locations (unique per type). |
-| 4 | `Infrastructure/Reports/ReportDocument.cs`, `ReportPdfWriter.cs`, `DocxWriter.cs` | `Portrait` option. |
-| 5 | `Data/Inward.cs` (new) | Codes, `InwardOptions`, entities, `InwardAccess`, `Gstin`, `Money` (paise parse and format). |
-| 6 | `Data/InwardRepository.cs` (new) | Queries (§6), desk SQL. |
-| 7 | `Data/InwardWorkflow.cs` (new) | §3.2 transitions, numbering, FTS upkeep, reminder link, e-Note conversion, daily reminders, grants. |
-| 8 | `Data/InvoiceWorkflow.cs` (new) | §3.3–3.5, payments, reversals. |
-| 9 | `Data/InwardImport.cs` (new) | Project codes and ERP payment CSV (in memory). |
-| 10 | `Data/InwardReports.cs` (new) | Acknowledgement slip, register, invoice and 43B(h) exports. |
-| 11 | `Infrastructure/InwardScheduler.cs` (new); `Infrastructure/UploadGuard.cs` | Daily job; `/Inward` prefix with multipart allowed only on `/Inward/ProjectCodes` and `/Inward/Payments`. |
-| 12 | `Program.cs` | Options, services, hosted service. |
-| 13 | `Data/Desk.cs`, `Infrastructure/Endpoints.cs`, `Pages/Desk/Index.cshtml`, `Pages/Shared/_Layout.cshtml`, `wwwroot/js/site.js` | Counts, sections, tab, badge; invoice-section toggle on the inward form. |
-| 14 | `Data/ENoteWorkflow.cs`, `Pages/ENotes/View.cshtml` | `SourceInwardId` set on conversion; "Created from inward …" link. |
-| 15 | `Pages/Inward/*` (new) | Pages of §6. |
-| 16 | `wwwroot/css/site.css` | A few classes. |
-| 17 | `Infrastructure/Seeder.cs` | Demo (new empty databases only): office codes, an operator grant, Accounts grant, project codes, a few letters and invoices. |
-| 18 | Tests | `InwardTests.cs`, `InvoiceTests.cs`, `GstinTests` (in `InvoiceTests`), `InwardBenchTests.cs`, `tests/e2e/inward.e2e.js` + `run-all.sh`. |
-| 19 | Docs | CHANGELOG, README, SETUP_GUIDE, TESTING_CHECKLIST, ADMIN-GUIDE, STAFF-GUIDE, IT-SECURITY-NOTE, DEPLOYMENT-GUIDE (settings), UPGRADE-GUIDE, TEST-SCRIPT (rows + p95), SBOM, `docs/designs/SITEMAP.md`, `PLATFORM.md` (migration 8, roles), `DESK-NOTIFICATIONS.md`, DD-07 §16 (points here). |
-| 20 | `NabconsIntranet.csproj` | 1.7.0; package rebuilt; 1.6.0 ZIP removed. |
+| 1 | `Infrastructure/Schema.cs` | Migration 8 (§4) |
+| 2 | `Infrastructure/Notifications.cs`, `Data/Models.cs` | The "Inward" label; `InwardQueue`; `MasterTypes.InwardCategory` |
+| 3 | `Data/ENoteWorkflow.cs`, `Data/ENotes.cs`, `Pages/ENotes/View.cshtml(.cs)` | `Create(..., sourceInwardId)`; `ENote.SourceInwardId`; attachment refusal; "Created from inward" link |
+| 4 | `Data/Inward.cs` | Codes, `InwardOptions`, records, `InwardAccess` |
+| 5 | `Data/InwardRepository.cs` | Queries and desk SQL |
+| 6 | `Data/InwardWorkflow.cs` | §3.2, numbering, participants, search index, reminder link, conversion, edit/cancel, transfer, grants, reminders |
+| 7 | `Data/InvoiceWorkflow.cs` | §3.3–3.5 |
+| 8 | `Data/InwardImport.cs` | Project codes and ERP payment imports |
+| 9 | `Data/InwardReports.cs` | §7 |
+| 10 | `Infrastructure/InwardScheduler.cs`; `Infrastructure/UploadGuard.cs` | Daily job; `/Inward` prefix, multipart only on `/Inward/ProjectCodes` and `/Inward/Payments` |
+| 11 | `Program.cs` | Options, services, hosted job |
+| 12 | `Data/Desk.cs`, `Pages/Desk/Index.cshtml`, `Pages/Shared/_Layout.cshtml`, `Infrastructure/Endpoints.cs`, `wwwroot/js/site.js` | Counts, sections, tab, badge, invoice-section toggle |
+| 13 | `Pages/Inward/*` | The pages in §6 |
+| 14 | `wwwroot/css/site.css` | Styles |
+| 15 | `Infrastructure/Seeder.cs` | Demo data, on new empty databases only |
+| 16 | Tests | `InwardTests.cs`, `InvoiceTests.cs` (including GSTIN and paise), `InwardBenchTests.cs`, `tests/e2e/inward.e2e.js`, `run-all.sh`, `ReportWriterTests.cs` (portrait) |
+| 17 | Docs | Same list as DD-07 §12 #18, plus DD-07 §16 pointing here |
+| 18 | `NabconsIntranet.csproj` | 1.7.0; rebuild the package; remove the 1.6.0 ZIP |
 
 ## 13. Test plan
 **xUnit:**
-1. **Migration.** Migration 8 applies once. Triggers and CHECKs work. 1.6.0 data is untouched.
-2. **Numbering.** Numbers run per office and per FY; an office without a code gets `GEN`.
-3. **Item transitions.** Every allowed item transition in §3.2 works, and forbidden ones fail.
-4. **Invoice transitions.** Every invoice transition in §3.3 works; generic Close is refused for invoices.
-5. **Payments.** Paise arithmetic: auto-Paid, PartPaid, overpayment refused, reversal (once, recomputes, reopens), close short.
-6. **Duplicates.** Same key blocked; override with a reason allowed; same number in a different FY only warns.
-7. **GSTIN.** Valid and invalid check digits; PAN extracted.
-8. **MSME.** Due-date computation, the > 45 flag, and the 43B(h) list excludes Medium.
-9. **Permissions.** The §5 matrix, 404s, confidential metadata-only in register, export and print, and no free text in notifications or audit.
-10. **Reminder link.** The new item is closed and the original is reopened with `ReminderCount + 1`.
-11. **e-Note conversion.** A draft e-Note is created with `SourceInwardId`; the option is hidden or refused when e-Note is off.
-12. **Imports.** Project codes and ERP payments: preview, all or nothing, idempotent (same file refused; existing vouchers skipped), nothing on disk.
-13. **No uploads.** Multipart to every other `/Inward` route gets 415; text limits hold.
-14. **Daily reminders.** Aggregated, once per day, inactive users skipped.
-15. **My Desk.** Counts and cache invalidation.
-16. **Backup.** The backup includes the new tables.
+1. **Migration:** migration 8 runs once; the triggers and CHECKs hold.
+2. **Numbering:** separate series per office and per FY, including GEN.
+3. **Item transitions:** every §3.2 transition, including edit, cancel and transfer; return to registry removes participation.
+4. **Invoice transitions:** every §3.3 transition; the item status always matches the invoice status.
+5. **Payments:**
+   - paise arithmetic, with Paid, PartPaid, and overpayment refused;
+   - credit and debit notes; reversal (once only, including after ClosedShort and while OnHold);
+   - one voucher across two invoices.
+6. **Duplicates:** blocked, override, the *checked* confirmation, and the warnings.
+7. **GSTIN:** valid and invalid check digits.
+8. **MSME:** due dates, both flags, and the 43B(h) inclusion rules.
+9. **Permissions:**
+   - the §5 matrix, 404s, and E8 masking in the register, search, export, print and aggregates;
+   - no free text in notifications or the audit log;
+   - the Administrator cannot grant to themselves.
+10. **Segregation:** the person who inwarded an invoice cannot certify it, and a self-inwarded invoice is never theirs to verify.
+11. **Reminder link:** visible items only; a non-invoice original is reopened; an invoice is not.
+12. **e-Note conversion:** a draft with the confidential flag and `SourceInwardId`; attachments refused; retry is idempotent; hidden when e-Note is off.
+13. **Imports:** preview categories, all or nothing, idempotent, nothing written to disk.
+14. **Uploads:** 415 on every other `/Inward` route; text limits.
+15. **Daily reminders:** aggregated, run once a day, inactive holders skipped.
+16. **My Desk:** counts and `RoleKey`.
+17. **Backup:** the new tables are included.
 
 **Playwright (`inward.e2e.js`):**
-1. An operator inwards a letter (hand delivery) and prints the acknowledgement slip.
-2. The operator marks it; the holder accepts it, adds a note, and replies and closes it.
+1. Operator inwards a letter and prints the slip.
+2. Mark, accept, note, reply and close.
 3. Self-inward of an e-mail.
-4. An invoice: inward, mark, certify, send to Accounts, part-pay, pay; the item closes automatically.
-5. A duplicate invoice is blocked.
-6. The register is printed to PDF and Excel.
+4. An invoice from inward through certify, send, part payment, full payment and automatic close.
+5. A duplicate is blocked.
+6. Register exported to PDF and Excel.
 7. A non-participant gets 404.
-8. The page fits a phone screen.
+8. The pages fit a phone screen.
 
-**Performance (`NABCONS_BENCH=1`):**
-- **Volume:** 250,000 items, 750,000 movements, 25,000 invoices and 40,000 payments.
-- **Budgets (p95):**
-  - dashboard < 300 ms;
-  - register page 1 (office filter) < 300 ms;
-  - FTS search < 400 ms;
-  - invoice dashboard < 300 ms;
-  - inward write (with FTS) < 50 ms;
-  - register PDF for one day (300 items) < 3 s.
+**Performance (`NABCONS_BENCH=1`):** at 250,000 items, 750,000 movements and 25,000 invoices, with an operator of 3 offices, the p95 budgets are:
 
-**Upgrade:**
-1. Take a copy of a 1.6.0 database and run `--migrate` twice.
-2. Check that row counts are unchanged, except for the new master items and the schema row.
-3. Run `--verify-audit`.
-4. Check that 1.6.0 still starts on the upgraded database.
+| Measure | Budget |
+|---|---|
+| Dashboard | < 300 ms |
+| Register page 1 | < 300 ms |
+| Search | < 400 ms |
+| Invoice dashboard | < 300 ms |
+| Inward write | < 50 ms |
+| One-day register PDF | < 3 s |
+
+**Upgrade:** start from a copy of a 1.6.0 database. Run `--migrate` twice, check row counts and `--verify-audit`, then roll back to 1.6.0.
 
 ## 14. Acceptance criteria (1.7.0)
-1. Migration 8 is additive and roll-back safe. Existing data is unchanged; the audit log verifies.
-2. Operators inward items for their offices; any user can self-inward. Numbers are `NCS/IN/<office>/<FY>/nnnnn`.
-3. Marking, accepting, re-marking, returning to the registry, copy-to, notes, closure with the type's fields, reopen, and reminder linking all work. The movement trail and notes are append-only.
-4. Invoices follow the §3.3 lifecycle:
-   - payments are in paise;
+1. Migration 8 is additive and safe to roll back; the audit log verifies.
+2. Operators and self-inward users get numbers `NCS/IN/<office>/<FY>/nnnnn`.
+3. All item transitions work as specified (§3.2), with an append-only trail.
+4. Invoices follow §3.3:
+   - payments and adjustments are kept in paise;
    - the item closes automatically when paid;
    - reversals work;
-   - close short needs a reason;
-   - duplicate protection with an audited override;
-   - GSTIN is checked offline.
-5. The MSME 45-day monitoring and the 43B(h) list are correct.
-6. Dashboards, registers, exports, the acknowledgement slip and the register PDF respect visibility and the confidential rule.
-7. Reminders and digests arrive in-app; My Desk and the badge update through the existing poll only.
-8. No upload anywhere except the two CSV imports (in memory). No file is stored. No bank details are stored.
-9. The performance budgets are met at design volume and recorded.
-10. All existing and new tests pass. The documents are updated. The package is built with its checksum.
+   - close-short is visible to the Inward Viewers;
+   - duplicate protection and segregation of duties hold.
+5. The MSME flags and the 43B(h) report follow D15.
+6. Every screen and output respects visibility and confidential masking.
+7. Reminders and digests arrive in-app; the badges update through the existing poll only.
+8. Nothing can be uploaded except the two CSV imports, which are held in memory. No files and no bank details are stored. e-Notes created from inward items cannot carry files.
+9. The performance budgets are met and recorded.
+10. All tests pass, the documents are updated, and the package is built with its checksum.
 
 ## 15. Risks and open items
 | # | Item | Plan |
 |---|---|---|
-| R-1 | The ERP payment export format is unknown (E7) | Our template now. A mapping change is made once a sample arrives. |
-| R-2 | Elephant decisions E1–E9 | Owner confirms before merge. |
-| R-3 | e-Note attachments after "Converted to e-Note" | The brief allows them. The owner's live server has e-Note off, so conversion is hidden there. |
-| R-4 | Without a holiday calendar, "1 working day" counts gazetted holidays as working days | Accepted. The digest is advisory only. |
-| R-5 | 300 items/day means about 1,500 writes/day plus FTS upkeep | Single short transactions; benchmarked. |
-| R-6 | Operators may be at offices that have no code yet | `GEN` numbering; the Administrator adds codes on the Master lists page. |
+| R-1 | The ERP payment format is unknown | Use our template now; map columns when a sample arrives. |
+| R-2 | Elephant decisions E1–E10 | The owner confirms before merge. |
+| R-3 | Working days ignore holidays | Accepted: the digest is advisory only. |
+| R-4 | 43B(h) and s.15 are simplified (D15) | The owner chose this. The statutory acceptance-date model can be added later. |
+| R-5 | A single person holding both operator and Accounts grants | Accepted: segregation applies at certification, and close-short is visible to the Inward Viewers. |
