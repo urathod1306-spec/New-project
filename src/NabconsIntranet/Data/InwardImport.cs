@@ -35,8 +35,9 @@ public static class PaymentCategory
 }
 
 /// <summary>
-/// CSV imports of the inward module, read in memory only (never stored): project codes and ERP payments. Both are all or
-/// nothing, re-checked inside the write transaction, and the same file is refused a second time (InwardImports).
+/// CSV imports of the inward module, read in memory only (never stored): project codes and ERP payments. Both are
+/// re-checked inside the write transaction and recorded in InwardImports. A project-code file is refused a second time;
+/// a payment file may come again, and rows whose voucher is already recorded on the invoice are skipped.
 /// </summary>
 public sealed partial class InwardWorkflow
 {
@@ -201,6 +202,14 @@ public sealed partial class InwardWorkflow
                 { r.Category = PaymentCategory.Unmatched; r.Problem = found.Count > 1 ? "More than one invoice matches (overridden duplicates); enter it manually." : "No invoice matches."; continue; }
                 r.ItemId = found[0].ItemId; r.MatchedNumber = found[0].Number;
                 var detail = InvoiceOf(c, tx!, r.ItemId.Value)!;
+                if (r.InwardNo != null)
+                {
+                    // matched by number: the row's own invoice details, when given, must agree (a mistyped number must not pay another vendor)
+                    var g = Gstin.Normalise(v("VendorGstin"));
+                    var no = v("InvoiceNo");
+                    if ((no != null && InvoiceRules.NormInvoiceNo(no) != InvoiceRules.NormInvoiceNo(detail.InvoiceNo)) || (g != null && detail.VendorGstin != null && g != detail.VendorGstin))
+                    { r.Category = PaymentCategory.Unmatched; r.Problem = $"{r.MatchedNumber} is invoice {detail.InvoiceNo}{(detail.VendorGstin != null ? " of " + detail.VendorGstin : "")}, which does not agree with this row."; r.ItemId = null; continue; }
+                }
                 var row = ValidatePayment(r.Input, detail);
                 r.Settled = row.Net + row.Tds + row.Other;
                 var used = Db.Scalar<long>(c, tx, """
@@ -235,10 +244,9 @@ public sealed partial class InwardWorkflow
         RequireAccounts(u);
         var norm = ComplianceImport.Normalise(text);
         var sha = ComplianceImport.Sha(norm);
-        RequireNewFile(null, null, "Payments", sha);
         var n = InTx(db, (c, tx) =>
         {
-            RequireNewFile(c, tx, "Payments", sha);
+            // the same file may come again (rows not payable last time); vouchers already recorded are skipped as "already recorded"
             var rows = ClassifyPayments(c, tx, norm, out var error);
             if (error != null) throw new WorkflowException(error);
             var ok = rows.Where(r => r.Category == PaymentCategory.New).ToList();

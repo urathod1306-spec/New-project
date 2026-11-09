@@ -25,7 +25,7 @@
     <div class="field"><label for="mode">Received by (mode) *</label>
         <select id="mode" name="Input.Mode" required>@foreach (var t in InwardMode.Labels) { <option value="@t.Key" selected="@(i.Mode == t.Key)">@t.Value</option> }</select></div>
     <div class="field"><label for="rcvd">Received on *</label>
-        <div class="inline"><input type="date" id="rcvd" name="Input.ReceivedOn" value="@i.ReceivedOn" min="@minDay" max="@today" required /><input type="time" name="Input.ReceivedTime" value="@i.ReceivedTime" aria-label="Received time (optional)" /></div>
+        <div class="inline"><input type="date" id="rcvd" name="Input.ReceivedOn" value="@i.ReceivedOn" min="@(Model.Edit ? null : minDay)" max="@today" required /><input type="time" name="Input.ReceivedTime" value="@i.ReceivedTime" aria-label="Received time (optional)" /></div>
         <span class="hint">Time is optional (today: now). At most @Model.MaxBackdateDays days back.</span></div>
     @if (!locked)
     {

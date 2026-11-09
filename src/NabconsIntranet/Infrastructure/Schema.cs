@@ -780,6 +780,7 @@ public static class Schema
             CREATE INDEX IF NOT EXISTS IX_Inward_Closed ON InwardItems(ClosedAt) WHERE ClosedAt IS NOT NULL;
             CREATE INDEX IF NOT EXISTS IX_Inward_Linked ON InwardItems(LinkedToId) WHERE LinkedToId IS NOT NULL;
             CREATE INDEX IF NOT EXISTS IX_Inward_Type ON InwardItems(ItemType, Status);
+            CREATE INDEX IF NOT EXISTS IX_Inward_SenderRef ON InwardItems(SenderRef COLLATE NOCASE, SenderRefDate) WHERE SenderRef IS NOT NULL;
             CREATE TRIGGER IF NOT EXISTS InwardItems_fixed BEFORE UPDATE ON InwardItems
             WHEN new.Number IS NOT old.Number OR new.OfficeId IS NOT old.OfficeId OR new.OfficeCode IS NOT old.OfficeCode OR new.FinancialYear IS NOT old.FinancialYear OR new.Serial IS NOT old.Serial OR new.InwardedAt IS NOT old.InwardedAt OR new.InwardedByUserId IS NOT old.InwardedByUserId
             BEGIN SELECT RAISE(ABORT, 'The number, office, FY and inwarding details of an inward item never change'); END;

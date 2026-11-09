@@ -55,13 +55,17 @@
             @if (!m && !string.IsNullOrEmpty(i.Summary)) { <h3 class="mt">Summary</h3><p class="pre">@i.Summary</p> }
         </div>
 
-        @if (v != null)
+        @if (v != null && m)
+        {
+            <div class="card"><h2>Invoice</h2><p>Status: @InvStatus.Label(v.InvoiceStatus) · invoice dated @F.DateDot(v.InvoiceDate). Amounts and vendor details are shown only to people with full access.</p></div>
+        }
+        @if (v != null && !m)
         {
             <div class="card">
-                <h2>Invoice @(m ? "" : "— " + v.VendorName)</h2>
+                <h2>Invoice — @v.VendorName</h2>
                 <dl class="meta-grid">
                     <dt>Invoice</dt><dd>@v.InvoiceNo dated @F.DateDot(v.InvoiceDate) (FY @v.InvoiceFy)</dd>
-                    @if (!m) { <dt>GSTIN</dt><dd>@(v.VendorGstin ?? "—")</dd> }
+                    @if (i.Full) { <dt>GSTIN</dt><dd>@(v.VendorGstin ?? "—")</dd> }
                     <dt>MSME</dt><dd>@(v.IsMsme ? "Yes" + (v.MsmeClass != null ? " — " + v.MsmeClass : "") + (v.IsTrader ? " (trader)" : "") + (!m && v.UdyamNo != null ? " · " + v.UdyamNo : "") : "No")</dd>
                     @if (v.ProjectCode != null) { <dt>Project</dt><dd>@v.ProjectCode</dd> }
                     @if (!m && v.PoRef != null) { <dt>PO</dt><dd>@v.PoRef</dd> }
@@ -237,7 +241,7 @@
         @if (Model.CanCopy)
         {
             <details class="card"><summary><strong>Copy to others</strong></summary>
-                <form method="post" asp-page-handler="Copy">
+                <form method="post" asp-page-handler="Copy"><input type="hidden" name="rv" value="@rv" />
                     <div class="field"><label for="cusers">People</label><select id="cusers" name="users" multiple size="5" required>@foreach (var u in Model.Users) { <option value="@u.Id">@u.DisplayName</option> }</select></div>
                     @if (i.IsConfidential) { <label class="check"><input type="checkbox" name="confirm" value="true" required /> I confirm copying this confidential item</label> }
                     <button class="btn" type="submit">Copy</button></form>

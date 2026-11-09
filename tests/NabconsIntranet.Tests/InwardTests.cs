@@ -161,8 +161,8 @@ public class InwardTests : IDisposable
         Assert.Equal(0, R.Register(P("coo"), new InwardFilter { Status = "all", Q = "zebra" }).Total);   // subject not indexed
         Assert.Equal(1, R.Register(P("coo"), new InwardFilter { Status = "all", Q = I(id).Number.Split('/').Last() }).Total);
         Assert.Throws<WorkflowException>(() => W.AddNote(id, "note", P("bdu")));                          // masked operator: no notes
-        Assert.Throws<WorkflowException>(() => W.CopyTo(id, new() { Uid("staff") }, false, P("approver1")));   // needs the confirmation
-        W.CopyTo(id, new() { Uid("staff") }, true, P("approver1"));
+        Assert.Throws<WorkflowException>(() => W.CopyTo(id, new() { Uid("staff") }, false, Rv(id), P("approver1")));   // needs the confirmation
+        W.CopyTo(id, new() { Uid("staff") }, true, Rv(id), P("approver1"));
         Assert.False(R.Item(id, P("staff"))!.Masked);
     }
 
@@ -410,8 +410,8 @@ public class InwardTests : IDisposable
         Assert.Equal(1, W.ImportPayments(pay, P("approver2")));
         Assert.Equal(InvStatus.PartPaid, Inv(id).InvoiceStatus);
         Assert.Equal("Import", R.Payments(id).Single().Source);
-        Assert.Throws<WorkflowException>(() => W.ImportPayments(pay, P("approver2")));
-        Assert.Equal(PaymentCategory.Recorded, W.PreviewPayments(pay + " ", P("approver2"), out _)[0].Category);
+        Assert.Equal(PaymentCategory.Recorded, W.PreviewPayments(pay, P("approver2"), out _)[0].Category);   // same file again: already recorded
+        Assert.Throws<WorkflowException>(() => W.ImportPayments(pay, P("approver2")));                         // nothing new to record
     }
 
     // ------------------------------------------------------------------ HTTP
@@ -455,5 +455,96 @@ public class InwardTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync("/Inward")).StatusCode);
         Assert.DoesNotContain("href=\"/Inward", await (await c.GetAsync("/")).Content.ReadAsStringAsync());
     }
-}
 
+    // ------------------------------------------------------------------ Prompt R review regressions
+
+    [Fact]
+    public void Review_confidential_items_cannot_be_self_marked_and_warnings_do_not_leak_numbers()
+    {
+        W.Grant(Uid("bdu"), InwardRole.Operator, Ho, P("admin"));
+        var conf = W.Inward(Letter("Secret", "approver1", confidential: true), P("publisher"), false);
+        Assert.Throws<WorkflowException>(() => W.Mark(conf, Uid("bdu"), null, Rv(conf), P("bdu")));                       // finding 2
+        Assert.Throws<WorkflowException>(() => W.CopyTo(conf, new() { Uid("bdu") }, true, Rv(conf), P("bdu")));
+        var withRef = Letter("Ref", confidential: true); withRef.SenderRef = "CONF/1"; withRef.SenderRefDate = D(-1);
+        var refId = W.Inward(withRef, P("publisher"), false);
+        var probe = Letter("Probe"); probe.SenderRef = "conf/1"; probe.SenderRefDate = D(-1);
+        var ex = Assert.Throws<InwardConfirmException>(() => W.Inward(probe, P("staff"), false));                          // finding 6
+        Assert.DoesNotContain(I(refId).Number, ex.Warnings[0]);
+        var dup = Invoice("LEAK-1", markTo: "approver1");
+        var d2 = Assert.Throws<InwardConfirmException>(() => Invoice("LEAK-1", markTo: null, by: "staff"));
+        Assert.DoesNotContain(I(dup).Number, d2.Warnings[0]);
+    }
+
+    [Fact]
+    public void Review_reminder_of_a_reminder_needs_access_to_the_root()
+    {
+        var pune = R.Offices().First(o => o.Name == "Pune");
+        W.Grant(Uid("bdu"), InwardRole.Operator, pune.Id, P("admin"));
+        var root = W.Inward(Letter(markTo: "approver1"), P("publisher"), false);                                          // HO item
+        var rem = Letter("first reminder"); rem.OfficeId = pune.Id; rem.LinkedNumber = I(root).Number;
+        Assert.Throws<WorkflowException>(() => W.Inward(rem, P("bdu"), false));                                         // finding 9
+    }
+
+    [Fact]
+    public void Review_amount_edit_after_a_credit_note_cannot_leave_nothing_to_pay()
+    {
+        var id = AtAccounts("REV-3", "1,18,000");
+        W.RecordAdjustment(id, new AdjustmentInput { Kind = "CreditNote", DocNo = "C1", DocDate = D(0), Amount = "1,00,000" }, Rv(id), P("approver2"));
+        var e = new InwardInput { Invoice = new InvoiceInput { Total = "1,00,000", TermsDays = 30 } };
+        Assert.Throws<WorkflowException>(() => W.Edit(id, e, Rv(id), P("approver2"), true));                            // finding 3
+        Assert.Throws<WorkflowException>(() => W.RecordAdjustment(id, new AdjustmentInput { Kind = "CreditNote", DocNo = "c1", DocDate = D(0), Amount = "1" }, Rv(id), P("approver2")));   // finding 11
+        W.Hold(id, "query", Rv(id), P("approver2"));
+        Assert.Throws<WorkflowException>(() => W.Cancel(id, "x", Rv(id), P("publisher")));                              // finding 10
+    }
+
+    [Fact]
+    public void Review_erp_row_must_agree_with_the_matched_invoice()
+    {
+        var a = AtAccounts("ERP-A", "1,000");
+        var pay = $"InwardNo,InvoiceNo,PaidOn,Amount,VoucherRef\r\n{I(a).Number},OTHER-99,{D(0)},100,Z1\r\n";
+        Assert.Equal(PaymentCategory.Unmatched, W.PreviewPayments(pay, P("approver2"), out _)[0].Category);             // finding 4
+    }
+
+    [Fact]
+    public void Review_reversed_late_payment_is_not_paid_late_and_copy_checks_row_version()
+    {
+        var id = AtAccounts("MS-REV", "1,000", msme: true);
+        Db.Exec("UPDATE InvoiceDetails SET InvoiceDate = @d, PaymentDueOn = @due WHERE ItemId = @id", new { d = D(-60), due = D(-30), id });
+        Pay(id, "1,000", "LATE");
+        W.Reverse(id, R.Payments(id).First().Id, "wrong", Rv(id), P("approver2"));
+        Db.Exec("UPDATE InvoiceDetails SET PaymentDueOn = @due WHERE ItemId = @id", new { due = D(5), id });              // now due later: unpaid, not late
+        var row = R.MsmeReport(P("coo"), _app.Get<Fmt>().Today, null).Single(r => r.ItemId == id);
+        Assert.Null(row.LastPaidOn);                                                                                    // finding 5
+        var l = W.Inward(Letter(markTo: "staff"), P("publisher"), false);
+        Assert.Throws<WorkflowException>(() => W.CopyTo(l, new() { Uid("bdu") }, false, Rv(l) - 1, P("staff")));        // finding 19
+    }
+
+    [Fact]
+    public void Review_return_keeps_access_only_for_holders_who_passed_it_on()
+    {
+        var id = W.Inward(Letter(markTo: "staff"), P("publisher"), false);
+        W.ReturnToRegistry(id, "not mine", Rv(id), P("staff"));
+        W.Mark(id, Uid("staff"), null, Rv(id), P("publisher"));
+        W.ReturnToRegistry(id, "still not mine", Rv(id), P("staff"));
+        Assert.False(_app.Get<InwardAccess>().IsParticipant(id, Uid("staff")));                                          // finding 14
+        var b = W.Inward(Letter(markTo: "staff"), P("publisher"), false);
+        W.Mark(b, Uid("approver1"), null, Rv(b), P("staff"));
+        W.Mark(b, Uid("staff"), null, Rv(b), P("approver1"));
+        W.ReturnToRegistry(b, "x", Rv(b), P("staff"));
+        Assert.True(_app.Get<InwardAccess>().IsParticipant(b, Uid("staff")));
+    }
+
+    [Fact]
+    public void Review_masked_editor_cannot_see_or_change_the_invoice_part()
+    {
+        W.Grant(Uid("bdu"), InwardRole.Operator, Ho, P("admin"));
+        var i = Letter("Confidential invoice", "approver1", confidential: true, type: InwardType.Invoice);
+        i.Invoice = new InvoiceInput { VendorName = "Hidden Vendor", InvoiceNo = "HV-1", InvoiceDate = D(-2), Total = "500" };
+        var id = W.Inward(i, P("publisher"), true);
+        var e = new InwardInput { Mode = "Courier", ReceivedOn = D(0), Priority = "Normal", KeptAt = "Rack 9", Invoice = new InvoiceInput { VendorName = "Changed", InvoiceNo = "X", InvoiceDate = D(0), Total = "1" } };
+        W.Edit(id, e, Rv(id), P("bdu"), true);                                                                          // finding 1
+        Assert.Equal("Hidden Vendor", Inv(id).VendorName);
+        Assert.Equal(50000, Inv(id).TotalPaise);
+        Assert.Equal("Courier", I(id).Mode);
+    }
+}

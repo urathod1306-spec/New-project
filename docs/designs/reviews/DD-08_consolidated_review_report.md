@@ -89,3 +89,29 @@ Three fresh reviewers read DD-08 v1 and the code read-only: **G1 Comprehension**
 ## Round 2 — G3 readiness on v2
 
 Verdict: buildable with three blocking items (R2-1 credit/debit note items, R2-2 ActionRequired values, R2-3 voucher uniqueness). All 22 items were accepted as PROPOSE FIX and are recorded as binding in DD-08 §15. R2-3 and R2-8 changed migration 8 before release (no table UNIQUE on vouchers; unique index on `ENotes.SourceInwardId`).
+
+## Post-build hostile review (Prompt R) on the 1.7.0 build
+
+19 findings (no Blocker; 3 High, 10 Medium, 6 Low). All fixed before release; regression tests are the `Review_*` tests in `tests/NabconsIntranet.Tests/InwardTests.cs`.
+
+| # | Sev. | Finding | Resolution |
+|---|---|---|---|
+| 1 | High | Edit form showed/let a masked operator change a confidential invoice's vendor fields | Invoice part hidden from masked editors and never updated by them |
+| 2 | High | Operator could mark or copy a confidential item to themselves and gain full access | Refused unless they already have full access |
+| 3 | High | Amount edit after a credit note could leave nothing (or less) to pay | Refused when total + adjustments ≤ 0 or below the settled amount |
+| 4 | Med | ERP row matched by inward number ignored its own invoice no./GSTIN | Must agree, else "Unmatched" |
+| 5 | Med | MSME report counted reversed and earlier-year late payments; closed-short balance shown outstanding | Late payments: not reversed, within the as-on FY; closed short = nothing outstanding; current status/class documented |
+| 6 | Med | Duplicate / sender-reference warnings named items the user cannot open; MSME hint showed Udyam | Numbers only when visible; Udyam/class only with full access |
+| 7 | Med | e-Note draft from an earlier holder silently reused | Reuse only by its initiator; otherwise a clear message |
+| 8 | Med | Search capped at 5,000 matches before the visibility filter | Cap removed (benchmarked) |
+| 9 | Med | Reminder chain could reach a root the user cannot see | Root must be visible too |
+| 10 | Med | Cancel, copy-to and Accounts amount edit allowed while on hold | Refused while on hold |
+| 11 | Med | Same credit/debit note recordable twice | Refused for a closed note item and a repeated document number |
+| 12 | Med | Sender-reference and other-FY lookups scanned the table | Index on (SenderRef, SenderRefDate) added to migration 8 (unreleased); key prefix as an index range |
+| 13 | Med | Items older than 90 days could not be edited in the browser | No minimum date on the edit form |
+| 14 | Low | Return-to-registry keep rule wrong in both directions | Based on the movement history: held earlier and passed on without returning |
+| 15 | Low | Masked rows showed amounts, vouchers, project; GSTIN shown without full access | Masked invoice panel and list cells; GSTIN only with full access. The MSME report keeps amounts (statutory), vendor masked |
+| 16 | Low | Operators could add notes they could not read | Notes shown to them on non-confidential items |
+| 17 | Low | Overridden-duplicate invoice could not be edited by users without full access | Stored reason kept when unchanged |
+| 18 | Low | Same ERP payment file refused a second time | Allowed; already-recorded vouchers are skipped |
+| 19 | Low | Copy-to did not check the row version | Checked and bumped |

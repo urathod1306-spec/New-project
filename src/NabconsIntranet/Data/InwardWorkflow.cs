@@ -166,6 +166,29 @@ public sealed partial class InwardWorkflow(Db db, InwardAccess access, InwardRep
 
     private sealed class IdRow { public long Id { get; set; } }
 
+    private sealed class MoveRow { public string Action { get; set; } = ""; public long? ToUserId { get; set; } }
+
+    /// <summary>R2-5: the user held the item earlier and it moved on without them returning it (so they keep access).</summary>
+    private static bool HeldAndPassedOn(SqliteConnection c, SqliteTransaction tx, long id, long uid)
+    {
+        long? holder = null;
+        foreach (var m in Db.Query<MoveRow>(c, tx, "SELECT Action, ToUserId FROM InwardMovements WHERE ItemId = @id ORDER BY Id", new { id }))
+        {
+            if (m.Action == "Returned" || m.Action == "SentToAccounts") { holder = null; continue; }
+            if (m.ToUserId is long to && m.Action is "Marked" or "Remarked" or "Transferred" or "SentBack" or "Reopened")
+            {
+                if (holder == uid && to != uid) return true;
+                holder = to;
+            }
+        }
+        return false;
+    }
+
+    private static void RequireNotOnHold(SqliteConnection c, SqliteTransaction tx, InwardItem it)
+    {
+        if (it.IsInvoice && InvoiceOf(c, tx, it.Id)?.InvoiceStatus == InvStatus.OnHold) throw new WorkflowException("This invoice is on hold; release it first.");
+    }
+
     private static void RequireOpen(InwardItem it)
     {
         if (!it.IsOpen) throw new WorkflowException("This item is closed; it must be reopened first.");
@@ -252,6 +275,7 @@ public sealed partial class InwardWorkflow(Db db, InwardAccess access, InwardRep
         if (it == null || !access.CanView(it, u)) throw new WorkflowException($"Inward number {number.Trim()} was not found.");
         for (var hops = 0; it.LinkedToId != null && it.ClosureType == Closure.Reminder && hops < 50; hops++)
             it = Load(c, tx, it.LinkedToId.Value);
+        if (!access.CanView(it, u)) throw new WorkflowException($"Inward number {number.Trim()} was not found.");
         return it;
     }
 
@@ -313,12 +337,14 @@ public sealed partial class InwardWorkflow(Db db, InwardAccess access, InwardRep
             var warnings = new List<string>();
             if (!confirmed && v.SenderRef != null && v.SenderRefDate != null)
             {
-                var same = Db.Scalar<string>(c, tx, "SELECT Number FROM InwardItems WHERE SenderRef = @r COLLATE NOCASE AND SenderRefDate = @d AND ClosureType IS NOT 'Cancelled' LIMIT 1",
-                    new { r = v.SenderRef, d = v.SenderRefDate });
-                if (same != null) warnings.Add($"An item with the same sender's reference and date is already inwarded as {same}.");
+                var same = Db.Query<InwardItem>(c, tx, LoadSql + " WHERE i.SenderRef = @r COLLATE NOCASE AND i.SenderRefDate = @d AND i.ClosureType IS NOT 'Cancelled' LIMIT 1",
+                    new { r = v.SenderRef, d = v.SenderRefDate }).FirstOrDefault();
+                if (same != null) warnings.Add(access.CanView(same, u)
+                    ? $"An item with the same sender's reference and date is already inwarded as {same.Number}."
+                    : "An item with the same sender's reference and date is already inwarded. Ask the registry before saving it again.");
             }
             var fy = LeadRepository.FinancialYear(fmt.Today);
-            if (inv != null) warnings.AddRange(DuplicateCheck(c, tx, inv, null, confirmed));
+            if (inv != null) warnings.AddRange(DuplicateCheck(c, tx, inv, null, confirmed, u));
             if (warnings.Count > 0) throw new InwardConfirmException(warnings, false);
 
             var (serial, number) = NextNumber(c, tx, office!.NumberCode, fy);
@@ -403,6 +429,7 @@ public sealed partial class InwardWorkflow(Db db, InwardAccess access, InwardRep
         if (list.Count == 0) return new();
         if (list.Count > 50) throw new WorkflowException("Copy to at most 50 people at a time.");
         if (it.IsConfidential && !confirmConfidential) throw new WorkflowException("This item is confidential. Tick the confirmation to copy it to other people.");
+        if (it.IsConfidential && list.Contains(u.UserId()) && !access.HasFull(it, u)) throw new WorkflowException("This item is confidential: you cannot copy it to yourself.");
         var existing = Copies(c, tx, it.Id).ToHashSet();
         var added = new List<long>();
         foreach (var id in list.Where(x => !existing.Contains(x)))
@@ -441,6 +468,8 @@ public sealed partial class InwardWorkflow(Db db, InwardAccess access, InwardRep
             }
             else throw new WorkflowException(it.Status == ItemStatus.Closed ? "This item is closed; it must be reopened first." : "This invoice is with Accounts.");
             if (it.IsInvoice && toUserId == it.InwardedByUserId) throw new WorkflowException("An invoice cannot be marked to the person who inwarded it.");
+            if (toUserId == u.UserId() && it.IsConfidential && !access.HasFull(it, u))
+                throw new WorkflowException("This item is confidential: you cannot mark it to yourself. Ask an Inward Viewer.");
             var prev = it.HolderUserId;
             Bump(c, tx, it, rowVersion, "Status = 'WithHolder', HolderUserId = @to, HolderSince = @now2, AcceptedAt = NULL, LastHolderUserId = @to",
                 new() { ["to"] = toUserId, ["now2"] = Db.Now() });
@@ -484,8 +513,7 @@ public sealed partial class InwardWorkflow(Db db, InwardAccess access, InwardRep
                 Db.Exec(c, tx, "UPDATE InvoiceDetails SET InvoiceStatus = 'Received', CertifiedByUserId = NULL, CertifiedByName = NULL, CertifiedOn = NULL WHERE ItemId = @id", new { id });
             // the holder stops being a participant unless they have another reason to be one (R2-5)
             var uid = u.UserId();
-            var keep = uid == it.InwardedByUserId || Copies(c, tx, id).Contains(uid)
-                       || Db.Scalar<long>(c, tx, "SELECT COUNT(*) FROM InwardMovements WHERE ItemId = @id AND ToUserId = @uid AND Action IN ('Marked','Remarked','Transferred')", new { id, uid }) > 1;
+            var keep = uid == it.InwardedByUserId || Copies(c, tx, id).Contains(uid) || HeldAndPassedOn(c, tx, id, uid);
             if (!keep) Db.Exec(c, tx, "DELETE FROM InwardParticipants WHERE ItemId = @id AND UserId = @uid", new { id, uid });
             Move(c, tx, id, u, "Returned", remarks: rem);
             notifications.Notify(c, tx, access.OperatorIds(it.OfficeId), NotificationActor.From(u), Msg(it, "Returned", "returned to the registry"));
@@ -495,12 +523,14 @@ public sealed partial class InwardWorkflow(Db db, InwardAccess access, InwardRep
         Audit("Returned", it);
     }
 
-    public void CopyTo(long id, List<long> userIds, bool confirmConfidential, ClaimsPrincipal u)
+    public void CopyTo(long id, List<long> userIds, bool confirmConfidential, long rowVersion, ClaimsPrincipal u)
     {
         var (it, added) = InTx(db, (c, tx) =>
         {
             var it = LoadVisible(c, tx, id, u);
             RequireOpen(it);
+            RequireNotOnHold(c, tx, it);
+            Bump(c, tx, it, rowVersion, "Id = Id", new());
             if (!IsHolder(u, it) && !IsOp(u, it)) throw new WorkflowException("Only the holder or the registry of the office can copy this item.");
             var added = AddCopies(c, tx, it, userIds, confirmConfidential, u);
             if (added.Count == 0) throw new WorkflowException("Choose at least one person who does not already have a copy.");
@@ -540,6 +570,7 @@ public sealed partial class InwardWorkflow(Db db, InwardAccess access, InwardRep
             var inv = it.IsInvoice ? InvoiceOf(c, tx, id) : null;
             var accountsAmounts = inv != null && access.IsAccounts(u) && inv.SettledPaise == 0 && !InvStatus.IsFinal(inv.InvoiceStatus)
                                   && Db.Scalar<long>(c, tx, "SELECT COUNT(*) FROM InvoicePayments WHERE ItemId = @id", new { id }) == 0;
+            if (inv?.InvoiceStatus == InvStatus.OnHold) throw new WorkflowException("This invoice is on hold; release it first.");
             var general = IsOp(u, it) || it.InwardedByUserId == u.UserId() || IsHolder(u, it);
             if (inv != null && general && inv.InvoiceStatus is not (InvStatus.Received or InvStatus.WithVerifier)) general = false;
             if (!general && !accountsAmounts)
@@ -582,10 +613,15 @@ public sealed partial class InwardWorkflow(Db db, InwardAccess access, InwardRep
                 S("ActionRequired", it.ActionRequired, v.ActionRequired, "action required"); S("ReplyDueOn", it.ReplyDueOn, v.ReplyDueOn, "reply due");
                 S("KeptAt", it.KeptAt, v.KeptAt, "kept at"); S("Pages", it.Pages, v.Pages, "pages"); S("Irn", it.Irn, v.Irn, "IRN");
             }
-            if (inv != null)
+            if (inv != null && !(general && it.IsConfidential && !full))      // a masked editor never touches the invoice part (E8)
             {
+                // an unchanged "not a duplicate" keeps its stored reason (it is not shown to users without full access)
+                if (i.Invoice.NotDuplicate && string.IsNullOrWhiteSpace(i.Invoice.OverrideReason)) i.Invoice.OverrideReason = inv.OverrideReason;
                 var ni = ValidateInvoice(i.Invoice, general ? null : inv);
-                var w = DuplicateCheck(c, tx, ni, id, confirmed);
+                var effective = ni.TotalPaise + inv.AdjustPaise;
+                if (effective <= 0 || effective < inv.SettledPaise)
+                    throw new WorkflowException("With the credit / debit notes already recorded, this total would leave nothing (or less than nothing) to pay. Check the total.");
+                var w = DuplicateCheck(c, tx, ni, id, confirmed, u);
                 if (w.Count > 0) throw new InwardConfirmException(w, false);
                 changed.AddRange(UpdateInvoice(c, tx, inv, ni));
             }
@@ -652,6 +688,8 @@ public sealed partial class InwardWorkflow(Db db, InwardAccess access, InwardRep
         if (it.IsInvoice || !IsHolder(u, it)) throw new WorkflowException("Only the holder of a letter or other item can convert it to an e-Note.");
         if (it.RowVersion != rowVersion) throw new WorkflowException(Changed);
         var noteId = db.Scalar<long?>("SELECT Id FROM ENotes WHERE SourceInwardId = @id", new { id });
+        if (noteId != null && db.Scalar<long>("SELECT InitiatorUserId FROM ENotes WHERE Id = @noteId", new { noteId }) != u.UserId())
+            throw new WorkflowException($"An e-Note draft (#{noteId}) was already created from this item by an earlier holder. Ask them to use it, or close this item another way.");
         if (noteId == null)
         {
             if (!declaration) throw new WorkflowException("Accept the declaration to create the e-Note.");
@@ -690,6 +728,7 @@ public sealed partial class InwardWorkflow(Db db, InwardAccess access, InwardRep
         {
             var it = LoadVisible(c, tx, id, u);
             RequireOpen(it);
+            RequireNotOnHold(c, tx, it);
             if (!IsOp(u, it) && it.InwardedByUserId != u.UserId()) throw new WorkflowException("Only the registry of the office or the person who inwarded it can cancel this item.");
             if (it.IsInvoice)
             {

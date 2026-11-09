@@ -33,7 +33,7 @@ public class EditModel(InwardRepository repo, InwardWorkflow workflow, InwardOpt
                 SenderRefDate = it.SenderRefDate, Subject = it.Subject, Summary = it.Summary, Category = it.Category, Priority = it.Priority, IsConfidential = it.IsConfidential,
                 ActionRequired = it.ActionRequired, ReplyDueOn = it.ReplyDueOn, KeptAt = it.KeptAt, Pages = it.Pages, Irn = it.Irn,
             };
-            if (inv != null)
+            if (inv != null && !(general && it.IsConfidential && !it.Full))     // a masked editor never sees the invoice part (E8)
                 Input.Invoice = new InvoiceInput
                 {
                     VendorName = inv.VendorName, VendorGstin = inv.VendorGstin, IsMsme = inv.IsMsme, IsTrader = inv.IsTrader, UdyamNo = inv.UdyamNo, MsmeClass = inv.MsmeClass,
@@ -48,7 +48,7 @@ public class EditModel(InwardRepository repo, InwardWorkflow workflow, InwardOpt
             codes.Insert(0, new ProjectCode { Code = pc, Name = "(inactive)" });
         Form = new InwardFormModel
         {
-            Input = Input, Edit = true, MetadataOnly = general && it.IsConfidential && !it.Full, ShowInvoice = inv != null, AmountsOnly = amountsOnly, Blocked = Blocked,
+            Input = Input, Edit = true, MetadataOnly = general && it.IsConfidential && !it.Full, ShowInvoice = inv != null && !(general && it.IsConfidential && !it.Full), AmountsOnly = amountsOnly, Blocked = Blocked,
             Categories = masters.Names(MasterTypes.InwardCategory), ProjectCodes = codes, MaxBackdateDays = o.MaxBackdateDays, DefaultTerms = o.InvoiceTermsDays,
             ReplyDaysHint = $"{o.ReplyDueDaysNormal} days (Normal), {o.ReplyDueDaysUrgent} (Urgent), {o.ReplyDueDaysImmediate} (Immediate)",
         };

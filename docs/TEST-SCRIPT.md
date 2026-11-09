@@ -78,14 +78,14 @@ Run with `NABCONS_BENCH=1 dotnet test tests/NabconsIntranet.Tests --filter Inwar
 
 | Measure | p50 | p95 | Budget |
 |---|---|---|---|
-| Dashboard, Inward Viewer (all offices) | 204 ms | 244 ms | < 300 ms |
-| Dashboard, operator of 3 offices | 141 ms | 162 ms | < 300 ms |
-| Invoice dashboard (Accounts) | 177 ms | 184 ms | < 300 ms |
-| Register page 1 (operator / participant only) | 5.1 / 6.0 ms | 5.8 / 6.7 ms | < 300 ms |
-| Text search (viewer) | 31.7 ms | 44.6 ms | < 400 ms |
+| Dashboard, Inward Viewer (all offices) | 201 ms | 263 ms | < 300 ms |
+| Dashboard, operator of 3 offices | 146 ms | 181 ms | < 300 ms |
+| Invoice dashboard (Accounts) | 141 ms | 165 ms | < 300 ms |
+| Register page 1 (operator / participant only) | 7.6 / 6.9 ms | 11.8 / 9.1 ms | < 300 ms |
+| Text search, all matches (viewer) | 87.3 ms | 91.8 ms | < 400 ms |
 | My Desk | 2.1 ms | 4.3 ms | < 300 ms |
 | Re-mark (write) | 1.1 ms | 1.8 ms | < 50 ms |
-| Register PDF, one day | 28.6 ms | 33.7 ms | < 3 s |
+| Register PDF, one day | 38.5 ms | 42.8 ms | < 3 s |
 
 ## Compliance (v1.6)
 | # | Area | Steps | Expected | Result |

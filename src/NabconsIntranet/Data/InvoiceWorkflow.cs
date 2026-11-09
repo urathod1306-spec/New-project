@@ -160,6 +160,7 @@ public sealed partial class InwardWorkflow
 
     private sealed class DupHit
     {
+        public long Id { get; set; }
         public string Number { get; set; } = "";
         public string? UdyamNo { get; set; }
         public string? MsmeClass { get; set; }
@@ -170,37 +171,48 @@ public sealed partial class InwardWorkflow
     /// Duplicate check (§3.5). An existing key blocks unless an override reason is given (then the reason is kept and the
     /// invoice flagged); otherwise warnings are returned unless <paramref name="confirmed"/>.
     /// </summary>
-    private List<string> DuplicateCheck(SqliteConnection c, SqliteTransaction tx, InvoiceDetail inv, long? excludeId, bool confirmed)
+    private List<string> DuplicateCheck(SqliteConnection c, SqliteTransaction tx, InvoiceDetail inv, long? excludeId, bool confirmed, ClaimsPrincipal u)
     {
         var ex = excludeId ?? 0;
+        // numbers of matching items are named only when the user may see them (E4: otherwise the same neutral answer)
+        string Shown(IEnumerable<DupHit> hits)
+        {
+            var visible = hits.Select(h => Load(c, tx, h.Id)).Where(it => access.CanView(it, u)).Select(it => it.Number).ToList();
+            return visible.Count > 0 ? string.Join(", ", visible) : "an item you cannot open (ask the registry)";
+        }
         var same = Db.Query<DupHit>(c, tx, """
-            SELECT i.Number FROM InvoiceDetails d JOIN InwardItems i ON i.Id = d.ItemId
+            SELECT i.Id, i.Number FROM InvoiceDetails d JOIN InwardItems i ON i.Id = d.ItemId
             WHERE d.DupKey = @k AND d.InvoiceStatus <> 'Cancelled' AND d.ItemId <> @ex ORDER BY i.Id LIMIT 3
             """, new { k = inv.DupKey, ex });
         if (same.Count > 0 && inv.OverrideReason == null)
-            throw new InwardConfirmException(new() { $"This invoice is already inwarded as {string.Join(", ", same.Select(s => s.Number))} (same vendor, invoice number and financial year). If it is really a different invoice, tick \"This is not a duplicate\" and give the reason." }, true);
+            throw new InwardConfirmException(new() { $"This invoice is already inwarded as {Shown(same)} (same vendor, invoice number and financial year). If it is really a different invoice, tick \"This is not a duplicate\" and give the reason." }, true);
         if (same.Count == 0) inv.OverrideReason = null;          // nothing to override
         var w = new List<string>();
         if (confirmed) return w;
+        // prefix range on the key (index-friendly, unlike LIKE): every key with the prefix sorts between "p" and "p" + U+FFFF
         var pfx = InvoiceRules.KeyPrefix(inv.VendorGstin, inv.VendorName, inv.InvoiceNo);
-        foreach (var h in Db.Query<DupHit>(c, tx, """
-                SELECT i.Number, d.InvoiceDate FROM InvoiceDetails d JOIN InwardItems i ON i.Id = d.ItemId
-                WHERE d.DupKey LIKE @p AND d.DupKey <> @k AND d.InvoiceStatus <> 'Cancelled' AND d.ItemId <> @ex LIMIT 3
-                """, new { p = pfx + "%", k = inv.DupKey, ex }))
-            w.Add($"The same vendor and invoice number were inwarded for another financial year as {h.Number} (invoice date {fmt.DateDot(h.InvoiceDate)}).");
+        var other = Db.Query<DupHit>(c, tx, """
+                SELECT i.Id, i.Number, d.InvoiceDate FROM InvoiceDetails d JOIN InwardItems i ON i.Id = d.ItemId
+                WHERE d.DupKey >= @p AND d.DupKey < @p2 AND d.DupKey <> @k AND d.InvoiceStatus <> 'Cancelled' AND d.ItemId <> @ex LIMIT 3
+                """, new { p = pfx, p2 = pfx + "\uffff", k = inv.DupKey, ex });
+        if (other.Count > 0) w.Add($"The same vendor and invoice number were inwarded for another financial year as {Shown(other)}.");
         if (inv.VendorGstin != null)
         {
             var from = DateOnly.ParseExact(inv.InvoiceDate, "yyyy-MM-dd", CultureInfo.InvariantCulture);
-            foreach (var h in Db.Query<DupHit>(c, tx, """
-                    SELECT i.Number, d.InvoiceDate FROM InvoiceDetails d JOIN InwardItems i ON i.Id = d.ItemId
+            var near = Db.Query<DupHit>(c, tx, """
+                    SELECT i.Id, i.Number, d.InvoiceDate FROM InvoiceDetails d JOIN InwardItems i ON i.Id = d.ItemId
                     WHERE d.VendorGstin = @g AND d.TotalPaise = @t AND d.InvoiceDate BETWEEN @a AND @b AND d.DupKey <> @k AND d.InvoiceStatus <> 'Cancelled' AND d.ItemId <> @ex LIMIT 3
-                    """, new { g = inv.VendorGstin, t = inv.TotalPaise, a = from.AddDays(-30).ToString("yyyy-MM-dd"), b = from.AddDays(30).ToString("yyyy-MM-dd"), k = inv.DupKey, ex }))
-                w.Add($"An invoice from the same GSTIN for the same total is inwarded as {h.Number} (invoice date {fmt.DateDot(h.InvoiceDate)}).");
+                    """, new { g = inv.VendorGstin, t = inv.TotalPaise, a = from.AddDays(-30).ToString("yyyy-MM-dd"), b = from.AddDays(30).ToString("yyyy-MM-dd"), k = inv.DupKey, ex });
+            if (near.Count > 0) w.Add($"An invoice from the same GSTIN for the same total, dated within 30 days, is inwarded as {Shown(near)}.");
             if (!inv.IsMsme)
             {
-                var m = Db.Query<DupHit>(c, tx, "SELECT i.Number, d.UdyamNo, d.MsmeClass FROM InvoiceDetails d JOIN InwardItems i ON i.Id = d.ItemId WHERE d.VendorGstin = @g AND d.IsMsme = 1 AND d.ItemId <> @ex ORDER BY d.ItemId DESC LIMIT 1",
+                var m = Db.Query<DupHit>(c, tx, "SELECT i.Id, i.Number, d.UdyamNo, d.MsmeClass FROM InvoiceDetails d JOIN InwardItems i ON i.Id = d.ItemId WHERE d.VendorGstin = @g AND d.IsMsme = 1 AND d.ItemId <> @ex ORDER BY d.ItemId DESC LIMIT 1",
                     new { g = inv.VendorGstin, ex }).FirstOrDefault();
-                if (m != null) w.Add($"An earlier invoice from this GSTIN ({m.Number}) was marked MSME{(m.MsmeClass == null ? "" : " — " + m.MsmeClass)}{(m.UdyamNo == null ? "" : ", " + m.UdyamNo)}. Check whether this one is MSME too.");
+                // the Udyam number and class are shown only to users with full access to that earlier invoice
+                if (m != null)
+                    w.Add(access.HasFull(Load(c, tx, m.Id), u)
+                        ? $"An earlier invoice from this GSTIN ({m.Number}) was marked MSME{(m.MsmeClass == null ? "" : " — " + m.MsmeClass)}{(m.UdyamNo == null ? "" : ", " + m.UdyamNo)}. Check whether this one is MSME too."
+                        : "An earlier invoice from this GSTIN was marked MSME. Check whether this one is MSME too.");
             }
         }
         return w;
@@ -467,7 +479,10 @@ public sealed partial class InwardWorkflow
                 note = Db.Query<InwardItem>(c, tx, LoadSql + " WHERE i.Number = @n COLLATE NOCASE", new { n = a.NoteNumber.Trim() }).FirstOrDefault();
                 if (note == null || note.ItemType != InwardType.CreditDebitNote || note.LinkedToId != id || !access.CanView(note, u))
                     throw new WorkflowException($"{a.NoteNumber.Trim()} is not an inwarded credit / debit note against this invoice.");
+                if (!note.IsOpen) throw new WorkflowException($"{note.Number} is already closed: its adjustment has been recorded.");
             }
+            if (Db.Scalar<long>(c, tx, "SELECT COUNT(*) FROM InvoiceAdjustments WHERE ItemId = @id AND Kind = @kind AND DocNo = @docNo COLLATE NOCASE", new { id, kind, docNo }) > 0)
+                throw new WorkflowException($"{(kind == "CreditNote" ? "Credit" : "Debit")} note {docNo} is already recorded on this invoice.");
             var before = Totals(c, tx, id);
             if (kind == "CreditNote" && amount > inv.TotalPaise + before.Adjust - before.Settled)
                 throw new WorkflowException("A credit note cannot be more than the amount outstanding.");

@@ -101,8 +101,9 @@ public sealed class InwardReports(IntranetOptions io, Fmt fmt)
                         return new ReportRow(new[]
                         {
                             r.Number, masked ? "Confidential" : r.VendorName, masked || !r.Full ? "" : r.VendorGstin ?? "", r.IsMsme ? "Yes" : "No", r.MsmeClass ?? "",
-                            r.InvoiceNo, fmt.DateDot(r.InvoiceDate), r.ProjectCode ?? "", masked ? "" : r.PoRef ?? "", Rs(r.TotalPaise), Rs(r.AdjustPaise), Rs(r.SettledPaise),
-                            Rs(r.TotalPaise + r.AdjustPaise - r.SettledPaise), InvStatus.Label(r.InvoiceStatus),
+                            masked ? "" : r.InvoiceNo, fmt.DateDot(r.InvoiceDate), masked ? "" : r.ProjectCode ?? "", masked ? "" : r.PoRef ?? "",
+                            masked ? "" : Rs(r.TotalPaise), masked ? "" : Rs(r.AdjustPaise), masked ? "" : Rs(r.SettledPaise),
+                            masked ? "" : Rs(r.TotalPaise + r.AdjustPaise - r.SettledPaise), InvStatus.Label(r.InvoiceStatus),
                             r.Status == ItemStatus.WithAccounts ? "Accounts" : r.HolderName ?? "", fmt.DateDot(r.CertifiedOn), fmt.DateDot(r.PaymentDueOn), Days(r.InvoiceDate),
                             open && r.IsMsme && today.DayNumber - DateOnly.ParseExact(r.InvoiceDate, "yyyy-MM-dd", CultureInfo.InvariantCulture).DayNumber > 45 ? "Yes" : "",
                         });
@@ -126,7 +127,7 @@ public sealed class InwardReports(IntranetOptions io, Fmt fmt)
             var late = r.LastPaidOn != null && string.CompareOrdinal(r.LastPaidOn, r.DueOn) > 0 ? fmt.DateDot(r.LastPaidOn) : "";
             return new ReportRow(new[]
             {
-                r.Number, masked ? "Confidential" : r.VendorName, masked ? "" : r.VendorGstin ?? "", masked ? "" : r.UdyamNo ?? "", r.MsmeClass ?? "",
+                r.Number, masked ? "Confidential" : r.VendorName, !r.Full ? "" : r.VendorGstin ?? "", masked ? "" : r.UdyamNo ?? "", r.MsmeClass ?? "",
                 r.InvoiceNo, fmt.DateDot(r.InvoiceDate), fmt.DateDot(r.DueOn), Rs(r.EffectivePaise), Rs(r.PaidByCutoff), Rs(r.OutstandingAtCutoff), late,
             });
         }

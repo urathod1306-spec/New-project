@@ -178,8 +178,8 @@ public sealed class InwardRepository(Db db, InwardAccess access, InwardOptions o
             _ => "i.Status IN ('Unassigned','WithHolder','WithAccounts')",
         });
         var fts = SearchText.ToFtsQuery(f.Q);
-        // FTS first, newest first and capped, so a broad word never drags in the whole register
-        if (fts != null) w.Add("i.Id IN (SELECT rowid FROM InwardSearch WHERE InwardSearch MATCH @fts ORDER BY rowid DESC LIMIT 5000)");
+        // every match, then the visibility filter (a cap here would hide older visible items)
+        if (fts != null) w.Add("i.Id IN (SELECT rowid FROM InwardSearch WHERE InwardSearch MATCH @fts)");
         return (string.Join(" AND ", w), new
         {
             uid = u.UserId(), f.OfficeId, f.Type, f.Mode, f.HolderId, f.Priority, today = Today, fts,
@@ -402,7 +402,7 @@ public sealed class InwardRepository(Db db, InwardAccess access, InwardOptions o
         });
         if (!string.IsNullOrWhiteSpace(f.Project)) w.Add("d.ProjectCode = @project COLLATE NOCASE");
         var fts = SearchText.ToFtsQuery(f.Q);
-        if (fts != null) w.Add("i.Id IN (SELECT rowid FROM InwardSearch WHERE InwardSearch MATCH @fts ORDER BY rowid DESC LIMIT 5000)");
+        if (fts != null) w.Add("i.Id IN (SELECT rowid FROM InwardSearch WHERE InwardSearch MATCH @fts)");
         return (string.Join(" AND ", w), new { uid = u.UserId(), today = Today, msmeCut = Day(-o.MsmeMaxDays), msmeSoon = Day(o.MsmeDueSoonDays), project = f.Project, fts });
     }
 
@@ -450,30 +450,37 @@ public sealed class InwardRepository(Db db, InwardAccess access, InwardOptions o
     }
 
     /// <summary>
-    /// MSME / 43B(h) report (DD-08 §3.4): Micro and Small invoices (class recorded or not, traders excluded) dated on or
-    /// before the as-on date that were outstanding on it, or paid after their MSME due date. Payments count only when
-    /// dated on or before the as-on date and entered on or before <paramref name="enteredBy"/> (for reproducibility).
+    /// MSME / 43B(h) report (DD-08 §3.4): Micro and Small invoices (class recorded or not; traders and Medium excluded)
+    /// dated on or before the as-on date that were outstanding on it, or were paid after their MSME due date by a payment
+    /// made in the financial year of the as-on date. Payments, reversals and credit/debit notes count only when dated on
+    /// or before the as-on date and entered on or before <paramref name="enteredBy"/>; payments that were later reversed
+    /// never count as "paid late". An invoice closed short on or before the as-on date has nothing outstanding (the
+    /// balance was written off). Status, MSME flag and class are the current values, as recorded on the invoice.
     /// </summary>
     public List<MsmeRow> MsmeReport(ClaimsPrincipal u, DateOnly asOn, DateOnly? enteredBy)
     {
+        var fyStart = new DateOnly(asOn.Month >= 4 ? asOn.Year : asOn.Year - 1, 4, 1);
         var a = new
         {
-            uid = u.UserId(), asOn = asOn.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            entered = DayStartUtc((enteredBy ?? fmt.Today).AddDays(1)),
+            uid = u.UserId(), asOn = asOn.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), fyStart = fyStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            entered = DayStartUtc((enteredBy ?? fmt.Today).AddDays(1)), asOnEnd = DayStartUtc(asOn.AddDays(1)),
         };
         return db.Query<MsmeRow>($"""
             SELECT i.Id AS ItemId, i.Number, i.IsConfidential, ({access.FullSql(u)}) AS Full, d.VendorName, d.VendorGstin, d.UdyamNo, d.MsmeClass,
                    d.InvoiceNo, d.InvoiceDate, d.PaymentDueOn AS DueOn,
                    d.TotalPaise + COALESCE((SELECT SUM(CASE WHEN x.Kind = 'DebitNote' THEN x.AmountPaise ELSE -x.AmountPaise END)
                                             FROM InvoiceAdjustments x WHERE x.ItemId = i.Id AND x.DocDate <= @asOn AND x.EnteredAt < @entered), 0) AS EffectivePaise,
+                   CASE WHEN d.InvoiceStatus = 'ClosedShort' AND d.SettledAt < @asOnEnd AND d.SettledAt < @entered THEN -1 ELSE
                    COALESCE((SELECT SUM(p.NetPaise + p.TdsPaise + p.OtherDeductionsPaise) FROM InvoicePayments p
-                             WHERE p.ItemId = i.Id AND p.PaidOn <= @asOn AND p.EnteredAt < @entered), 0) AS PaidByCutoff,
-                   (SELECT MAX(p.PaidOn) FROM InvoicePayments p WHERE p.ItemId = i.Id AND p.ReversesId IS NULL AND p.EnteredAt < @entered) AS LastPaidOn
+                             WHERE p.ItemId = i.Id AND p.PaidOn <= @asOn AND p.EnteredAt < @entered), 0) END AS PaidByCutoff,
+                   (SELECT MAX(p.PaidOn) FROM InvoicePayments p WHERE p.ItemId = i.Id AND p.ReversesId IS NULL AND p.PaidOn BETWEEN @fyStart AND @asOn
+                      AND p.EnteredAt < @entered AND NOT EXISTS (SELECT 1 FROM InvoicePayments r WHERE r.ReversesId = p.Id AND r.EnteredAt < @entered)) AS LastPaidOn
             {InvJoin}
             WHERE {access.VisibleSql(u)} AND d.IsMsme = 1 AND d.IsTrader = 0 AND COALESCE(d.MsmeClass, '') <> 'Medium'
               AND d.InvoiceDate <= @asOn AND d.InvoiceStatus NOT IN ('Cancelled','ReturnedToVendor','Rejected')
             ORDER BY d.MsmeClass IS NULL, d.VendorName, d.InvoiceDate
-            """, a).Where(r => r.OutstandingAtCutoff > 0 || (r.LastPaidOn != null && string.CompareOrdinal(r.LastPaidOn, r.DueOn) > 0)).ToList();
+            """, a).Select(r => { if (r.PaidByCutoff < 0) r.PaidByCutoff = r.EffectivePaise; return r; })
+            .Where(r => r.OutstandingAtCutoff > 0 || (r.LastPaidOn != null && string.CompareOrdinal(r.LastPaidOn, r.DueOn) > 0)).ToList();
     }
 
     // ---------------------------------------------------------------- project codes, members

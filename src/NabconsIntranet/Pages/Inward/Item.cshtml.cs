@@ -43,7 +43,7 @@ public class ItemModel(InwardRepository repo, InwardWorkflow workflow, InwardOpt
         }
         HasPayments = Payments.Count > 0;
         Movements = repo.Movements(id);
-        Notes = Full ? repo.Notes(id) : new();
+        Notes = Full || (IsOp && !it.IsConfidential) ? repo.Notes(id) : new();
         Copies = repo.Copies(id);
         Reminders = repo.Reminders(id, User);
         if (it.LinkedToId is long l && repo.Item(l, User) is { } li && Access.CanView(li, User)) Linked = li;
@@ -52,13 +52,13 @@ public class ItemModel(InwardRepository repo, InwardWorkflow workflow, InwardOpt
         var onHold = s == InvStatus.OnHold;
         CanMark = !onHold && ((it.Status == ItemStatus.Unassigned && (IsOp || IsViewer)) || (it.Status == ItemStatus.WithHolder && (IsHolder || IsOp || IsViewer)));
         CanReturn = IsHolder && !onHold;
-        CanCopy = it.IsOpen && (IsHolder || IsOp);
+        CanCopy = it.IsOpen && (IsHolder || IsOp) && s != InvStatus.OnHold;
         CanNote = Full || (IsOp && !it.IsConfidential);
         CanClose = IsHolder && !it.IsInvoice;
         CanConvert = CanClose && enote.Enabled;
         CanEdit = it.IsOpen && (((IsOp || IsInwarder || IsHolder) && (s == null || s is InvStatus.Received or InvStatus.WithVerifier))
-                               || (IsAccounts && Inv != null && !HasPayments && !InvStatus.IsFinal(Inv.InvoiceStatus)));
-        CanCancel = it.IsOpen && (IsOp || IsInwarder) && !HasPayments;
+                               || (IsAccounts && Inv != null && !HasPayments && !InvStatus.IsFinal(Inv.InvoiceStatus) && Inv.InvoiceStatus != InvStatus.OnHold));
+        CanCancel = it.IsOpen && (IsOp || IsInwarder) && !HasPayments && s != InvStatus.OnHold;
         CanReopen = !it.IsOpen && !it.IsInvoice && it.ClosureType is not (Closure.Cancelled or Closure.Reminder or Closure.ConvertedToENote)
                     && (it.LastHolderUserId == uid || IsOp || IsViewer);
         CanAck = IsOp || IsViewer || IsInwarder;
@@ -102,7 +102,7 @@ public class ItemModel(InwardRepository repo, InwardWorkflow workflow, InwardOpt
     public IActionResult OnPostAccept(long id, long rv) => Act(id, () => workflow.Accept(id, rv, User), "Accepted.");
     public IActionResult OnPostMark(long id, long to, string? remarks, long rv) => Act(id, () => workflow.Mark(id, to, remarks, rv, User), "Marked and notified.");
     public IActionResult OnPostReturn(long id, string? remarks, long rv) => Act(id, () => workflow.ReturnToRegistry(id, remarks, rv, User), "Returned to the registry.");
-    public IActionResult OnPostCopy(long id, List<long>? users, bool confirm) => Act(id, () => workflow.CopyTo(id, users ?? new(), confirm, User), "Copied and notified.");
+    public IActionResult OnPostCopy(long id, List<long>? users, bool confirm, long rv) => Act(id, () => workflow.CopyTo(id, users ?? new(), confirm, rv, User), "Copied and notified.");
     public IActionResult OnPostNote(long id, string? text) => Act(id, () => workflow.AddNote(id, text, User), "Note added.");
     public IActionResult OnPostClose(long id, CloseInput c, long rv) => Act(id, () => workflow.Close(id, c, rv, User), "Item closed.");
     public IActionResult OnPostCancel(long id, string? reason, long rv) => Act(id, () => workflow.Cancel(id, reason, rv, User), "Item cancelled (entered in error).");
