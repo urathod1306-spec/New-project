@@ -10,7 +10,7 @@ mkdir -p "$OUT"
 python3 -I "$HERE/make-test-images.py" "$OUT/img"
 dotnet publish "$ROOT/src/NabconsIntranet" -c Release -o "$OUT/publish" >/dev/null
 fail=0
-for suite in core registration registration-others profile-photos-card leads desk-notifications enote board compliance; do
+for suite in core registration registration-others profile-photos-card leads desk-notifications enote board compliance inward; do
   pkill -x NabconsIntranet 2>/dev/null || true; sleep 1
   rm -rf "$APP"; cp -r "$OUT/publish" "$APP"
   ( cd "$APP" && nohup ./NabconsIntranet > console.log 2>&1 & )

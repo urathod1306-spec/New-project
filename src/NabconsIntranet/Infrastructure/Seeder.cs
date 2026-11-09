@@ -10,7 +10,7 @@ namespace NabconsIntranet.Infrastructure;
 /// </summary>
 public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, MasterRepository masters, StaffRepository staff,
     CircularRepository circulars, NoticeRepository notices, RequestWorkflow workflow, FileStore files, AuditService audit, Fmt fmt,
-    ENoteWorkflow enotes, BoardRepository board, ComplianceWorkflow compliance, ILogger<Seeder> log)
+    ENoteWorkflow enotes, BoardRepository board, ComplianceWorkflow compliance, InwardWorkflow inward, InwardAccess inwardAccess, ILogger<Seeder> log)
 {
     public const string DemoPassword = "Nabcons@2026";
 
@@ -342,6 +342,7 @@ public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, Maste
         board.Create("The Rajasthan watershed evaluation team completed its field visits this week. Thanks to everyone who supported the survey!",
             Array.Empty<IFormFile>(), staffP);
         SeedCompliance(staffP, r1, r2, coo);
+        SeedInward(staffP, r1, r2, coo);
         AuditService.AmbientActor.Value = "system (first-run setup)";
     }
 
@@ -398,5 +399,69 @@ public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, Maste
             Category = "Finance & Accounts", OwnerVertical = "Finance & Accounts", PrimaryOfficerUserId = r2.UserId(), OfficerCode = "AC(AA)", DueDate = D(-3),
         }, cs);
         _ = p2;
+    }
+
+    /// <summary>
+    /// Synthetic inward demo (v1.7, new databases only): office codes HO / DEL, a registry operator, a viewer and an
+    /// Accounts user, two project codes, letters and invoices at different stages.
+    /// </summary>
+    private void SeedInward(ClaimsPrincipal staffP, ClaimsPrincipal r1, ClaimsPrincipal r2, ClaimsPrincipal coo)
+    {
+        var ho = masters.List(MasterTypes.Location, activeOnly: false).FirstOrDefault(m => m.Name == "Mumbai (Head Office)");
+        var del = masters.List(MasterTypes.Location, activeOnly: false).FirstOrDefault(m => m.Name == "New Delhi");
+        if (ho == null) return;
+        masters.SetCode(ho.Id, "HO");
+        if (del != null) masters.SetCode(del.Id, "DEL");
+        var publisher = Principal("publisher");
+        var now = Db.Now();
+        void Grant(long userId, string role, long officeId)
+        {
+            db.Exec("INSERT INTO InwardMembers (UserId, Role, OfficeId, GrantedByName, GrantedAt) VALUES (@userId, @role, @officeId, 'system (first-run setup)', @now)", new { userId, role, officeId, now });
+            db.Exec("INSERT INTO InwardMemberHistory (UserId, Action, Role, OfficeId, ActorName, At) VALUES (@userId, 'Granted', @role, @officeId, 'system (first-run setup)', @now)", new { userId, role, officeId, now });
+        }
+        Grant(publisher.UserId(), InwardRole.Operator, ho.Id);
+        Grant(coo.UserId(), InwardRole.Viewer, 0);
+        Grant(r2.UserId(), InwardRole.Accounts, 0);
+        inwardAccess.Invalidate();
+        db.Exec("INSERT INTO ProjectCodes (Code, Name, OwnerUserId, IsActive, UpdatedAt, UpdatedBy) VALUES ('NC-2026-014', 'Impact evaluation of WDF projects (SYNTHETIC)', @o, 1, @now, 'system'), ('NC-2026-021', 'Baseline survey, FPO promotion (SYNTHETIC)', @s, 1, @now, 'system')",
+            new { o = r1.UserId(), s = staffP.UserId(), now });
+
+        AuditService.AmbientActor.Value = "publisher";
+        string D(int days) => fmt.Today.AddDays(days).ToString("yyyy-MM-dd");
+        long Rv(long id) => db.Scalar<long>("SELECT RowVersion FROM InwardItems WHERE Id = @id", new { id });
+        InwardInput Letter(string sender, string org, string subject, int daysAgo, string type = InwardType.Letter) => new()
+        {
+            OfficeId = ho.Id, ItemType = type, Mode = "Post", ReceivedOn = D(-daysAgo), ReceivedTime = "11:00", SenderName = sender, SenderOrg = org,
+            Subject = subject, Priority = "Normal", ActionRequired = InwardAction.Reply, KeptAt = "Registry rack 2 (synthetic)", Pages = 3,
+        };
+        var l1 = Letter("Chief General Manager", "NABARD Regional Office, Lucknow (SYNTHETIC)", "Request for proposal — impact evaluation of WDF projects", 3);
+        l1.SenderRef = "NB.UP/RFP/112/2026-27"; l1.SenderRefDate = D(-5); l1.MarkToUserId = staffP.UserId(); l1.Category = "Client / project";
+        inward.Inward(l1, publisher, true);
+        var l2 = Letter("Under Secretary", "Department of Agriculture (SYNTHETIC)", "Guidelines for third-party monitoring of watershed works", 2, InwardType.GovtOrder);
+        l2.ActionRequired = InwardAction.Information; l2.Category = "Government / regulator";
+        inward.Inward(l2, publisher, true);
+        var l3 = Letter("Advocate", "Sample & Co. (SYNTHETIC)", "Notice regarding a contract dispute", 1, InwardType.LegalNotice);
+        l3.IsConfidential = true; l3.Priority = "Urgent"; l3.MarkToUserId = r2.UserId(); l3.Category = "Legal";
+        inward.Inward(l3, publisher, true);
+
+        var i1 = Letter("Accounts Manager", "Sample Survey Agency Pvt Ltd (SYNTHETIC)", "Invoice for field survey, phase 1", 6, InwardType.Invoice);
+        i1.Mode = "Courier"; i1.MarkToUserId = r1.UserId();
+        i1.Invoice = new InvoiceInput
+        {
+            VendorName = "Sample Survey Agency Pvt Ltd (SYNTHETIC)", VendorGstin = "27AAPFU0939F1ZV", IsMsme = true, MsmeClass = "Micro", UdyamNo = "UDYAM-MH-01-0001234",
+            InvoiceNo = "SSA/26-27/041", InvoiceDate = D(-50), ProjectCode = "NC-2026-014", Taxable = "1,00,000", Gst = "18,000", Total = "1,18,000", TermsDays = 30,
+        };
+        var inv1 = inward.Inward(i1, publisher, true);
+        AuditService.AmbientActor.Value = "approver1";
+        inward.Certify(inv1, D(-4), Rv(inv1), r1);
+        inward.SendToAccounts(inv1, Rv(inv1), r1);
+        AuditService.AmbientActor.Value = "approver2";
+        inward.RecordPayment(inv1, new PaymentInput { PaidOn = D(-2), Net = "50,000", Tds = "1,000", VoucherRef = "UTR-SYN-0001" }, Rv(inv1), r2);
+
+        AuditService.AmbientActor.Value = "publisher";
+        var i2 = Letter("Billing", "Sample Printers (SYNTHETIC)", "Invoice for printing of survey schedules", 1, InwardType.Invoice);
+        i2.Mode = "Hand"; i2.MarkToUserId = staffP.UserId();
+        i2.Invoice = new InvoiceInput { VendorName = "Sample Printers (SYNTHETIC)", InvoiceNo = "SP-778", InvoiceDate = D(-3), ProjectCode = "NC-2026-021", Total = "12,400", TermsDays = 15 };
+        inward.Inward(i2, publisher, true);
     }
 }
