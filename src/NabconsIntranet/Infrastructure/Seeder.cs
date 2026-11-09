@@ -407,6 +407,7 @@ public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, Maste
     /// </summary>
     private void SeedInward(ClaimsPrincipal staffP, ClaimsPrincipal r1, ClaimsPrincipal r2, ClaimsPrincipal coo)
     {
+        if (!inwardAccess.Options.Enabled) return;
         var ho = masters.List(MasterTypes.Location, activeOnly: false).FirstOrDefault(m => m.Name == "Mumbai (Head Office)");
         var del = masters.List(MasterTypes.Location, activeOnly: false).FirstOrDefault(m => m.Name == "New Delhi");
         if (ho == null) return;
