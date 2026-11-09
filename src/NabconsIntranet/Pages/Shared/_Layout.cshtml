@@ -5,6 +5,7 @@
 @inject ENoteOptions ENoteSettings
 @inject BoardOptions BoardSettings
 @inject ComplianceAccess ComplianceAccess
+@inject InwardAccess InwardAccess
 @{
     var signedIn = User.Identity?.IsAuthenticated == true && User.UserId() > 0;
     // All badge numbers come from one cached query (see DeskService); the page script refreshes them with a small poll.
@@ -20,6 +21,8 @@
     var boardNew = counts?.BoardNew ?? 0;
     var complianceN = counts?.Compliance ?? 0;
     var showCompliance = signedIn && ComplianceAccess.ShowsMenu(User, counts?.ComplianceAssigned == true);
+    var inwardN = counts?.Inward ?? 0;
+    var showInward = signedIn && InwardAccess.ShowsMenu(User, counts?.InwardAssigned == true);
     string Hide(long n) => n > 0 ? "" : "hidden";
     var path = Context.Request.Path.Value ?? "/";
     string Active(string prefix) => (prefix == "/" ? path == "/" : path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ? "active" : "";
@@ -116,6 +119,10 @@
                         @if (showCompliance)
                         {
                             <li><a class="@Active("/Compliance")" href="@(ComplianceAccess.SeesAll(User) ? "/Compliance" : "/Compliance/Mine")">Compliance <span class="count @Hide(complianceN)" data-badge="compliance" title="Compliance items waiting for you">@DeskCounts.Badge(complianceN)</span></a></li>
+                        }
+                        @if (showInward)
+                        {
+                            <li><a class="@Active("/Inward")" href="@(InwardAccess.SeesRegister(User) ? "/Inward" : "/Inward/Mine")">Inward <span class="count @Hide(inwardN)" data-badge="inward" title="Inward items waiting for you">@DeskCounts.Badge(inwardN)</span></a></li>
                         }
                         @if (User.IsApprover())
                         {

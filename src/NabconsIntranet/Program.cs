@@ -94,6 +94,8 @@ builder.Services.AddHostedService<ComplianceScheduler>();
 builder.Services.AddSingleton<InwardAccess>();
 builder.Services.AddSingleton<InwardRepository>();
 builder.Services.AddSingleton<InwardWorkflow>();
+builder.Services.AddSingleton<InwardReports>();
+builder.Services.AddHostedService<InwardScheduler>();
 builder.Services.AddTransient<Seeder>();
 builder.Services.AddHostedService<BackupScheduler>();
 

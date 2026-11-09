@@ -210,7 +210,7 @@ document.querySelectorAll('select[data-autosubmit]').forEach(function (s) { s.ad
         });
     }
     function apply(d) {
-        ['unread', 'desk', 'inbox', 'admin', 'leads', 'enotes', 'board', 'compliance'].forEach(function (k) { if (typeof d[k] === 'number') setBadge(k, d[k]); });
+        ['unread', 'desk', 'inbox', 'admin', 'leads', 'enotes', 'board', 'compliance', 'inward'].forEach(function (k) { if (typeof d[k] === 'number') setBadge(k, d[k]); });
         var s = document.getElementById('bell-summary');
         if (s) s.setAttribute('aria-label', 'Notifications, ' + d.unread + ' unread');
         document.dispatchEvent(new CustomEvent('nab:summary', { detail: d }));

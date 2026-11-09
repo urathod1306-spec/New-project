@@ -26,7 +26,7 @@ public static class Endpoints
             return Results.Json(new
             {
                 unread = c.Unread, desk = c.Total, inbox = c.Inbox, admin = c.AdminPending, leads = c.NewLeads,
-                enotes = c.ENotesPending, board = c.BoardNew, compliance = c.Compliance, token = c.Token,
+                enotes = c.ENotesPending, board = c.BoardNew, compliance = c.Compliance, inward = c.Inward, token = c.Token,
             });
         }).RequireAuthorization();
 

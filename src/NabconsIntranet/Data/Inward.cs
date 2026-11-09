@@ -431,5 +431,5 @@ public sealed class InwardAccess(Db db, InwardOptions o)
         IsViewer(u) || (IsAccounts(u) && it.IsAccountsType) || IsParticipant(it.Id, u.UserId());
 
     /// <summary>Show the Inward tab: any grant, the Auditor role, self-inward, or a participant in any item.</summary>
-    public bool ShowsMenu(ClaimsPrincipal u, bool participant) => o.Enabled && (SeesRegister(u) || o.SelfInwardEnabled || participant);
+    public bool ShowsMenu(ClaimsPrincipal u, bool participant) => o.Enabled && (SeesRegister(u) || u.IsAdmin() || o.SelfInwardEnabled || participant);
 }
