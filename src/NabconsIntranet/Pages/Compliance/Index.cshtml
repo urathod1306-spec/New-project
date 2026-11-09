@@ -1,0 +1,113 @@
+@page
+@model NabconsIntranet.Pages.Compliance.IndexModel
+@{
+    ViewData["Title"] = "Compliance dashboard";
+    var d = Model.D;
+    var maxMonth = Math.Max(1, d.ClosedByMonth.Select(x => x.N).DefaultIfEmpty(0).Max());
+    var maxAge = Math.Max(1, d.Ageing.Select(x => x.N).DefaultIfEmpty(0).Max());
+    var buckets = new[] { "0–30", "31–90", "91–180", "181–365", "> 365" };
+    var overdueBuckets = new[] { "1–30", "31–90", "> 90" };
+    var months = Enumerable.Range(0, 12).Select(i => F.Today.AddMonths(-11 + i).ToString("yyyy-MM")).ToList();
+}
+<div class="page-head">
+    <div>
+        <h1>Compliance</h1>
+        <p>Action points from Board and committee meetings, audits and inspections. Status as on @F.DateDot(F.Today.ToString("yyyy-MM-dd")).</p>
+    </div>
+    @if (Model.IsAdmin) { <div class="actions"><a class="btn primary" href="/Compliance/EventEdit">+ Register an event</a></div> }
+</div>
+<partial name="_ComplianceTabs" />
+@if (Model.IsAdmin && d.ActiveAdmins < 2)
+{
+    <div class="alert warning">Only @d.ActiveAdmins Compliance Admin is active. Appoint a second one (Access tab): a Cell member cannot act on action points where they are a dealing officer.</div>
+}
+<div class="grid stats">
+    <a class="stat" href="/Compliance/Points?status=open"><div class="n">@d.Open</div><div class="l">Open</div></a>
+    <a class="stat stat-danger" href="/Compliance/Points?status=overdue"><div class="n">@d.Overdue</div><div class="l">Overdue</div></a>
+    <a class="stat" href="/Compliance/Points?status=duesoon"><div class="n">@d.DueSoon</div><div class="l">Due within @Model.DueSoonDays days</div></a>
+    <a class="stat" href="/Compliance/Points?status=due30"><div class="n">@d.Due30</div><div class="l">Due within 30 days</div></a>
+    <a class="stat" href="/Compliance/Points?status=awaiting"><div class="n">@d.Awaiting</div><div class="l">Updates awaiting review</div></a>
+    <a class="stat" href="/Compliance/Points?status=revision"><div class="n">@d.Revisions</div><div class="l">Due-date requests</div></a>
+    <a class="stat" href="/Compliance/Points?status=proposed"><div class="n">@d.Proposed</div><div class="l">Proposed for closure</div></a>
+    <div class="stat"><div class="n">@d.Inactive</div><div class="l">Open with an inactive officer</div></div>
+</div>
+
+<div class="card table-wrap mt">
+    <h2>Source × status</h2>
+    <table class="table compact">
+        <thead><tr><th>Source</th>@foreach (var s in CStatus.All) { <th class="right">@Model.StatusLabelShort(s)</th> }<th class="right">Total</th></tr></thead>
+        <tbody>
+            @foreach (var src in ComplianceSource.All)
+            {
+                var total = d.Matrix.Where(m => m.Key == src.Code).Sum(m => m.N);
+                if (total == 0) { continue; }
+                <tr>
+                    <td>@src.Label</td>
+                    @foreach (var s in CStatus.All)
+                    {
+                        var n = Model.Cell(src.Code, s);
+                        <td class="right">@if (n > 0) { <a href="/Compliance/Points?source=@src.Code&status=@Model.FilterKey(s)">@n</a> } else { <span class="muted">0</span> }</td>
+                    }
+                    <td class="right"><strong>@total</strong></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (d.Matrix.Count == 0) { <p class="empty">No action points yet.</p> }
+</div>
+
+<div class="grid halves mt">
+    <div class="card">
+        <h2>Open points by age (days since raised)</h2>
+        <table class="table compact">
+            @foreach (var b in buckets)
+            {
+                var n = d.Ageing.FirstOrDefault(x => x.Key == b)?.N ?? 0;
+                <tr><td class="nowrap">@b</td><td class="bar-cell"><progress max="@maxAge" value="@n" aria-label="@b days: @n"></progress></td><td class="right">@n</td></tr>
+            }
+        </table>
+        <h3 class="mt">Overdue by (days)</h3>
+        <table class="table compact">
+            @foreach (var b in overdueBuckets)
+            {
+                var n = d.OverdueAgeing.FirstOrDefault(x => x.Key == b)?.N ?? 0;
+                <tr><td class="nowrap">@b</td><td class="right">@n</td></tr>
+            }
+        </table>
+    </div>
+    <div class="card">
+        <h2>Points closed per month</h2>
+        <table class="table compact">
+            @foreach (var m in months)
+            {
+                var n = d.ClosedByMonth.FirstOrDefault(x => x.Key == m)?.N ?? 0;
+                <tr><td class="nowrap">@DateTime.ParseExact(m, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture).ToString("MMM yyyy")</td><td class="bar-cell"><progress max="@maxMonth" value="@n" aria-label="@m: @n"></progress></td><td class="right">@n</td></tr>
+            }
+        </table>
+    </div>
+</div>
+
+<div class="grid halves mt">
+    <div class="card table-wrap">
+        <h2>Open by vertical</h2>
+        @if (d.ByVertical.Count == 0) { <p class="empty">None.</p> }
+        else
+        {
+            <table class="table compact">
+                <thead><tr><th>Vertical</th><th class="right">Open</th><th class="right">Overdue</th></tr></thead>
+                @foreach (var v in d.ByVertical) { <tr><td>@v.Key</td><td class="right">@v.N</td><td class="right">@(v.N2 > 0 ? v.N2.ToString() : "—")</td></tr> }
+            </table>
+        }
+    </div>
+    <div class="card table-wrap">
+        <h2>Open by officer (top 20)</h2>
+        @if (d.ByOfficer.Count == 0) { <p class="empty">None.</p> }
+        else
+        {
+            <table class="table compact">
+                <thead><tr><th>Officer</th><th class="right">Open</th><th class="right">Overdue</th></tr></thead>
+                @foreach (var v in d.ByOfficer) { <tr><td><a href="/Compliance/Points?officer=@v.Key2">@v.Key</a></td><td class="right">@v.N</td><td class="right">@(v.N2 > 0 ? v.N2.ToString() : "—")</td></tr> }
+            </table>
+        }
+    </div>
+</div>

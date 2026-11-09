@@ -54,6 +54,41 @@ Run on the isolated test PC with the demo data (password for all demo accounts: 
 | 49 | Pin / remove | As `admin`, pin 3 posts, try a 4th; remove a post with a reason; as `staff`, try to pin | 4th refused ("Unpin one first"); removed post and its photos gone for everyone, `Board.Removed` in the audit log; staff see no Pin button ✔ | |
 | 26 | No egress | With an outbound "block all" firewall rule for `NabconsIntranet.exe`, use every page | Everything works; no blocked-connection events | |
 
+## Compliance (v1.6)
+| # | Area | Steps | Expected | Result |
+|---|---|---|---|---|
+| C1 | Access | As `admin` (no grant) open `/Compliance/Points` and `/Compliance/Members` | "Page not found" for both: the Administrator role gives no compliance access ✔ | |
+| C2 | First Compliance Admin | On the server run `Grant-Compliance-Admin.bat` for a user | User becomes Compliance Admin; audit `Compliance.AccessGranted`; existing CAs notified ✔ | |
+| C3 | Event and import | As `cs`: register a statutory-audit event; *Import from CSV* with the template (2 rows); then import the same file again | Preview shows rows OK; 2 points numbered `CMP/<FY>/nnnnn`; second import refused ✔ | |
+| C4 | No files | Try to post a file to a compliance page (e.g. a crafted multipart request) | 415, nothing stored ✔ (xUnit `No_file_can_be_uploaded_except_the_csv_import_and_bodies_are_bounded`) | |
+| C5 | Officer update | As the officer: submit compliance; as `cs`: return with remarks; officer resubmits proposing closure; `cs` accepts with edited wording | Officer text kept; ATR wording changed; status Proposed for closure ✔ | |
+| C6 | Segregation | As a CA who is also the officer of a point: try to accept its update | Refused: "another Compliance Cell member must act" ✔ | |
+| C7 | Closure | Close without an authority; then with one; reopen | First refused; closed; reopen keeps the old closure in history ✔ | |
+| C8 | Revision | Officer requests a new date; `cs` approves | Current due date changes; original due date unchanged ✔ | |
+| C9 | Restricted | As `auditor` open a Board meeting point URL | Not found; Board points absent from dashboard counts and lists ✔ | |
+| C10 | ATR | *Print ATR → Prepare pack* for the Board; preview; download Word, PDF, Excel; *Mark as final* | A4 landscape, Annexures, summary, "Status as on", page x of y; snapshot page says **Verified**; final copy footer shows snapshot no. and SHA-256 ✔ | |
+| C11 | Stale preview | Preview an ATR, change a point's update in another window, then *Mark as final* | Refused: "data has changed since your preview" ✔ | |
+| C12 | Next ATR | After C10, accept a new update on an earlier meeting's point and preview again | "Action presented in previous meeting" shows the text from the final ATR ✔ | |
+| C13 | Reminders | Leave a point overdue overnight | One reminder in the officer's bell; Cell digest; nothing repeated the same day ✔ | |
+| C14 | Upgrade | Upgrade a copy of a 1.5.0 database | Schema 7; existing row counts unchanged; `--verify-audit` passes; 1.5.0 still starts on it ✔ | |
+
+## Performance (v1.6, compliance)
+Run with `NABCONS_BENCH=1 dotnet test tests/NabconsIntranet.Tests --filter ComplianceBenchTests`.
+- **Data:** 500 users, 300 events, 6,000 action points, 40,000 updates, 30,000 history rows, 2,000 snapshots × 40 rows (database 103 MB), plus 3 Board meetings × 40 points created through the workflow.
+- **Machine:** development container with 4 vCPU (as for v1.3).
+
+| Measure | p50 | p95 | Budget |
+|---|---|---|---|
+| Dashboard (6,000 points) | 55.4 ms | 85.5 ms | < 300 ms |
+| Points list, overdue filter, page 1 | 14.4 ms | 24.2 ms | < 300 ms |
+| Points list, text search (all statuses) | 29.0 ms | 38.0 ms | < 400 ms |
+| Events list | 13.9 ms | 20.1 ms | < 300 ms |
+| Officer: My action points / My Desk | 6.4 / 9.8 ms | 8.0 / 11.7 ms | < 300 / 250 ms |
+| ATR 3 meetings × 40 points — DOCX | 21.6 ms | 27.1 ms | < 5 s |
+| ATR 3 meetings × 40 points — PDF | 108.6 ms | 114.4 ms | < 5 s |
+| Points Excel export, all 6,120 rows | 0.64 s | | — |
+| Daily reminders over 6,000 points | 69 ms | | — |
+
 ## Performance (v1.3)
 
 ### Budgets at the brief's volume

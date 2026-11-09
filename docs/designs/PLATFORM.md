@@ -40,6 +40,7 @@ All timestamps are stored in **UTC** as ISO-8601 text. They are shown in IST (`D
 | Audit log (search, export, verify) | | | | ✓ | ✓ | |
 | e-Note register (metadata only) | | | | ✓ | ✓ | |
 | All business leads (with BDU vertical members) | | | | | | ✓ |
+| Compliance (v1.6) | Not through these roles: compliance grants (Compliance Admin / Viewer) are held in the module and given only by Compliance Admins; officers see their own points; the Auditor role reads non-restricted events (DD-07 §5) | | | | | |
 
 Business-lead access deliberately does not follow the Administrator role: client and tender information is limited to BDU and the COO/MD, and administrators manage the system, not the business. Every user can submit leads and see their own.
 
@@ -73,6 +74,7 @@ Business-lead access deliberately does not follow the Administrator role: client
 | 4 | 1.2.0 | Users.StaffId/PhotoVersion, profile change requests and audit, leads (+serials, events, attachments), lead master lists, BDU vertical |
 | 5 | 1.3.0 | Notifications, Users.OpenDeskAfterSignIn, e-Note tables, MasterItems.Code, e-Note categories |
 | 6 | 1.4.0 | Message board posts and photos, Users.BoardSeenAt |
+| 7 | 1.6.0 | Compliance: events, points, support officers, updates, revisions, history, imports, snapshots (+events, items, voids), members (+history), serials, state; compliance master lists (see DD-07) |
 
 The applied versions are rows in `SchemaInfo`. If the database is newer than the program (after a roll-back), start-up logs "the database is at schema version N, newer than this program …; no data is affected" and continues.
 

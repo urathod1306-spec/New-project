@@ -1,0 +1,27 @@
+@inject ComplianceAccess CAccess
+@{
+    var path = Context.Request.Path.Value ?? "";
+    string A(string p) => string.Equals(path.TrimEnd('/'), p, StringComparison.OrdinalIgnoreCase) || (p != "/Compliance" && path.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase)) ? "active" : "";
+    var all = CAccess.SeesAll(User);
+    var admin = CAccess.IsAdmin(User);
+}
+<div class="tabs" role="navigation" aria-label="Compliance">
+    @if (all)
+    {
+        <a class="@A("/Compliance")" href="/Compliance">Dashboard</a>
+        <a class="@A("/Compliance/Points")" href="/Compliance/Points">Action points</a>
+        <a class="@A("/Compliance/Events")" href="/Compliance/Events">Events</a>
+    }
+    <a class="@A("/Compliance/Mine")" href="/Compliance/Mine">My action points</a>
+    @if (admin) { <a class="@A("/Compliance/Review")" href="/Compliance/Review">Cell queue</a> }
+    @if (all)
+    {
+        <a class="@A("/Compliance/Atr")" href="/Compliance/Atr">Print ATR</a>
+        <a class="@A("/Compliance/Snapshots")" href="/Compliance/Snapshots">Submitted ATRs</a>
+    }
+    @if (admin)
+    {
+        <a class="@A("/Compliance/Transfer")" href="/Compliance/Transfer">Transfer</a>
+        <a class="@A("/Compliance/Members")" href="/Compliance/Members">Access</a>
+    }
+</div>

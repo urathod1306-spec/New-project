@@ -440,6 +440,261 @@ public static class Schema
             CREATE TRIGGER IF NOT EXISTS BoardPosts_no_delete BEFORE DELETE ON BoardPosts
             BEGIN SELECT RAISE(ABORT, 'Message board posts are hidden, not deleted'); END;
             """),
+        // v1.6.0: compliance management (events, action points, updates, revisions, ATR snapshots). Additive only;
+        // registers only — no file is ever stored. Compliance access is held in ComplianceMembers, not in Users.Roles.
+        (7, "Compliance management (v1.6.0)", """
+            CREATE TABLE IF NOT EXISTS ComplianceSerials (FinancialYear TEXT PRIMARY KEY, LastSerial INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS ComplianceState (Key TEXT PRIMARY KEY, Value TEXT);
+
+            CREATE TABLE IF NOT EXISTS ComplianceMembers (
+                UserId INTEGER PRIMARY KEY REFERENCES Users(Id),
+                Role TEXT NOT NULL CHECK (Role IN ('ComplianceAdmin','ComplianceViewer')),
+                GrantedByName TEXT NOT NULL,
+                GrantedAt TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS ComplianceMemberHistory (
+                Id INTEGER PRIMARY KEY,
+                UserId INTEGER NOT NULL,
+                Action TEXT NOT NULL,
+                Role TEXT,
+                ActorName TEXT NOT NULL,
+                At TEXT NOT NULL
+            );
+            CREATE TRIGGER IF NOT EXISTS ComplianceMemberHistory_no_update BEFORE UPDATE ON ComplianceMemberHistory BEGIN SELECT RAISE(ABORT, 'Compliance access history is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceMemberHistory_no_delete BEFORE DELETE ON ComplianceMemberHistory BEGIN SELECT RAISE(ABORT, 'Compliance access history is append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS ComplianceEvents (
+                Id INTEGER PRIMARY KEY,
+                SourceType TEXT NOT NULL,
+                ForumId INTEGER,
+                Forum TEXT NOT NULL CHECK (length(Forum) <= 150),
+                EventNo TEXT CHECK (length(EventNo) <= 60),
+                Title TEXT NOT NULL CHECK (length(Title) <= 300),
+                HeldOn TEXT,
+                PeriodFrom TEXT,
+                PeriodTo TEXT,
+                ReportReceivedOn TEXT,
+                ReportedTo TEXT CHECK (length(ReportedTo) <= 150),
+                ReportingCycle TEXT NOT NULL DEFAULT 'NextMeeting' CHECK (ReportingCycle IN ('NextMeeting','Quarterly','Monthly','OneTime')),
+                NextReportingOn TEXT,
+                IsConfidential INTEGER NOT NULL DEFAULT 0,
+                SourceKeptAt TEXT CHECK (length(SourceKeptAt) <= 300),
+                Remarks TEXT CHECK (length(Remarks) <= 1000),
+                CreatedByUserId INTEGER NOT NULL,
+                CreatedByName TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL,
+                RowVersion INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE INDEX IF NOT EXISTS IX_CEvents_Source ON ComplianceEvents(SourceType, HeldOn DESC);
+            CREATE INDEX IF NOT EXISTS IX_CEvents_Forum ON ComplianceEvents(ForumId, HeldOn DESC);
+            CREATE TRIGGER IF NOT EXISTS ComplianceEvents_no_delete BEFORE DELETE ON ComplianceEvents
+            BEGIN SELECT RAISE(ABORT, 'Compliance events are permanent records'); END;
+
+            CREATE TABLE IF NOT EXISTS CompliancePoints (
+                Id INTEGER PRIMARY KEY,
+                EventId INTEGER NOT NULL REFERENCES ComplianceEvents(Id),
+                Number TEXT NOT NULL UNIQUE,
+                FinancialYear TEXT NOT NULL,
+                Seq INTEGER NOT NULL DEFAULT 0,
+                RefNo TEXT CHECK (length(RefNo) <= 60),
+                RefSubject TEXT CHECK (length(RefSubject) <= 300),
+                PointText TEXT NOT NULL CHECK (length(PointText) <= 4000),
+                Category TEXT CHECK (length(Category) <= 150),
+                Priority TEXT NOT NULL DEFAULT 'Medium' CHECK (Priority IN ('High','Medium','Low')),
+                OwnerVertical TEXT CHECK (length(OwnerVertical) <= 150),
+                PrimaryOfficerUserId INTEGER NOT NULL REFERENCES Users(Id),
+                OfficerCode TEXT CHECK (length(OfficerCode) <= 30),
+                RaisedOn TEXT NOT NULL,
+                OriginalDueDate TEXT NOT NULL,
+                CurrentDueDate TEXT NOT NULL,
+                NextUpdateDue TEXT,
+                Amount REAL,
+                CarriedFromId INTEGER REFERENCES CompliancePoints(Id),
+                Status TEXT NOT NULL DEFAULT 'Ongoing' CHECK (Status IN ('Ongoing','PendingExternal','ProposedClosure','Completed','Dropped','Merged')),
+                AtrText TEXT CHECK (length(AtrText) <= 4000),
+                AtrAsOn TEXT,
+                PapersKeptAt TEXT CHECK (length(PapersKeptAt) <= 300),
+                PendingUpdateId INTEGER,
+                PendingRevisionId INTEGER,
+                LastReturnedAt TEXT,
+                ClosedAt TEXT,
+                ClosedByName TEXT,
+                ClosureRemarks TEXT CHECK (length(ClosureRemarks) <= 1000),
+                ClosureAuthority TEXT CHECK (length(ClosureAuthority) <= 300),
+                MergedIntoId INTEGER REFERENCES CompliancePoints(Id),
+                Reminded7For TEXT,
+                Reminded1For TEXT,
+                LastOverdueReminderOn TEXT,
+                UpdateRemindedFor TEXT,
+                CreatedByName TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL,
+                RowVersion INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE INDEX IF NOT EXISTS IX_CPoints_Event ON CompliancePoints(EventId, Seq, Id);
+            CREATE INDEX IF NOT EXISTS IX_CPoints_StatusDue ON CompliancePoints(Status, CurrentDueDate);
+            CREATE INDEX IF NOT EXISTS IX_CPoints_Officer ON CompliancePoints(PrimaryOfficerUserId, Status, CurrentDueDate);
+            CREATE INDEX IF NOT EXISTS IX_CPoints_Vertical ON CompliancePoints(OwnerVertical, Status);
+            CREATE INDEX IF NOT EXISTS IX_CPoints_Closed ON CompliancePoints(ClosedAt) WHERE ClosedAt IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS IX_CPoints_Carried ON CompliancePoints(CarriedFromId) WHERE CarriedFromId IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS IX_CPoints_PendingUpdate ON CompliancePoints(PendingUpdateId) WHERE PendingUpdateId IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS IX_CPoints_PendingRevision ON CompliancePoints(PendingRevisionId) WHERE PendingRevisionId IS NOT NULL;
+            CREATE TRIGGER IF NOT EXISTS CompliancePoints_fixed BEFORE UPDATE OF Number, FinancialYear, EventId, OriginalDueDate ON CompliancePoints
+            WHEN new.Number IS NOT old.Number OR new.FinancialYear IS NOT old.FinancialYear OR new.EventId IS NOT old.EventId OR new.OriginalDueDate IS NOT old.OriginalDueDate
+            BEGIN SELECT RAISE(ABORT, 'The number, event and original due date of an action point never change'); END;
+            CREATE TRIGGER IF NOT EXISTS CompliancePoints_no_delete BEFORE DELETE ON CompliancePoints
+            BEGIN SELECT RAISE(ABORT, 'Action points are permanent records'); END;
+
+            CREATE TABLE IF NOT EXISTS ComplianceSupportOfficers (
+                PointId INTEGER NOT NULL REFERENCES CompliancePoints(Id),
+                UserId INTEGER NOT NULL REFERENCES Users(Id),
+                PRIMARY KEY (PointId, UserId)
+            );
+            CREATE INDEX IF NOT EXISTS IX_CSupport_User ON ComplianceSupportOfficers(UserId, PointId);
+
+            CREATE TABLE IF NOT EXISTS ComplianceUpdates (
+                Id INTEGER PRIMARY KEY,
+                PointId INTEGER NOT NULL REFERENCES CompliancePoints(Id),
+                SubmittedByUserId INTEGER NOT NULL,
+                SubmittedByName TEXT NOT NULL,
+                SubmittedAt TEXT NOT NULL,
+                AsOn TEXT NOT NULL,
+                UpdateText TEXT NOT NULL CHECK (length(UpdateText) <= 4000),
+                ProposedStatus TEXT NOT NULL CHECK (ProposedStatus IN ('Ongoing','PendingExternal','ProposedClosure')),
+                PapersKeptAt TEXT CHECK (length(PapersKeptAt) <= 300),
+                ReviewState TEXT NOT NULL DEFAULT 'Pending' CHECK (ReviewState IN ('Pending','Accepted','Returned','Withdrawn','Superseded')),
+                ReviewedByUserId INTEGER,
+                ReviewedByName TEXT,
+                ReviewedAt TEXT,
+                ReviewRemarks TEXT CHECK (length(ReviewRemarks) <= 1000),
+                AtrText TEXT CHECK (length(AtrText) <= 4000)
+            );
+            CREATE INDEX IF NOT EXISTS IX_CUpdates_Point ON ComplianceUpdates(PointId, Id DESC);
+            CREATE UNIQUE INDEX IF NOT EXISTS UX_CUpdates_Pending ON ComplianceUpdates(PointId) WHERE ReviewState = 'Pending';
+            CREATE TRIGGER IF NOT EXISTS ComplianceUpdates_guard BEFORE UPDATE ON ComplianceUpdates
+            WHEN old.ReviewState <> 'Pending' OR new.PointId IS NOT old.PointId OR new.SubmittedByUserId IS NOT old.SubmittedByUserId
+              OR new.SubmittedByName IS NOT old.SubmittedByName OR new.SubmittedAt IS NOT old.SubmittedAt OR new.AsOn IS NOT old.AsOn
+              OR new.UpdateText IS NOT old.UpdateText OR new.ProposedStatus IS NOT old.ProposedStatus OR new.PapersKeptAt IS NOT old.PapersKeptAt
+            BEGIN SELECT RAISE(ABORT, 'Compliance updates are append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceUpdates_no_delete BEFORE DELETE ON ComplianceUpdates
+            BEGIN SELECT RAISE(ABORT, 'Compliance updates are append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS ComplianceRevisions (
+                Id INTEGER PRIMARY KEY,
+                PointId INTEGER NOT NULL REFERENCES CompliancePoints(Id),
+                RequestedByUserId INTEGER NOT NULL,
+                RequestedByName TEXT NOT NULL,
+                RequestedAt TEXT NOT NULL,
+                OldDate TEXT NOT NULL,
+                NewDate TEXT NOT NULL,
+                Reason TEXT NOT NULL CHECK (length(Reason) <= 1000),
+                Status TEXT NOT NULL DEFAULT 'Pending' CHECK (Status IN ('Pending','Approved','Rejected','Withdrawn','Superseded')),
+                DecidedByUserId INTEGER,
+                DecidedByName TEXT,
+                DecidedAt TEXT,
+                DecisionRemarks TEXT CHECK (length(DecisionRemarks) <= 1000)
+            );
+            CREATE INDEX IF NOT EXISTS IX_CRevisions_Point ON ComplianceRevisions(PointId, Id DESC);
+            CREATE UNIQUE INDEX IF NOT EXISTS UX_CRevisions_Pending ON ComplianceRevisions(PointId) WHERE Status = 'Pending';
+            CREATE TRIGGER IF NOT EXISTS ComplianceRevisions_guard BEFORE UPDATE ON ComplianceRevisions
+            WHEN old.Status <> 'Pending' OR new.PointId IS NOT old.PointId OR new.RequestedByUserId IS NOT old.RequestedByUserId
+              OR new.RequestedByName IS NOT old.RequestedByName OR new.RequestedAt IS NOT old.RequestedAt OR new.OldDate IS NOT old.OldDate
+              OR new.NewDate IS NOT old.NewDate OR new.Reason IS NOT old.Reason
+            BEGIN SELECT RAISE(ABORT, 'Due-date revisions are append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceRevisions_no_delete BEFORE DELETE ON ComplianceRevisions
+            BEGIN SELECT RAISE(ABORT, 'Due-date revisions are append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS ComplianceHistory (
+                Id INTEGER PRIMARY KEY,
+                PointId INTEGER,
+                EventId INTEGER,
+                At TEXT NOT NULL,
+                ActorUserId INTEGER,
+                ActorName TEXT NOT NULL,
+                Action TEXT NOT NULL,
+                FromStatus TEXT,
+                ToStatus TEXT,
+                Detail TEXT
+            );
+            CREATE INDEX IF NOT EXISTS IX_CHistory_Point ON ComplianceHistory(PointId, Id);
+            CREATE INDEX IF NOT EXISTS IX_CHistory_Event ON ComplianceHistory(EventId, At);
+            CREATE TRIGGER IF NOT EXISTS ComplianceHistory_no_update BEFORE UPDATE ON ComplianceHistory BEGIN SELECT RAISE(ABORT, 'Compliance history is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceHistory_no_delete BEFORE DELETE ON ComplianceHistory BEGIN SELECT RAISE(ABORT, 'Compliance history is append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS ComplianceImports (
+                Id INTEGER PRIMARY KEY,
+                EventId INTEGER NOT NULL,
+                Sha256 TEXT NOT NULL,
+                Rows INTEGER NOT NULL,
+                ImportedByName TEXT NOT NULL,
+                ImportedAt TEXT NOT NULL,
+                UNIQUE (EventId, Sha256)
+            );
+            CREATE TRIGGER IF NOT EXISTS ComplianceImports_no_update BEFORE UPDATE ON ComplianceImports BEGIN SELECT RAISE(ABORT, 'The import register is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceImports_no_delete BEFORE DELETE ON ComplianceImports BEGIN SELECT RAISE(ABORT, 'The import register is append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS ComplianceSnapshots (
+                Id INTEGER PRIMARY KEY,
+                Template TEXT NOT NULL,
+                ForumId INTEGER,
+                Forum TEXT NOT NULL,
+                Title TEXT NOT NULL,
+                SubmittedTo TEXT NOT NULL,
+                SubmittedOn TEXT NOT NULL,
+                AsOn TEXT NOT NULL,
+                OptionsJson TEXT NOT NULL,
+                HeaderJson TEXT NOT NULL,
+                ItemCount INTEGER NOT NULL,
+                Sha256 TEXT NOT NULL,
+                CreatedByUserId INTEGER NOT NULL,
+                CreatedByName TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_CSnap_Forum ON ComplianceSnapshots(Template, ForumId, AsOn DESC);
+            CREATE TABLE IF NOT EXISTS ComplianceSnapshotEvents (
+                SnapshotId INTEGER NOT NULL,
+                EventId INTEGER NOT NULL,
+                PRIMARY KEY (SnapshotId, EventId)
+            );
+            CREATE INDEX IF NOT EXISTS IX_CSnapEvents_Event ON ComplianceSnapshotEvents(EventId);
+            CREATE TABLE IF NOT EXISTS ComplianceSnapshotItems (
+                SnapshotId INTEGER NOT NULL,
+                Seq INTEGER NOT NULL,
+                Section INTEGER NOT NULL,
+                PointId INTEGER,
+                Cells TEXT NOT NULL,
+                Bold INTEGER NOT NULL DEFAULT 0,
+                ReportedText TEXT,
+                Status TEXT,
+                PRIMARY KEY (SnapshotId, Seq)
+            );
+            CREATE INDEX IF NOT EXISTS IX_CSnapItems_Point ON ComplianceSnapshotItems(PointId, SnapshotId DESC) WHERE PointId IS NOT NULL;
+            CREATE TABLE IF NOT EXISTS ComplianceSnapshotVoids (
+                SnapshotId INTEGER PRIMARY KEY,
+                Reason TEXT NOT NULL CHECK (length(Reason) <= 1000),
+                VoidedByName TEXT NOT NULL,
+                VoidedAt TEXT NOT NULL
+            );
+            CREATE TRIGGER IF NOT EXISTS ComplianceSnapshots_no_update BEFORE UPDATE ON ComplianceSnapshots BEGIN SELECT RAISE(ABORT, 'ATR snapshots are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceSnapshots_no_delete BEFORE DELETE ON ComplianceSnapshots BEGIN SELECT RAISE(ABORT, 'ATR snapshots are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceSnapshotEvents_no_update BEFORE UPDATE ON ComplianceSnapshotEvents BEGIN SELECT RAISE(ABORT, 'ATR snapshots are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceSnapshotEvents_no_delete BEFORE DELETE ON ComplianceSnapshotEvents BEGIN SELECT RAISE(ABORT, 'ATR snapshots are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceSnapshotItems_no_update BEFORE UPDATE ON ComplianceSnapshotItems BEGIN SELECT RAISE(ABORT, 'ATR snapshots are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceSnapshotItems_no_delete BEFORE DELETE ON ComplianceSnapshotItems BEGIN SELECT RAISE(ABORT, 'ATR snapshots are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceSnapshotVoids_no_update BEFORE UPDATE ON ComplianceSnapshotVoids BEGIN SELECT RAISE(ABORT, 'Snapshot voids are append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS ComplianceSnapshotVoids_no_delete BEFORE DELETE ON ComplianceSnapshotVoids BEGIN SELECT RAISE(ABORT, 'Snapshot voids are append-only'); END;
+
+            WITH m(Name, Ord) AS (VALUES ('Board of Directors',1),('Audit Committee',2),('Business Development Committee',3),('HR Committee',4),('Risk Management Committee',5),('NABARD (Inspection)',6),('C&AG',7),('Statutory Auditor',8),('Internal Auditor',9),('Subsidiaries Review Meeting',10),('Strategic Review Meeting',11),('NABARD Oversight Review',12))
+            INSERT INTO MasterItems (Type, Name, SortOrder, IsActive)
+            SELECT 'ComplianceForum', m.Name, m.Ord, 1 FROM m
+            WHERE NOT EXISTS (SELECT 1 FROM MasterItems x WHERE x.Type = 'ComplianceForum' AND x.Name = m.Name COLLATE NOCASE);
+
+            WITH m(Name, Ord) AS (VALUES ('Governance',1),('Finance & Accounts',2),('Taxation',3),('Human Resources',4),('IT & Systems',5),('Business Development',6),('Legal & Statutory',7),('Administration',8),('Other',9))
+            INSERT INTO MasterItems (Type, Name, SortOrder, IsActive)
+            SELECT 'ComplianceCategory', m.Name, m.Ord, 1 FROM m
+            WHERE NOT EXISTS (SELECT 1 FROM MasterItems x WHERE x.Type = 'ComplianceCategory' AND x.Name = m.Name COLLATE NOCASE);
+            """),
     };
 
     public const string Sql = """

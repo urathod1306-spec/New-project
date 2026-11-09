@@ -1,0 +1,19 @@
+@page
+@model NabconsIntranet.Pages.Compliance.TransferModel
+@{ ViewData["Title"] = "Transfer action points"; }
+<div class="page-head"><div><h1>Transfer action points</h1><p>Move every <strong>open</strong> action point of one officer to another, for example on transfer or retirement. Points where you are an officer are left for another Cell member.</p></div></div>
+<partial name="_ComplianceTabs" />
+<form method="get" class="card filters">
+    <div class="field"><label for="from">From officer</label><select id="from" name="from" required><option value="">Choose…</option>@foreach (var u in Model.AllUsers) { <option value="@u.Id" selected="@(Model.From == u.Id)">@u.DisplayName (@u.Username)</option> }</select></div>
+    <div class="field"><label for="scope">Points where they are</label><select id="scope" name="scope"><option value="both" selected="@(Model.Scope == "both")">primary or supporting officer</option><option value="primary" selected="@(Model.Scope == "primary")">primary officer</option><option value="supporting" selected="@(Model.Scope == "supporting")">supporting officer</option></select></div>
+    <div class="actions"><button class="btn" type="submit">Show</button></div>
+</form>
+@if (Model.Plan is { } plan)
+{
+    <form method="post" class="card mt">
+        <p><strong>@(plan.Primary + plan.Supporting)</strong> open point(s): @plan.Primary as primary, @plan.Supporting as supporting officer@(plan.SkippedOwn > 0 ? $"; {plan.SkippedOwn} will be skipped because you are an officer on them" : "").</p>
+        <input type="hidden" name="from" value="@Model.From" /><input type="hidden" name="scope" value="@Model.Scope" />
+        <div class="field"><label for="to">Transfer to</label><select id="to" name="to" required><option value="">Choose…</option>@foreach (var u in Model.Users.Where(u => u.Id != Model.From)) { <option value="@u.Id">@u.DisplayName (@u.Username)</option> }</select></div>
+        <button class="btn primary" type="submit">Transfer</button>
+    </form>
+}

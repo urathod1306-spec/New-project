@@ -177,7 +177,11 @@ public sealed class Db
         var cmd = c.CreateCommand();
         cmd.CommandText = sql;
         cmd.Transaction = tx;
-        if (args != null)
+        if (args is IDictionary<string, object?> dict)
+        {
+            foreach (var kv in dict) cmd.Parameters.AddWithValue("@" + kv.Key, ToDb(kv.Value));
+        }
+        else if (args != null)
         {
             foreach (var p in args.GetType().GetProperties())
                 cmd.Parameters.AddWithValue("@" + p.Name, ToDb(p.GetValue(args)));

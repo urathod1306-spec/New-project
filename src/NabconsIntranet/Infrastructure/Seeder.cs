@@ -10,7 +10,7 @@ namespace NabconsIntranet.Infrastructure;
 /// </summary>
 public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, MasterRepository masters, StaffRepository staff,
     CircularRepository circulars, NoticeRepository notices, RequestWorkflow workflow, FileStore files, AuditService audit, Fmt fmt,
-    ENoteWorkflow enotes, BoardRepository board, ILogger<Seeder> log)
+    ENoteWorkflow enotes, BoardRepository board, ComplianceWorkflow compliance, ILogger<Seeder> log)
 {
     public const string DemoPassword = "Nabcons@2026";
 
@@ -23,7 +23,8 @@ public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, Maste
         ("staff", "Vikram Singh", "Staff", "Rural Infrastructure", "Staff - browse and submit requests"),
         ("auditor", "Meera Nair", "Staff,Auditor", "Finance & Accounts", "Auditor - read-only audit history"),
         ("bdu", "Rohan Kapoor", "Staff", "BDU", "BDU vertical - business lead pipeline"),
-        ("coo", "Kavita Rao", "Staff,LeadViewer", "HR & Administration", "LeadViewer (COO) - sees all business leads"),
+        ("coo", "Kavita Rao", "Staff,LeadViewer", "HR & Administration", "LeadViewer (COO) - sees all business leads; Compliance Viewer"),
+        ("cs", "Sunita Menon", "Staff", "HR & Administration", "Company Secretary - Compliance Admin (Compliance Cell)"),
     };
 
     /// <summary>Capitals of all 28 states and 8 union territories (Chandigarh serves Punjab, Haryana and the UT; J&amp;K has Srinagar and Jammu).</summary>
@@ -340,6 +341,62 @@ public sealed class Seeder(Db db, IntranetOptions o, UserRepository users, Maste
         As(staffP);
         board.Create("The Rajasthan watershed evaluation team completed its field visits this week. Thanks to everyone who supported the survey!",
             Array.Empty<IFormFile>(), staffP);
+        SeedCompliance(staffP, r1, r2, coo);
         AuditService.AmbientActor.Value = "system (first-run setup)";
+    }
+
+    /// <summary>Synthetic compliance demo (v1.6): a Compliance Admin, a viewer, a Board meeting and an internal audit with points.</summary>
+    private void SeedCompliance(ClaimsPrincipal staffP, ClaimsPrincipal r1, ClaimsPrincipal r2, ClaimsPrincipal coo)
+    {
+        var cs = Principal("cs");
+        compliance.GrantCore(cs.UserId(), ComplianceGrant.Admin, "system (first-run setup)");
+        compliance.GrantCore(coo.UserId(), ComplianceGrant.Viewer, "system (first-run setup)");
+        AuditService.AmbientActor.Value = "cs";
+        string D(int days) => fmt.Today.AddDays(days).ToString("yyyy-MM-dd");
+        long Forum(string name) => masters.List(MasterTypes.ComplianceForum).First(m => m.Name == name).Id;
+        var board = compliance.CreateEvent(new ComplianceEventInput
+        {
+            SourceType = ComplianceSource.Board, ForumId = Forum("Board of Directors"), EventNo = "98th", Title = "Board meeting (SYNTHETIC SAMPLE)",
+            HeldOn = D(-45), ReportedTo = "Board of Directors", ReportingCycle = ComplianceCycle.NextMeeting, NextReportingOn = D(40),
+            SourceKeptAt = "File no. CS/BM/98 (synthetic)",
+        }, cs);
+        compliance.CreatePoint(board, new CompliancePointInput
+        {
+            RefNo = "Memo No. 7", RefSubject = "Review of IT security policy", PointText = "Place the revised IT security policy before the Board after vetting by the Risk Management Committee.",
+            Category = "IT & Systems", Priority = "High", OwnerVertical = "IT & Digital", PrimaryOfficerUserId = r1.UserId(), OfficerCode = "GM(IT)", DueDate = D(20),
+        }, cs);
+        var p2 = compliance.CreatePoint(board, new CompliancePointInput
+        {
+            RefNo = "Memo No. 9", RefSubject = "Statutory audit observations", PointText = "Obtain the views of the statutory auditor on the treatment of unbilled revenue and report.",
+            Category = "Finance & Accounts", Priority = "Medium", OwnerVertical = "Finance & Accounts", PrimaryOfficerUserId = r2.UserId(), OfficerCode = "CFO", DueDate = D(-5),
+            InitialStatus = CStatus.PendingExternal, InitialAtrText = "Reference sent to the statutory auditor; guidance awaited.", InitialAsOn = D(-10),
+        }, cs);
+        var p3 = compliance.CreatePoint(board, new CompliancePointInput
+        {
+            RefNo = "Chairman's opening remarks", PointText = "Prepare a note on the pipeline of watershed evaluation assignments for the next meeting.",
+            Category = "Business Development", OwnerVertical = "Rural Infrastructure", PrimaryOfficerUserId = staffP.UserId(), DueDate = D(30),
+        }, cs);
+        AuditService.AmbientActor.Value = "staff";
+        long Rv(long id) => db.Scalar<long>("SELECT RowVersion FROM CompliancePoints WHERE Id = @id", new { id });
+        var upd = compliance.SubmitUpdate(p3, D(-1), "Draft note prepared listing 14 assignments (₹ 3.2 crore). Being vetted by the vertical head.", CStatus.Ongoing, "Shared folder BD / Pipeline (synthetic)", Rv(p3), staffP);
+        AuditService.AmbientActor.Value = "cs";
+        compliance.AcceptUpdate(p3, upd, null, Rv(p3), cs);
+
+        var ia = compliance.CreateEvent(new ComplianceEventInput
+        {
+            SourceType = ComplianceSource.InternalAudit, ForumId = Forum("Internal Auditor"), EventNo = "Q2 FY 2026-27", Title = "Internal audit report (SYNTHETIC SAMPLE)",
+            PeriodFrom = D(-130), PeriodTo = D(-40), ReportReceivedOn = D(-30), ReportedTo = "Audit Committee", ReportingCycle = ComplianceCycle.Quarterly,
+        }, cs);
+        compliance.CreatePoint(ia, new CompliancePointInput
+        {
+            RefNo = "1", PointText = "Sundry creditors outstanding for more than three years (12 parties, ₹ 4.6 lakh) should be reviewed and written back where appropriate.",
+            Category = "Finance & Accounts", OwnerVertical = "Finance & Accounts", PrimaryOfficerUserId = r2.UserId(), OfficerCode = "AC(AA)", DueDate = D(15), Amount = 460000,
+        }, cs);
+        compliance.CreatePoint(ia, new CompliancePointInput
+        {
+            RefNo = "2", PointText = "EMD refunds of closed tenders are pending; reconcile the EMD register with the bank statement.",
+            Category = "Finance & Accounts", OwnerVertical = "Finance & Accounts", PrimaryOfficerUserId = r2.UserId(), OfficerCode = "AC(AA)", DueDate = D(-3),
+        }, cs);
+        _ = p2;
     }
 }

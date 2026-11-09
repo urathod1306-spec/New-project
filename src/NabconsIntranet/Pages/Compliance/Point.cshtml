@@ -1,0 +1,221 @@
+@page "{id:long}"
+@model NabconsIntranet.Pages.Compliance.PointModel
+@{
+    var p = Model.P;
+    ViewData["Title"] = p.Number;
+    var today = F.Today.ToString("yyyy-MM-dd");
+    var overdue = p.IsOverdue(F.Today);
+    var rv = p.RowVersion;
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Compliance/Event/@p.EventId">← @(p.EventNo != null ? p.EventNo + " — " : "")@p.EventTitle</a></p>
+        <h1>@p.Number@(string.IsNullOrEmpty(p.RefNo) ? "" : " · " + p.RefNo)</h1>
+        <p><span class="badge @CompliancePage.StatusCss(p.Status)">@CompliancePage.StatusLabel(p.Status)</span> · @ComplianceSource.Label(p.SourceType) · @p.Forum
+            @if (p.IsConfidential) { <span class="badge warning">confidential</span> }</p>
+    </div>
+    @if (Model.CanCell && p.IsOpen) { <div class="actions"><a class="btn" href="/Compliance/PointEdit/@p.Id">Edit</a></div> }
+</div>
+<partial name="_ComplianceTabs" />
+@if (overdue) { <div class="alert danger">Overdue since <strong>@F.DateDot(p.CurrentDueDate)</strong>.</div> }
+@if (p.LastReturnedAt != null && p.IsOpen && Model.IsOfficer) { <div class="alert warning">Your last update was returned by the Compliance Cell. See the remarks under Updates and submit again.</div> }
+@if (Model.IsAdmin && Model.IsOfficer) { <div class="alert info">You are a dealing officer on this point, so another Compliance Cell member must review and decide it.</div> }
+
+<div class="grid two">
+    <div class="stack">
+        <div class="card">
+            @if (!string.IsNullOrEmpty(p.RefSubject)) { <h2>@p.RefSubject</h2> }
+            <h3>Action point</h3>
+            <p class="pre">@p.PointText</p>
+            <h3 class="mt">Action taken (as reported in the ATR)</h3>
+            @if (p.AtrText == null) { <p class="muted">Nothing reported yet.</p> }
+            else { <p class="pre">@p.AtrText</p><p class="muted small">As on @F.DateDot(p.AtrAsOn)</p> }
+        </div>
+
+        @if (Model.IsOfficer && (p.Status == CStatus.Ongoing || p.Status == CStatus.PendingExternal) && Model.Pending == null)
+        {
+            <form method="post" asp-page-handler="Update" class="card">
+                <h2>Submit compliance</h2>
+                <input type="hidden" name="rv" value="@rv" />
+                <div class="form-grid">
+                    <div class="field"><label for="asOn">As on *</label><input type="date" id="asOn" name="asOn" value="@today" max="@today" required /></div>
+                    <div class="field"><label for="proposed">Status *</label>
+                        <select id="proposed" name="proposed"><option value="Ongoing">Ongoing</option><option value="PendingExternal">Pending with external party (guidance awaited)</option><option value="ProposedClosure">Complied — propose closure</option></select></div>
+                    <div class="field full"><label for="text">Compliance / action taken *</label><textarea id="text" name="text" rows="6" maxlength="4000" required></textarea>
+                        <span class="hint">Plain text. A short table can be typed line by line. Do not paste documents: record where the papers are kept.</span></div>
+                    <div class="field full"><label for="papers">Supporting papers kept at</label><input id="papers" name="papers" maxlength="300" placeholder="File no., shared-folder path or ERP report name" /></div>
+                </div>
+                <div class="actions"><button class="btn primary" type="submit">Submit to the Compliance Cell</button></div>
+            </form>
+        }
+
+        @if (Model.Pending != null)
+        {
+            var u = Model.Pending;
+            <div class="card highlight">
+                <h2>Update awaiting review</h2>
+                <p class="muted small">By @u.SubmittedByName, @F.DateTime(u.SubmittedAt) · as on @F.DateDot(u.AsOn) · proposed: @CompliancePage.StatusLabel(u.ProposedStatus)</p>
+                <p class="pre">@u.UpdateText</p>
+                @if (!string.IsNullOrEmpty(u.PapersKeptAt)) { <p class="small">Papers kept at: @u.PapersKeptAt</p> }
+                @if (u.SubmittedByUserId == User.UserId())
+                {
+                    <form method="post" asp-page-handler="WithdrawUpdate"><input type="hidden" name="updateId" value="@u.Id" /><input type="hidden" name="rv" value="@rv" /><button class="btn small" type="submit">Withdraw this update</button></form>
+                }
+                @if (Model.CanCell && u.SubmittedByUserId != User.UserId())
+                {
+                    <form method="post" asp-page-handler="Accept" class="mt">
+                        <input type="hidden" name="updateId" value="@u.Id" /><input type="hidden" name="rv" value="@rv" />
+                        <div class="field"><label for="atrText">Wording for the ATR (edit if needed)</label><textarea id="atrText" name="atrText" rows="5" maxlength="4000">@u.UpdateText</textarea>
+                            <span class="hint">The officer's own text is kept unchanged in the record.</span></div>
+                        <button class="btn primary" type="submit">Accept</button>
+                    </form>
+                    <form method="post" asp-page-handler="Return" class="mt">
+                        <input type="hidden" name="updateId" value="@u.Id" /><input type="hidden" name="rv" value="@rv" />
+                        <div class="field"><label for="retRemarks">Return with remarks</label><textarea id="retRemarks" name="remarks" rows="2" maxlength="1000" required></textarea></div>
+                        <button class="btn" type="submit">Return to the officer</button>
+                    </form>
+                }
+            </div>
+        }
+
+        <div class="card">
+            <h2>Updates</h2>
+            @if (Model.Updates.Count == 0) { <p class="empty">No updates yet.</p> }
+            @foreach (var u in Model.Updates)
+            {
+                <div class="entry">
+                    <div class="small"><strong>@u.SubmittedByName</strong> · @F.DateTime(u.SubmittedAt) · as on @F.DateDot(u.AsOn) · proposed @CompliancePage.StatusLabel(u.ProposedStatus)
+                        · <span class="badge @(u.ReviewState == "Accepted" ? "success" : u.ReviewState == "Returned" ? "warning" : "neutral")">@u.ReviewState</span></div>
+                    <p class="pre">@u.UpdateText</p>
+                    @if (!string.IsNullOrEmpty(u.PapersKeptAt)) { <p class="small muted">Papers kept at: @u.PapersKeptAt</p> }
+                    @if (u.ReviewedByName != null && u.ReviewState is "Accepted" or "Returned") { <p class="small muted">@u.ReviewState by @u.ReviewedByName, @F.DateTime(u.ReviewedAt)@(u.ReviewRemarks != null ? ": " + u.ReviewRemarks : "")</p> }
+                    @if (u.AtrText != null && u.AtrText != u.UpdateText) { <p class="small"><strong>ATR wording:</strong> @u.AtrText</p> }
+                </div>
+            }
+        </div>
+
+        <div class="card">
+            <h2>History</h2>
+            <table class="table compact">
+                @foreach (var h in Model.History)
+                {
+                    <tr><td class="nowrap small">@F.DateTime(h.At)</td><td class="small"><strong>@h.Action</strong> by @h.ActorName@(h.FromStatus != h.ToStatus && h.ToStatus != null ? $" ({h.FromStatus} → {h.ToStatus})" : "")<div class="pre muted">@h.Detail</div></td></tr>
+                }
+            </table>
+        </div>
+    </div>
+
+    <div class="stack">
+        <div class="card">
+            <h2>Details</h2>
+            <dl class="meta-grid">
+                <dt>Primary officer</dt><dd>@p.OfficerName@if (!p.OfficerActive) { <span class="badge danger">inactive</span> }</dd>
+                <dt>Supporting</dt><dd>@(Model.Support.Count == 0 ? "—" : string.Join(", ", Model.Support.Select(s => s.DisplayName)))</dd>
+                <dt>Officer code</dt><dd>@(p.OfficerCode ?? "—")</dd>
+                <dt>Vertical</dt><dd>@(p.OwnerVertical ?? "—")</dd>
+                <dt>Category · priority</dt><dd>@(p.Category ?? "—") · @p.Priority</dd>
+                <dt>Raised on</dt><dd>@F.DateDot(p.RaisedOn)</dd>
+                <dt>Original due date</dt><dd>@F.DateDot(p.OriginalDueDate)</dd>
+                <dt>Current due date</dt><dd>@F.DateDot(p.CurrentDueDate)</dd>
+                <dt>Next update due</dt><dd>@(p.NextUpdateDue != null ? F.DateDot(p.NextUpdateDue) : "—")</dd>
+                @if (p.Amount.HasValue) { <dt>Amount</dt><dd>@Fmt.Money(p.Amount) (@Fmt.Lakh(p.Amount))</dd> }
+                <dt>Papers kept at</dt><dd>@(p.PapersKeptAt ?? "—")</dd>
+                @if (Model.CarriedFrom != null) { <dt>Carried from</dt><dd><a href="/Compliance/Point/@Model.CarriedFrom.Id">@Model.CarriedFrom.Number</a></dd> }
+                @if (Model.MergedInto != null) { <dt>Merged into</dt><dd><a href="/Compliance/Point/@Model.MergedInto.Id">@Model.MergedInto.Number</a></dd> }
+                @if (p.ClosedAt != null) { <dt>Closed</dt><dd>@F.DateDot(p.ClosedAt) by @p.ClosedByName</dd><dt>Authority</dt><dd>@p.ClosureAuthority</dd><dt>Remarks</dt><dd class="pre">@p.ClosureRemarks</dd> }
+            </dl>
+        </div>
+
+        <div class="card">
+            <h2>Due-date revisions</h2>
+            @if (Model.PendingRevision is { } pr)
+            {
+                <div class="alert info">Requested by @pr.RequestedByName: @F.DateDot(pr.OldDate) → <strong>@F.DateDot(pr.NewDate)</strong><div class="pre small">@pr.Reason</div></div>
+                @if (pr.RequestedByUserId == User.UserId()) { <form method="post" asp-page-handler="WithdrawRevision"><input type="hidden" name="revisionId" value="@pr.Id" /><input type="hidden" name="rv" value="@rv" /><button class="btn small" type="submit">Withdraw request</button></form> }
+                @if (Model.CanCell)
+                {
+                    <form method="post" asp-page-handler="Decide">
+                        <input type="hidden" name="revisionId" value="@pr.Id" /><input type="hidden" name="rv" value="@rv" />
+                        <div class="field"><label for="decRemarks">Remarks (required to reject)</label><textarea id="decRemarks" name="remarks" rows="2" maxlength="1000"></textarea></div>
+                        <button class="btn primary" type="submit" name="approve" value="true">Approve</button>
+                        <button class="btn" type="submit" name="approve" value="false">Reject</button>
+                    </form>
+                }
+            }
+            else if (Model.IsPrimary && p.IsOpen)
+            {
+                <form method="post" asp-page-handler="Revision">
+                    <input type="hidden" name="rv" value="@rv" />
+                    <div class="field"><label for="newDate">Request a new due date</label><input type="date" id="newDate" name="newDate" min="@today" required /></div>
+                    <div class="field"><label for="revReason">Reason *</label><textarea id="revReason" name="reason" rows="2" maxlength="1000" required></textarea></div>
+                    <button class="btn" type="submit">Request</button>
+                </form>
+            }
+            @if (Model.CanCell && p.IsOpen && Model.PendingRevision == null)
+            {
+                <details class="mt"><summary>Revise the due date directly</summary>
+                    <form method="post" asp-page-handler="Revise">
+                        <input type="hidden" name="rv" value="@rv" />
+                        <div class="field"><label for="rNew">New due date</label><input type="date" id="rNew" name="newDate" required /></div>
+                        <div class="field"><label for="rReason">Reason *</label><textarea id="rReason" name="reason" rows="2" maxlength="1000" required></textarea></div>
+                        <button class="btn" type="submit">Revise</button>
+                    </form>
+                </details>
+            }
+            <ul class="list small mt">
+                @foreach (var r in Model.Revisions.Where(r => r.Status != "Pending"))
+                {
+                    <li>@F.DateDot(r.OldDate) → @F.DateDot(r.NewDate) · <span class="badge neutral">@r.Status</span> · @r.RequestedByName@(r.DecidedByName != null ? ", decided by " + r.DecidedByName : "")<div class="muted pre">@r.Reason@(r.DecisionRemarks != null ? " — " + r.DecisionRemarks : "")</div></li>
+                }
+            </ul>
+        </div>
+
+        @if (Model.CanCell)
+        {
+            <div class="card">
+                <h2>Compliance Cell actions</h2>
+                @if (p.IsOpen)
+                {
+                    @if (p.Status == CStatus.ProposedClosure)
+                    {
+                        <details open><summary>Do not accept the closure proposal</summary>
+                            <form method="post" asp-page-handler="RejectProposal"><input type="hidden" name="rv" value="@rv" />
+                                <div class="field"><label for="rpRemarks">Remarks *</label><textarea id="rpRemarks" name="remarks" rows="2" maxlength="1000" required></textarea></div>
+                                <button class="btn" type="submit">Keep ongoing</button></form>
+                        </details>
+                    }
+                    <details @(p.Status == CStatus.ProposedClosure ? "open" : null)><summary>Close as completed</summary>
+                        <form method="post" asp-page-handler="Close"><input type="hidden" name="rv" value="@rv" />
+                            <div class="field"><label for="clAuth">Closure authority *</label><input id="clAuth" name="authority" maxlength="300" required placeholder="Taken on record by the Board, 100th meeting, Memo No. 4" /></div>
+                            <div class="field"><label for="clRemarks">Closing remarks *</label><textarea id="clRemarks" name="remarks" rows="2" maxlength="1000" required></textarea></div>
+                            <button class="btn primary" type="submit">Close</button></form>
+                    </details>
+                    <details><summary>Drop</summary>
+                        <form method="post" asp-page-handler="Drop"><input type="hidden" name="rv" value="@rv" />
+                            <div class="field"><label for="drAuth">Authority *</label><input id="drAuth" name="authority" maxlength="300" required placeholder="Dropped by the auditor in the Q3 report" /></div>
+                            <div class="field"><label for="drRemarks">Reason *</label><textarea id="drRemarks" name="remarks" rows="2" maxlength="1000" required></textarea></div>
+                            <button class="btn" type="submit">Drop</button></form>
+                    </details>
+                    <details><summary>Merge into another point</summary>
+                        <form method="post" asp-page-handler="Merge"><input type="hidden" name="rv" value="@rv" />
+                            <div class="field"><label for="mgTarget">Point number *</label><input id="mgTarget" name="target" maxlength="30" required placeholder="CMP/2026-27/00012" /></div>
+                            <div class="field"><label for="mgRemarks">Reason *</label><textarea id="mgRemarks" name="remarks" rows="2" maxlength="1000" required></textarea></div>
+                            <button class="btn" type="submit">Merge</button></form>
+                    </details>
+                    <details><summary>Change officers</summary>
+                        <form method="post" asp-page-handler="Reassign"><input type="hidden" name="rv" value="@rv" />
+                            <div class="field"><label for="raPrimary">Primary officer</label><select id="raPrimary" name="primary">@foreach (var u in Model.Users) { <option value="@u.Id" selected="@(u.Id == p.PrimaryOfficerUserId)">@u.DisplayName (@u.Username)</option> }</select></div>
+                            <div class="field"><label for="raSupport">Supporting officers</label><select id="raSupport" name="support" multiple size="5">@foreach (var u in Model.Users) { <option value="@u.Id" selected="@(Model.Support.Any(s => s.Id == u.Id))">@u.DisplayName</option> }</select></div>
+                            <button class="btn" type="submit">Change</button></form>
+                    </details>
+                }
+                else
+                {
+                    <form method="post" asp-page-handler="Reopen"><input type="hidden" name="rv" value="@rv" />
+                        <div class="field"><label for="roRemarks">Reopen — reason *</label><textarea id="roRemarks" name="remarks" rows="2" maxlength="1000" required></textarea></div>
+                        <button class="btn" type="submit">Reopen</button></form>
+                }
+            </div>
+        }
+    </div>
+</div>

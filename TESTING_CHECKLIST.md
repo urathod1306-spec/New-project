@@ -1,5 +1,18 @@
 # NABCONS Intranet — Manual testing checklist (office machine)
 
+## 1.6.0: Compliance Management
+- [ ] Upgrade → *System information* shows 1.6.0 / schema 7; old data intact.
+- [ ] `Grant-Compliance-Admin.bat` for the Company Secretary → they see the **Compliance** tab; the administrator does not.
+- [ ] Register a Board meeting; add two action points (one by form, one by CSV import using the template).
+- [ ] The officer sees the point on My Desk, submits compliance; the Cell returns it once, then accepts it with edited wording.
+- [ ] *Print ATR → Prepare pack* for the Board → preview → download Word and PDF; open both: A4 landscape, annexure, summary, page numbers.
+- [ ] *Mark as final* → the snapshot page says **Verified**; download the Word copy again: footer shows the snapshot number.
+- [ ] The Auditor cannot open the Board point's link (Page not found).
+- [ ] Phone: the Compliance dashboard is readable without horizontal scrolling.
+
+---
+
+
 ## 1.5.0: review fixes
 - [ ] Upgrade → *System information* shows 1.5.0 / schema 6; old data intact; settings unchanged.
 - [ ] *Administration → Backup → Create backup now*: a new ZIP appears; no `.partial` file is left in the backups folder.

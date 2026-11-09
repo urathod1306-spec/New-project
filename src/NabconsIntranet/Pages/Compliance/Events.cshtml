@@ -1,0 +1,34 @@
+@page
+@model NabconsIntranet.Pages.Compliance.EventsModel
+@{ ViewData["Title"] = "Compliance events"; }
+<div class="page-head">
+    <div><h1>Events</h1><p>Meetings, audits and inspections that produced action points.</p></div>
+    @if (Model.IsAdmin) { <div class="actions"><a class="btn primary" href="/Compliance/EventEdit">+ Register an event</a></div> }
+</div>
+<partial name="_ComplianceTabs" />
+<form class="card filters" method="get">
+    <div class="field"><label for="source">Source</label><select id="source" name="source"><option value="">All</option>@foreach (var s in ComplianceSource.All) { <option value="@s.Code" selected="@(Model.Source == s.Code)">@s.Label</option> }</select></div>
+    <div class="field"><label for="forum">Forum</label><select id="forum" name="forum"><option value="">All</option>@foreach (var m in Model.Forums) { <option value="@m.Id" selected="@(Model.Forum == m.Id)">@m.Name</option> }</select></div>
+    <div class="field"><label for="year">Year</label><input id="year" name="year" value="@Model.Year" inputmode="numeric" maxlength="4" placeholder="2026" /></div>
+    <div class="actions"><button class="btn primary" type="submit">Filter</button><a class="btn" href="/Compliance/Events">Clear</a></div>
+</form>
+<div class="card table-wrap">
+    @if (Model.Items.Count == 0) { <p class="empty">No events.</p> }
+    else
+    {
+        <table class="table">
+            <thead><tr><th>Event</th><th>Source</th><th>Date / period</th><th class="right">Open</th><th class="right">Total</th></tr></thead>
+            <tbody>
+                @foreach (var e in Model.Items)
+                {
+                    <tr>
+                        <td><a href="/Compliance/Event/@e.Id"><strong>@(e.EventNo != null ? e.EventNo + " — " : "")@e.Title</strong></a><div class="muted small">@e.Forum@if (e.IsConfidential) { <span class="badge warning">confidential</span> }</div></td>
+                        <td>@ComplianceSource.Label(e.SourceType)</td>
+                        <td class="nowrap">@(e.HeldOn != null ? F.DateDot(e.HeldOn) : e.PeriodTo != null ? F.DateDot(e.PeriodFrom) + "–" + F.DateDot(e.PeriodTo) : F.DateDot(e.ReportReceivedOn))</td>
+                        <td class="right">@e.OpenCount</td><td class="right">@e.TotalCount</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

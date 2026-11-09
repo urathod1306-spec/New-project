@@ -1,0 +1,28 @@
+@page
+@model NabconsIntranet.Pages.Compliance.PointsModel
+@{
+    ViewData["Title"] = "Action points";
+    var f = Model.Filter;
+}
+<div class="page-head">
+    <div><h1>Action points</h1><p>@Model.Result.Total point(s) match. Overdue rows are red; due within 7 days amber.</p></div>
+    <div class="actions"><a class="btn" href="@Model.Url(export: true)">Export to Excel</a></div>
+</div>
+<partial name="_ComplianceTabs" />
+<form class="card filters" method="get">
+    <div class="field wide"><label for="q">Search</label><input type="search" id="q" name="q" value="@f.Q" maxlength="100" placeholder="Number, reference or text" /></div>
+    <div class="field"><label for="status">Status</label><select id="status" name="status">@foreach (var s in CompliancePointFilter.StatusLabels) { <option value="@s.Key" selected="@(f.Status == s.Key)">@s.Value</option> }</select></div>
+    <div class="field"><label for="source">Source</label><select id="source" name="source"><option value="">All</option>@foreach (var s in ComplianceSource.All) { <option value="@s.Code" selected="@(f.Source == s.Code)">@s.Label</option> }</select></div>
+    <div class="field"><label for="forum">Forum</label><select id="forum" name="forum"><option value="">All</option>@foreach (var m in Model.Forums) { <option value="@m.Id" selected="@(f.ForumId == m.Id)">@m.Name</option> }</select></div>
+    <div class="field"><label for="vertical">Vertical</label><select id="vertical" name="vertical"><option value="">All</option>@foreach (var x in Model.Verticals) { <option selected="@(f.Vertical == x)">@x</option> }</select></div>
+    <div class="field"><label for="officer">Primary officer</label><select id="officer" name="officer"><option value="">Anyone</option>@foreach (var o in Model.Officers) { <option value="@o.Id" selected="@(f.OfficerId == o.Id)">@o.DisplayName</option> }</select></div>
+    <div class="field"><label for="category">Category</label><select id="category" name="category"><option value="">All</option>@foreach (var x in Model.Categories) { <option selected="@(f.Category == x)">@x</option> }</select></div>
+    <div class="field"><label for="priority">Priority</label><select id="priority" name="priority"><option value="">All</option>@foreach (var x in CompliancePriority.All) { <option selected="@(f.Priority == x)">@x</option> }</select></div>
+    @if (f.EventId > 0) { <input type="hidden" name="eventId" value="@f.EventId" /> }
+    <label class="check"><input type="checkbox" name="lakh" value="true" checked="@Model.Lakh" /> Amounts in ₹ lakh</label>
+    <div class="actions"><button class="btn primary" type="submit">Filter</button><a class="btn" href="/Compliance/Points">Clear</a></div>
+</form>
+<div class="card table-wrap">
+    <partial name="_PointTable" model='new NabconsIntranet.Pages.Compliance.PointTableModel(Model.Result.Items, Model.Lakh, "No action points match.")' />
+</div>
+<partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, p => Model.Url(p))" />

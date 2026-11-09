@@ -37,6 +37,9 @@ enoteOptions.Resolve();
 builder.Services.AddSingleton(enoteOptions);
 var boardOptions = builder.Configuration.GetSection("MessageBoard").Get<BoardOptions>() ?? new BoardOptions();
 builder.Services.AddSingleton(boardOptions);
+var complianceOptions = builder.Configuration.GetSection("Compliance").Get<ComplianceOptions>() ?? new ComplianceOptions();
+complianceOptions.Resolve();
+builder.Services.AddSingleton(complianceOptions);
 // One request may carry several attachments: allow the larger of the circular and e-Note limits.
 var maxBody = Math.Max(Math.Max(options.MaxUploadBytes * 5, enoteOptions.MaxFileBytes * 10), boardOptions.MaxPhotoMB * 1024L * 1024L * boardOptions.MaxPhotosPerPost) + 1024 * 1024;
 builder.Logging.AddProvider(new FileLoggerProvider(options.LogPath));
@@ -49,6 +52,8 @@ builder.WebHost.ConfigureKestrel(k =>
 builder.Services.Configure<FormOptions>(f =>
 {
     f.MultipartBodyLengthLimit = maxBody;
+    // keep request bodies up to just over 2 MB in memory: the compliance CSV import (max 2 MB) must never touch the disk
+    f.MemoryBufferThreshold = (int)UploadGuard.ImportBodyLimit + 128 * 1024;
     f.ValueCountLimit = 2048;
 });
 
@@ -77,6 +82,12 @@ builder.Services.AddSingleton<ENoteRepository>();
 builder.Services.AddSingleton<ENoteWorkflow>();
 builder.Services.AddSingleton<ENotePdfService>();
 builder.Services.AddSingleton<BoardRepository>();
+builder.Services.AddSingleton<ComplianceAccess>();
+builder.Services.AddSingleton<ComplianceRepository>();
+builder.Services.AddSingleton<ComplianceWorkflow>();
+builder.Services.AddSingleton<ComplianceImport>();
+builder.Services.AddSingleton<AtrBuilder>();
+builder.Services.AddHostedService<ComplianceScheduler>();
 builder.Services.AddTransient<Seeder>();
 builder.Services.AddHostedService<BackupScheduler>();
 
@@ -172,6 +183,8 @@ app.Services.GetRequiredService<ProfileRepository>().LinkUnlinkedAccounts();
     var enoteWorkflow = app.Services.GetRequiredService<ENoteWorkflow>();
     if (enoteOptions.Enabled) housekeeping.ExtraSteps.Add(enoteWorkflow.AgeingAlerts);
 }
+foreach (var unknown in complianceOptions.UnknownRestricted)
+    app.Logger.LogWarning("Compliance:RestrictedSourceTypes contains an unknown code '{Code}'; it is ignored.", unknown);
 app.Services.GetRequiredService<AuditService>().Log("System.Started", "System", null,
     $"NABCONS Intranet {typeof(Program).Assembly.GetName().Version} started; auth={options.AuthenticationMode}", "system");
 
@@ -191,6 +204,7 @@ app.Use(async (ctx, next) =>
     h["Pragma"] = "no-cache";
     await next();
 });
+app.UseUploadGuard();
 
 app.UseStaticFiles(new StaticFileOptions
 {

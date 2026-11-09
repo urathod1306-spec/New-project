@@ -6,7 +6,7 @@ using NabconsIntranet.Infrastructure;
 namespace NabconsIntranet.Pages.Admin;
 
 public class UserEditModel(UserRepository users, MasterRepository masters, AuditService audit, IntranetOptions o,
-    ProfileRepository profiles, StaffRepository staff, PhotoService photos) : AppPage
+    ProfileRepository profiles, StaffRepository staff, PhotoService photos, ComplianceWorkflow compliance) : AppPage
 {
     public sealed class InputModel
     {
@@ -78,18 +78,21 @@ public class UserEditModel(UserRepository users, MasterRepository masters, Audit
             };
             var newId = users.Create(u, User.UserName());
             audit.Log("User.Created", "User", newId, $"{u.Username}; roles={u.Roles}; active={u.IsActive}");
+            if (roles.Contains(Infrastructure.Roles.Auditor)) compliance.NotifyAuditorGranted(newId, User);
             Flash($"User {u.Username} created." + (o.IsWindowsAuth ? "" : " They must change the temporary password at first sign-in."));
             return RedirectToPage("/Admin/Users");
         }
 
         var before = $"roles={Existing.Roles}; active={Existing.IsActive}; vertical={Existing.Vertical}";
         var rolesChanged = Infrastructure.Roles.Join(roles) != Infrastructure.Roles.Join(Existing.RoleList) || Existing.IsActive != Input.IsActive;
+        var gainsAuditor = roles.Contains(Infrastructure.Roles.Auditor) && !Existing.RoleList.Contains(Infrastructure.Roles.Auditor);
         Existing.DisplayName = Input.DisplayName.Trim();
         Existing.Email = Clean(Input.Email, 150);
         var oldVertical = Existing.Vertical;
         Existing.Roles = Infrastructure.Roles.Join(roles);
         Existing.IsActive = Input.IsActive;
         users.Update(Existing, User.UserName(), rotateStamp: rolesChanged);
+        compliance.UserChanged();          // a deactivated Compliance Admin loses access at once
         // the vertical changes with the linked directory entry, and is recorded in the profile history
         profiles.SetVerticalByAdmin(Existing.Id, Existing.StaffId, oldVertical, vertical, User.UserName());
         Existing.Vertical = vertical;
@@ -99,7 +102,9 @@ public class UserEditModel(UserRepository users, MasterRepository masters, Audit
         {
             users.SetPassword(Existing.Id, Input.TempPassword, mustChange: true, User.UserName());
             audit.Log("User.PasswordReset", "User", Existing.Id, $"{Existing.Username}: temporary password set by administrator");
+            compliance.NotifyMemberPasswordReset(Existing.Id, User);      // the Compliance Cell is told when a member's password is reset
         }
+        if (gainsAuditor) compliance.NotifyAuditorGranted(Existing.Id, User);
         Flash($"User {Existing.Username} updated." + (rolesChanged ? " They will need to sign in again." : ""));
         return RedirectToPage("/Admin/Users");
     }

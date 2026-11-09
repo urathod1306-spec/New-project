@@ -62,6 +62,12 @@ On a spare PC, or in a different folder on the same PC while the live intranet i
 3. Run `Upgrade-Existing-Intranet.bat` from the new version, pointing it at the **copy**.
 4. Test with your real data. When satisfied, confirm the merge and upgrade the live installation.
 
+## Upgrading to 1.6.0 (Compliance Management)
+- The database goes from schema 6 to **7** (new compliance tables only; nothing existing changes). The upgrade takes a backup first, as always.
+- After the upgrade nobody sees Compliance until the first Compliance Admin is created with `Grant-Compliance-Admin.bat` (see the Deployment Guide, section 5).
+- **Roll-back:** 1.5.0 runs on the upgraded database and ignores the compliance tables; compliance data and access grants are kept and reappear when 1.6.0 is reinstalled.
+- Each upgrade leaves a `pre-upgrade-*.db` copy next to the database; delete old copies once the new version has run well for a week.
+
 ## Upgrading from 1.0.0 (the first release)
 
 Version 1.0.0 did not include the upgrade script, but that doesn't matter: you always run the script from the **new** version's folder. Follow the steps above as written.

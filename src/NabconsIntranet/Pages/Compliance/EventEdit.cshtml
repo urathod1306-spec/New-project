@@ -1,0 +1,33 @@
+@page "{id:long?}"
+@model NabconsIntranet.Pages.Compliance.EventEditModel
+@{
+    ViewData["Title"] = Model.Id > 0 ? "Edit event" : "Register an event";
+    var i = Model.Input;
+}
+<div class="page-head"><div><p class="muted"><a href="/Compliance/Events">← Events</a></p><h1>@ViewData["Title"]</h1>
+<p>A meeting, audit or inspection. The minutes or report are <strong>not</strong> uploaded: record where they are kept.</p></div></div>
+<form method="post" class="card narrow-form">
+    <partial name="_Errors" />
+    <input type="hidden" asp-for="RowVersion" />
+    <div class="form-grid">
+        <div class="field"><label for="src">Source type *</label>
+            <select id="src" name="Input.SourceType" required disabled="@(Model.HasPoints)">@foreach (var s in ComplianceSource.All) { <option value="@s.Code" selected="@(i.SourceType == s.Code)">@s.Label</option> }</select>
+            @if (Model.HasPoints) { <input type="hidden" name="Input.SourceType" value="@i.SourceType" /><span class="hint">Fixed: the event has action points.</span> }
+            <span class="hint">Board and Audit Committee events are restricted: only the Compliance Cell, viewers and the assigned officers see them.</span></div>
+        <div class="field"><label for="forum">Forum / body *</label><select id="forum" name="Input.ForumId" required><option value="">Choose…</option>@foreach (var f in Model.Forums) { <option value="@f.Id" selected="@(i.ForumId == f.Id)">@f.Name</option> }</select>
+            <span class="hint">The list is kept by the administrator (Administration → Master lists).</span></div>
+        <div class="field"><label for="no">Event number</label><input id="no" name="Input.EventNo" value="@i.EventNo" maxlength="60" placeholder="99th / Q2 FY 2026-27" /></div>
+        <div class="field"><label for="title">Title *</label><input id="title" name="Input.Title" value="@i.Title" maxlength="300" required placeholder="Board meeting / Internal audit report" /></div>
+        <div class="field"><label for="held">Held on (meeting)</label><input type="date" id="held" name="Input.HeldOn" value="@i.HeldOn" /></div>
+        <div class="field"><label for="recv">Report received on</label><input type="date" id="recv" name="Input.ReportReceivedOn" value="@i.ReportReceivedOn" /></div>
+        <div class="field"><label for="pf">Period covered from (audits)</label><input type="date" id="pf" name="Input.PeriodFrom" value="@i.PeriodFrom" /></div>
+        <div class="field"><label for="pt">Period covered to</label><input type="date" id="pt" name="Input.PeriodTo" value="@i.PeriodTo" /></div>
+        <div class="field"><label for="rt">Compliance reported to</label><input id="rt" name="Input.ReportedTo" value="@i.ReportedTo" maxlength="150" placeholder="Board of Directors / Audit Committee" /></div>
+        <div class="field"><label for="cycle">Reporting cycle</label><select id="cycle" name="Input.ReportingCycle">@foreach (var c in ComplianceCycle.Labels) { <option value="@c.Key" selected="@((i.ReportingCycle ?? ComplianceCycle.NextMeeting) == c.Key)">@c.Value</option> }</select></div>
+        <div class="field"><label for="next">Next meeting / submission date</label><input type="date" id="next" name="Input.NextReportingOn" value="@i.NextReportingOn" /><span class="hint">Officers are asked for an update 15 days before it.</span></div>
+        <div class="field"><label for="kept">Minutes / report kept at</label><input id="kept" name="Input.SourceKeptAt" value="@i.SourceKeptAt" maxlength="300" placeholder="File no. CS/BM/99 · Company Secretary's cabinet" /></div>
+        <div class="field full"><label for="rem">Remarks</label><textarea id="rem" name="Input.Remarks" rows="2" maxlength="1000">@i.Remarks</textarea></div>
+        <label class="check full"><input type="checkbox" name="Input.IsConfidential" value="true" checked="@i.IsConfidential" /> Confidential (treated like a restricted source)</label>
+    </div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><a class="btn" href="@(Model.Id > 0 ? $"/Compliance/Event/{Model.Id}" : "/Compliance/Events")">Cancel</a></div>
+</form>

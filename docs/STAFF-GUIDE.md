@@ -1,5 +1,13 @@
 # NABCONS Intranet — Quick guide for staff
 
+## Compliance (action points)
+If an action point from a Board or committee meeting, an audit or an inspection is assigned to you, **Compliance** appears in the menu and the point is listed on **My Desk** when it needs attention.
+- Open the point and use **Submit compliance**: what has been done, the *as on* date, and the status (*Ongoing*, *Pending with an external party*, or *Complied — propose closure*). Record where the supporting papers are kept; files are not uploaded.
+- The Compliance Cell reviews your update. It may **return** it with remarks (you will see a message on the point), or accept it, possibly editing the wording printed in the report. Your own text is always kept.
+- Need more time? The primary officer can **request a new due date** with a reason; the Cell decides.
+- Only the Compliance Cell closes a point, with the authority (for example, "taken on record by the Board").
+- Reminders arrive in the bell: before the due date, when overdue (weekly) and when a periodic update is due.
+
 ## Message Board
 Open **Message Board** in the top menu to share news, greetings and photos with colleagues.
 - **To post:** write your message, optionally add up to 4 photos (JPEG, PNG or WebP, up to 5 MB each), then click **Post**. Location and camera details are removed from photos automatically.

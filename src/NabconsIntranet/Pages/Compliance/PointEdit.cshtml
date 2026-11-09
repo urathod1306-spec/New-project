@@ -1,0 +1,51 @@
+@page "{id:long?}"
+@model NabconsIntranet.Pages.Compliance.PointEditModel
+@{
+    ViewData["Title"] = Model.Id > 0 ? "Edit action point" : "Add action point";
+    var i = Model.Input;
+    var e = Model.Event;
+    var creating = Model.Id == 0;
+}
+<div class="page-head"><div><p class="muted"><a href="/Compliance/Event/@e.Id">← @(e.EventNo != null ? e.EventNo + " — " : "")@e.Title</a></p><h1>@ViewData["Title"]</h1>
+<p>Plain text only. Short tables can be typed as lines of text; record where supporting papers are kept — files are not uploaded.</p></div></div>
+<form method="post" class="card narrow-form">
+    <partial name="_Errors" />
+    <input type="hidden" asp-for="RowVersion" />
+    <input type="hidden" name="eventId" value="@e.Id" />
+    <div class="form-grid">
+        <div class="field"><label for="ref">Memorandum / agenda / para / observation no.</label><input id="ref" name="Input.RefNo" value="@i.RefNo" maxlength="60" placeholder="Memo No. 7" /></div>
+        <div class="field"><label for="subj">Subject</label><input id="subj" name="Input.RefSubject" value="@i.RefSubject" maxlength="300" placeholder="Review of IT security policy" /></div>
+        <div class="field full"><label for="text">Action point *</label><textarea id="text" name="Input.PointText" rows="5" maxlength="4000" required>@i.PointText</textarea></div>
+        <div class="field"><label for="officer">Primary dealing officer *</label><select id="officer" name="Input.PrimaryOfficerUserId" required><option value="">Choose…</option>@foreach (var u in Model.Users) { <option value="@u.Id" selected="@(i.PrimaryOfficerUserId == u.Id)">@u.DisplayName (@u.Username)</option> }</select></div>
+        <div class="field"><label for="code">Officer code (printed in the internal-audit sheet)</label><input id="code" name="Input.OfficerCode" value="@i.OfficerCode" maxlength="30" placeholder="AC(AA)" /></div>
+        <div class="field full"><label for="support">Supporting officers (optional; hold Ctrl to choose several)</label>
+            <select id="support" name="Input.SupportOfficerIds" multiple size="5">@foreach (var u in Model.Users) { <option value="@u.Id" selected="@(i.SupportOfficerIds.Contains(u.Id))">@u.DisplayName (@u.Username)</option> }</select></div>
+        <div class="field"><label for="cat">Category</label><select id="cat" name="Input.Category"><option value="">—</option>@foreach (var c in Model.Categories) { <option selected="@(i.Category == c)">@c</option> }</select></div>
+        <div class="field"><label for="prio">Priority / risk</label><select id="prio" name="Input.Priority">@foreach (var p in CompliancePriority.All) { <option selected="@((i.Priority ?? "Medium") == p)">@p</option> }</select></div>
+        <div class="field"><label for="vert">Owner vertical</label><select id="vert" name="Input.OwnerVertical"><option value="">—</option>@foreach (var v in Model.Verticals) { <option selected="@(i.OwnerVertical == v)">@v</option> }</select></div>
+        <div class="field"><label for="amt">Amount (₹, optional)</label><input id="amt" name="Input.Amount" value="@i.Amount" inputmode="decimal" /></div>
+        @if (creating)
+        {
+            <div class="field"><label for="due">Due date *</label><input type="date" id="due" name="Input.DueDate" value="@i.DueDate" required /><span class="hint">The original due date never changes; later changes go through a revision.</span></div>
+            <div class="field"><label for="raised">Raised on</label><input type="date" id="raised" name="Input.RaisedOn" value="@i.RaisedOn" /><span class="hint">Default: the event date. Ageing is counted from it.</span></div>
+        }
+        <div class="field"><label for="cf">Carried forward from (earlier point number)</label><input id="cf" name="Input.CarriedFromNumber" value="@i.CarriedFromNumber" maxlength="30" placeholder="CMP/2025-26/00012" /></div>
+        <div class="field"><label for="papers">Supporting papers kept at</label><input id="papers" name="Input.PapersKeptAt" value="@i.PapersKeptAt" maxlength="300" placeholder="File no. F&A/IA/2026/3" /></div>
+        @if (creating)
+        {
+            <fieldset class="full fieldset">
+                <legend>Migrating a point that is already open (optional)</legend>
+                <div class="form-grid">
+                    <div class="field"><label for="ist">Current status</label><select id="ist" name="Input.InitialStatus"><option value="Ongoing">Ongoing</option><option value="PendingExternal" selected="@(i.InitialStatus == "PendingExternal")">Pending with external party (guidance awaited)</option></select></div>
+                    <div class="field"><label for="asOn">Action taken — as on</label><input type="date" id="asOn" name="Input.InitialAsOn" value="@i.InitialAsOn" /></div>
+                    <div class="field full"><label for="atr">Action taken so far (as last reported)</label><textarea id="atr" name="Input.InitialAtrText" rows="3" maxlength="4000">@i.InitialAtrText</textarea></div>
+                </div>
+            </fieldset>
+        }
+    </div>
+    <div class="actions">
+        <button class="btn primary" type="submit">Save</button>
+        @if (creating) { <button class="btn" type="submit" name="another" value="1">Save and add another</button> }
+        <a class="btn" href="@(creating ? $"/Compliance/Event/{e.Id}" : $"/Compliance/Point/{Model.Id}")">Cancel</a>
+    </div>
+</form>

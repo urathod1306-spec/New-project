@@ -17,11 +17,11 @@ This guide covers the office-PC pilot (no installation) and the later move to a 
 ## 2. Get the package
 
 1. On an approved internet-connected machine, open the GitHub repository and download
-   `release/NABCONS-Intranet-v1.5.0-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
+   `release/NABCONS-Intranet-v1.6.0-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
 2. Transfer the ZIP into the NABARD LAN **only by the IT-approved method** (approved media or transfer gateway), with malware scanning and a change ticket.
 3. On the office PC, check the checksum in PowerShell:
    ```powershell
-   Get-FileHash .\NABCONS-Intranet-v1.5.0-win-x64.zip -Algorithm SHA256
+   Get-FileHash .\NABCONS-Intranet-v1.6.0-win-x64.zip -Algorithm SHA256
    ```
    It must match the `.sha256` file. Inside the ZIP, `SHA256SUMS.txt` lists the checksum of every file, which helps with allow-listing.
 4. Right-click the ZIP → **Properties** → tick **Unblock** if shown → OK. Then extract it to `C:\NABCONSIntranet\`.
@@ -106,9 +106,19 @@ Edit with Notepad, save, then restart the intranet (close and reopen the window,
 | `MessageBoard:MaxChars` / `MaxPhotosPerPost` / `MaxPhotoMB` | `2000` / `4` / `5` | Limits for one post |
 | `MessageBoard:MaxPinned` | `3` | How many posts administrators can pin at once |
 | `MessageBoard:PostsPerHour` | `10` | Flood guard: posts per person per hour |
+| `Compliance:Enabled` (v1.6) | `true` | `false` hides Compliance (menu, pages, desk sections, reminders); data is kept. Nobody sees Compliance until a Compliance Admin exists (see below) or points are assigned. |
+| `Compliance:RestrictedSourceTypes` | `["Board","AuditCommittee"]` | Event types visible only to the Compliance Cell, Compliance Viewers and the assigned officers. Codes: Board, AuditCommittee, BoardCommittee, NabardInspection, StatutoryAudit, InternalAudit, ReviewMeeting, Other. `["None"]` for none. A list here replaces the default. |
+| `Compliance:AuditorSeesRestricted` | `false` | `true` lets the Auditor role read restricted events |
+| `Compliance:DueSoonDays` / `OverdueRepeatDays` / `UpdateLeadDays` | `7` / `7` / `15` | "Due soon" window; how often overdue points are reminded again; for "every meeting" cycles, how many days before the next meeting an update is asked for |
+| `Compliance:ReminderHour` | `9` | Daily reminders run once a day at or after this hour (office time), whenever the PC is on |
+| `Compliance:SignatureBlock` | `Company Secretary` | Printed at the end of ATRs (`\n` for a new line) |
+| `Compliance:MaxImportRows` / `MaxImportKB` | `500` / `1024` | CSV import limits |
+| `Compliance:DefaultOfficerCodeFormat` | `Code` | Dealing person in the internal-audit sheet: `Code`, `Name` or `NameAndCode` |
 | `DataFolder`, `DocumentsFolder`, `BackupFolder`, `LogFolder` | relative | May be absolute paths, e.g. `D:\\NABCONSData\\documents` |
 
-The `Notifications`, `ENote` and (from 1.4) `MessageBoard` sections sit at the top level of `appsettings.json`, next to `"Intranet"`. If a section or setting is missing, the default above applies.
+**Compliance access (v1.6).** Compliance is not given through the intranet roles: Compliance Admins (the Compliance Cell) grant it on *Compliance → Access*. To create the **first** Compliance Admin (or recover when none is left), run `Grant-Compliance-Admin.bat` in the program folder on the server and type the person's sign-in name (in Windows mode they must have signed in once). The grant is audited, existing Compliance Admins are notified, and it takes effect within 30 seconds (no restart needed).
+
+The `Notifications`, `ENote`, (from 1.4) `MessageBoard` and (from 1.6) `Compliance` sections sit at the top level of `appsettings.json`, next to `"Intranet"`. If a section or setting is missing, the default above applies.
 
 ## 6. HTTPS (recommended before wider LAN use)
 

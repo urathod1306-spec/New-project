@@ -1,0 +1,48 @@
+@page "{id:long}"
+@model NabconsIntranet.Pages.Compliance.SnapshotModel
+@{
+    var s = Model.S;
+    ViewData["Title"] = $"ATR snapshot #{s.Id}";
+}
+<div class="page-head">
+    <div>
+        <p class="muted"><a href="/Compliance/Snapshots">← Submitted ATRs</a></p>
+        <h1>Final ATR #@s.Id</h1>
+        <p>Submitted to <strong>@s.SubmittedTo</strong> on @F.DateDot(s.SubmittedOn) · status as on @F.DateDot(s.AsOn) · marked final by @s.CreatedByName, @F.DateTime(s.CreatedAt)</p>
+    </div>
+    <div class="actions">
+        <a class="btn primary" href="/Compliance/Snapshot/@s.Id?handler=Download&format=docx">Word</a>
+        <a class="btn" href="/Compliance/Snapshot/@s.Id?handler=Download&format=pdf">PDF</a>
+        <a class="btn" href="/Compliance/Snapshot/@s.Id?handler=Download&format=xlsx">Excel</a>
+    </div>
+</div>
+<partial name="_ComplianceTabs" />
+@if (Model.Verified) { <div class="alert success">Verified: the stored content matches its SHA-256 (@s.Sha256), which is also recorded in the audit log.</div> }
+else { <div class="alert danger">MISMATCH: the stored content no longer matches its SHA-256. Report this as a security incident and compare with the audit log entry Compliance.AtrFinalised for snapshot #@s.Id.</div> }
+@if (s.IsVoided) { <div class="alert warning">Void since @F.DateTime(s.VoidedAt) by @s.VoidedByName: @s.VoidReason</div> }
+<div class="card">
+    <p class="center"><strong>@Model.Header.Org</strong></p>
+    <h2 class="center">@Model.Header.Title</h2>
+    @foreach (var t in Model.Header.Subtitles) { <p class="center muted">@t</p> }
+    @for (var i = 0; i < Model.Header.Sections.Count; i++)
+    {
+        var sec = Model.Header.Sections[i];
+        var rows = sec.IsSummary ? (sec.SummaryRows ?? new()) : Model.Items.Where(x => x.Section == i).Select(x => x.Cells).ToList();
+        @if (!string.IsNullOrEmpty(sec.Heading)) { <h3 class="mt">@sec.Heading</h3> }
+        <div class="table-wrap">
+            <table class="table compact">
+                <thead><tr>@foreach (var c in sec.Columns) { <th>@c.H</th> }</tr></thead>
+                <tbody>@foreach (var r in rows) { <tr>@foreach (var c in r) { <td class="pre">@c</td> }</tr> }</tbody>
+            </table>
+        </div>
+    }
+</div>
+@if (Model.IsAdmin && !s.IsVoided)
+{
+    <details class="card mt"><summary>Mark this snapshot void (it was marked final by mistake)</summary>
+        <form method="post" asp-page-handler="Void">
+            <div class="field"><label for="reason">Reason *</label><textarea id="reason" name="reason" rows="2" maxlength="1000" required></textarea></div>
+            <button class="btn" type="submit">Mark void</button>
+        </form>
+    </details>
+}
