@@ -106,6 +106,8 @@ public sealed class ENote
     public string UpdatedAt { get; set; } = "";
     public long RowVersion { get; set; }
     public string? PdfPath { get; set; }
+    /// <summary>v1.7: the inward item this note was converted from (no files may be attached to such notes unless allowed).</summary>
+    public long? SourceInwardId { get; set; }
     public string? PdfSha256 { get; set; }
     public string? PdfState { get; set; }
     public string? RecordSha256 { get; set; }

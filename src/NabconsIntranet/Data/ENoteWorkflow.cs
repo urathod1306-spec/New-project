@@ -15,7 +15,7 @@ public sealed record ENotePermissions(bool IsInitiator, bool IsHolder, bool CanE
 /// notifications. The hash-chained audit entry is written straight after the commit (the existing pattern).
 /// </summary>
 public sealed class ENoteWorkflow(Db db, ENoteRepository notes, ENoteOptions o, AuditService audit, INotificationService notifications,
-    ChangeTracker tracker, MasterRepository masters, FileStore files, Fmt fmt, IntranetOptions io, ILogger<ENoteWorkflow> log)
+    ChangeTracker tracker, MasterRepository masters, FileStore files, Fmt fmt, IntranetOptions io, InwardOptions inward, ILogger<ENoteWorkflow> log)
 {
     public const string Changed = "This note has changed — someone acted on it a moment ago. The latest version is shown below; please check it and try again.";
 
@@ -60,7 +60,8 @@ public sealed class ENoteWorkflow(Db db, ENoteRepository notes, ENoteOptions o, 
         return (subject, category, body);
     }
 
-    public long Create(DraftInput d, ClaimsPrincipal user)
+    /// <param name="sourceInwardId">v1.7: set when the draft is created from an inward item ("Converted to e-Note").</param>
+    public long Create(DraftInput d, ClaimsPrincipal user, long? sourceInwardId = null)
     {
         var (subject, category, body) = Validate(d, requireDeclaration: true);
         var now = Db.Now();
@@ -69,9 +70,9 @@ public sealed class ENoteWorkflow(Db db, ENoteRepository notes, ENoteOptions o, 
         var me = ENoteRepository.Person(c, tx, user.UserId()) ?? throw new WorkflowException("Your account was not found.");
         var id = Db.Insert(c, tx, """
             INSERT INTO ENotes (Subject, Category, InitiatorUserId, InitiatorName, InitiatorDesignation, InitiatorVertical, CurrentHolderUserId,
-                CurrentHolderName, HeldSince, State, DraftBody, LastSeq, IsConfidential, DeclarationAccepted, CreatedAt, UpdatedAt, RowVersion)
-            VALUES (@subject, @category, @uid, @name, @desig, @vertical, @uid, @name, @now, 'Draft', @body, 1, @conf, 1, @now, @now, 1)
-            """, new { subject, category, uid = me.Id, name = me.Name, desig = me.Designation, vertical = me.Vertical, now, body, conf = d.Confidential });
+                CurrentHolderName, HeldSince, State, DraftBody, LastSeq, IsConfidential, DeclarationAccepted, CreatedAt, UpdatedAt, RowVersion, SourceInwardId)
+            VALUES (@subject, @category, @uid, @name, @desig, @vertical, @uid, @name, @now, 'Draft', @body, 1, @conf, 1, @now, @now, 1, @sourceInwardId)
+            """, new { subject, category, uid = me.Id, name = me.Name, desig = me.Designation, vertical = me.Vertical, now, body, conf = d.Confidential, sourceInwardId });
         Db.Insert(c, tx, """
             INSERT INTO ENoteMovements (NoteId, Seq, Action, FromUserId, FromName, FromDesignation, FromState, ToState, Timestamp)
             VALUES (@id, 1, 'Created', @uid, @name, @desig, NULL, 'Draft', @now)
@@ -313,6 +314,9 @@ public sealed class ENoteWorkflow(Db db, ENoteRepository notes, ENoteOptions o, 
     {
         var n = notes.Get(id) ?? throw new WorkflowException("Note not found.");
         if (!Permissions(n, user).CanAttach) throw new WorkflowException("Only the current holder can add attachments.");
+        // register-only rule (DD-08 D16): a note converted from an inward item never carries files unless explicitly allowed
+        if (n.SourceInwardId != null && !inward.ConvertedNotesAllowFiles)
+            throw new WorkflowException("This note was created from an inward register item, so files cannot be attached to it. Record where the papers are kept in the note text.");
         var list = uploads.Where(f => f.Length > 0 || !string.IsNullOrEmpty(f.FileName)).ToList();
         if (list.Count == 0) throw new WorkflowException("Choose a file to attach.");
         if (replacesId != null && list.Count != 1) throw new WorkflowException("Attach exactly one file to replace an earlier one.");

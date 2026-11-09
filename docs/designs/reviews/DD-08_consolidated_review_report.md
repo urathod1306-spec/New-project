@@ -85,3 +85,7 @@ Three fresh reviewers read DD-08 v1 and the code read-only: **G1 Comprehension**
 | G3-19 | MaxImportKB clamped |
 | G3-20 | DEFAULT NULL |
 | G3-21 | Full page, short content |
+
+## Round 2 — G3 readiness on v2
+
+Verdict: buildable with three blocking items (R2-1 credit/debit note items, R2-2 ActionRequired values, R2-3 voucher uniqueness). All 22 items were accepted as PROPOSE FIX and are recorded as binding in DD-08 §15. R2-3 and R2-8 changed migration 8 before release (no table UNIQUE on vouchers; unique index on `ENotes.SourceInwardId`).

@@ -639,3 +639,30 @@ Markers are set in batches of 200, and the summaries are written in one final tr
 | R-3 | Working days ignore holidays | Accepted: the digest is advisory only. |
 | R-4 | 43B(h) and s.15 are simplified (D15) | The owner chose this. The statutory acceptance-date model can be added later. |
 | R-5 | A single person holding both operator and Accounts grants | Accepted: segregation applies at certification, and close-short is visible to the Inward Viewers. |
+
+## 15. Round-2 readiness resolutions (binding; override earlier text where they differ)
+
+| ID | Resolution |
+|---|---|
+| R2-1 | A *Credit / debit note* item must name a visible invoice ("against invoice"), stored in `LinkedToId`. Invoice Accounts have full access to such items. Recording the adjustment against the invoice closes the note item as `ActionCompleted`. An adjustment can also be recorded without an inwarded note. |
+| R2-2 | `ActionRequired` values are fixed in code: `Reply`, `Action`, `Information`. Only `Reply` and `Action` get `ReplyDueOn`; `Information` items never count as overdue or due soon. |
+| R2-3 | No table-level uniqueness on (ItemId, VoucherRef). Code refuses a voucher already used on the item by a payment that has not been reversed; a plain index supports the check. |
+| R2-4 | Re-mark of a Certified invoice moves it to `WithVerifier` and clears certification. |
+| R2-5 | On return to registry the holder's participant row is kept if they are the inwarder, a copy-to user, or an earlier holder who never returned the item. |
+| R2-6 | Type and office are never editable (cancel and re-inward). Confidential is editable and re-indexed. Non-Accounts invoice edits stop at Certified; Invoice Accounts may edit amounts until the first payment, audited as "amounts edited", with no re-certification. |
+| R2-7 | Copy-to and Add note apply to invoices. Add note needs full access, or operator of the office on a non-confidential item. |
+| R2-8 | Converted e-Note body = summary, or "See inward {number}" when there is none or the item is confidential. Unique index on `ENotes(SourceInwardId)`. `ConvertedToENote` items cannot be reopened. |
+| R2-9 | Build order: options and access before the e-Note link (done). |
+| R2-10 | Transfer skips invoices whose inwarder is the new holder (count shown in preview); Certified invoices move to `WithVerifier`; one audit entry with the item count. |
+| R2-11 | A credit note that brings the outstanding to zero settles the invoice: status `Paid`, closure `InvoiceSettled`. |
+| R2-12 | ERP import: overridden duplicates not yet checked go to the preview category "enter manually"; header is `Amount` (net); rows for the same invoice are added up for the overpayment test; Source is `Manual`, `Import` or `Reversal`. |
+| R2-13 | Register dates filter by `ReceivedAt` (stored UTC ISO, shown and filtered in office time). Reply due = received date + D7 days. |
+| R2-14 | The acknowledgement slip masks the subject only (E8 exception); it shows the sender because the sender is who receives the slip. |
+| R2-15 | On a confidential item an operator without full access may edit metadata fields only and cannot add notes. |
+| R2-16 | Working days are used only by the unassigned digest and the matching dashboard tile. |
+| R2-17 | A reminder for an Unassigned item notifies the office operators; for a closed invoice, Invoice Accounts. |
+| R2-18 | Scheduler markers never bump `RowVersion` or `UpdatedAt`. |
+| R2-19 | MSME flags apply to every `IsMsme` invoice; the 43B(h) report excludes Medium and traders and counts adjustments dated on or before the as-on date. Future invoice dates are refused. |
+| R2-20 | Reversal reopening a Paid / ClosedShort invoice clears `ClosureType`, `ClosedAt`, `SettledAt`. Reversal rows cannot be reversed. |
+| R2-21 | Project codes by CSV only in 1.7.0; never preselect the inwarder as certifier; project code optional. |
+| R2-22 | Tests added to the plan: voucher re-entry after reversal, transfer segregation, reopen of a converted item refused, overridden duplicate in import, scheduler markers vs RowVersion, roll-back with `SourceInwardId`; Playwright covers invoice dashboard, 43B(h), ERP import preview and Access page. |

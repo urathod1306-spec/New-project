@@ -51,6 +51,7 @@ public static class MasterTypes
     public const string ENoteCategory = "ENoteCategory";
     public const string ComplianceForum = "ComplianceForum";
     public const string ComplianceCategory = "ComplianceCategory";
+    public const string InwardCategory = "InwardCategory";
 
     public static readonly Dictionary<string, string> Labels = new()
     {
@@ -65,6 +66,7 @@ public static class MasterTypes
         [ENoteCategory] = "e-Note categories",
         [ComplianceForum] = "Compliance forums / bodies",
         [ComplianceCategory] = "Compliance categories",
+        [InwardCategory] = "Inward categories",
     };
 }
 
