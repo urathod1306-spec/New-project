@@ -431,3 +431,17 @@ a.stat:hover { border-color: var(--brand); }
 .fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 14px; margin: 8px 0 12px; }
 .fieldset legend { font-weight: 600; font-size: .88rem; padding: 0 6px; }
 details > summary { cursor: pointer; font-weight: 600; margin: 8px 0; }
+
+/* ---------- v1.7 inward register ---------- */
+.inline { display: flex; gap: 8px; align-items: center; }
+.inline > * { min-width: 0; }
+.upper { text-transform: uppercase; }
+.tabs.sub { margin-top: -6px; }
+.tabs.sub a { padding: 6px 12px; font-size: .92rem; }
+.inward-note { border-bottom: 1px solid var(--line); padding: 6px 0; }
+.inward-note:last-of-type { border-bottom: 0; }
+.inward-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.inward-row .field { margin: 0; }
+details.card > summary { cursor: pointer; }
+details.card[open] > summary { margin-bottom: 10px; }
+tr.muted td { color: var(--muted); }

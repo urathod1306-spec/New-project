@@ -18,6 +18,8 @@ public class ViewModel(ENoteRepository notes, ENoteWorkflow workflow, ENoteOptio
     public ENoteOptions Options => o;
     public string? Sender { get; private set; }
     public bool UnsentChanges { get; private set; }
+    /// <summary>The inward item this note was created from, shown only to viewers who may open it.</summary>
+    public InwardItem? SourceInward { get; private set; }
     // "Mark to" without JavaScript: when the typed name matches several people, they are offered to choose from
     public List<ENoteLookupRow>? Candidates { get; private set; }
     public string? MarkQuery { get; private set; }
@@ -37,6 +39,8 @@ public class ViewModel(ENoteRepository notes, ENoteWorkflow workflow, ENoteOptio
         Attachments = notes.Attachments(id);
         (FileCount, FileBytes) = notes.Usage(id);
         if (n.PreviousHolderUserId is long p && n.State is ENoteStates.InMovement or ENoteStates.Returned) Sender = notes.Person(p)?.Name;
+        if (n.SourceInwardId is long sid && HttpContext.RequestServices.GetRequiredService<InwardRepository>().Item(sid, User) is { } src
+            && HttpContext.RequestServices.GetRequiredService<InwardAccess>().CanView(src, User)) SourceInward = src;
         return true;
     }
 

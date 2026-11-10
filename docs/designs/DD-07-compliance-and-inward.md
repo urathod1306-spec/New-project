@@ -730,6 +730,8 @@ All settings are optional: the owner's existing file needs no change. This follo
 | R-5 | Write contention at month-end ATR time. | Writes are single short transactions. ATR generation is read-only and limited to 2 at a time. |
 
 ## 16. R2 (1.7.0) — outline only; must not be built from this document
+
+> **Superseded:** R2 was designed in full in `docs/designs/DD-08-inward-and-invoices.md` and built as release 1.7.0. The outline below is kept for history only.
 R2 needs its own interview and a revised version of this document, written in a fresh Elephant session. The outline and the points already raised are kept here.
 
 **Outline.** Migration 8 adds:

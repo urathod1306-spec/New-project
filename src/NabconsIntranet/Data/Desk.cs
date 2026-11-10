@@ -9,13 +9,16 @@ namespace NabconsIntranet.Data;
 /// <summary>The numbers behind every badge (bell, My Desk, Approval Inbox, Administration, Business Leads, e-Notes).</summary>
 public sealed record DeskCounts(long Unread, long Inbox, long RequestsReturned, long Registrations, long VerticalChanges,
     long NewLeads, long MyLeadsDue, long ENotesPending, long ENotesMine, long BoardNew = 0,
-    long ComplianceMine = 0, long ComplianceCell = 0, bool ComplianceAssigned = false)
+    long ComplianceMine = 0, long ComplianceCell = 0, bool ComplianceAssigned = false,
+    long InwardMine = 0, long InwardUnassigned = 0, long InvoiceQueue = 0, bool InwardAssigned = false)
 {
     public long AdminPending => Registrations + VerticalChanges;
     /// <summary>Items waiting for the user's action (the "My Desk (n)" badge).</summary>
-    public long Total => Inbox + RequestsReturned + Registrations + VerticalChanges + NewLeads + MyLeadsDue + ENotesPending + ENotesMine + Compliance;
+    public long Total => Inbox + RequestsReturned + Registrations + VerticalChanges + NewLeads + MyLeadsDue + ENotesPending + ENotesMine + Compliance + Inward;
     /// <summary>Compliance items waiting for the user: own action points needing attention, plus the Cell queue for Compliance Admins.</summary>
     public long Compliance => ComplianceMine + ComplianceCell;
+    /// <summary>Inward items waiting for the user: held by them and needing attention, the registry queue (operators), the Accounts queue.</summary>
+    public long Inward => InwardMine + InwardUnassigned + InvoiceQueue;
     public string Token { get; init; } = "";
     public static string Badge(long n) => n > 99 ? "99+" : n.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
@@ -88,6 +91,12 @@ public sealed class DeskView
     public bool ShowComplianceCell { get; init; }
     public List<CompliancePoint> ComplianceMine { get; init; } = new();
     public List<ComplianceQueueRow> ComplianceCell { get; init; } = new();
+    public bool ShowInward { get; init; }
+    public bool ShowInwardRegistry { get; init; }
+    public bool ShowInvoiceQueue { get; init; }
+    public List<InwardItem> InwardMine { get; init; } = new();
+    public List<InwardItem> InwardUnassigned { get; init; } = new();
+    public List<InwardItem> InvoiceQueue { get; init; } = new();
 }
 
 /// <summary>
@@ -95,7 +104,7 @@ public sealed class DeskView
 /// the cache entry is dropped as soon as a relevant write bumps the user's or the queue's change marker.
 /// </summary>
 public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, INotificationService notifications, Fmt fmt, ENoteOptions enote, BoardOptions board,
-    ComplianceAccess compliance, ComplianceRepository complianceRepo)
+    ComplianceAccess compliance, ComplianceRepository complianceRepo, InwardAccess inward, InwardRepository inwardRepo)
 {
     private sealed record Entry(DeskCounts Counts, string Roles, long Seq, long ComputedTicks);
     private readonly ConcurrentDictionary<long, Entry> _cache = new();
@@ -108,9 +117,10 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
         if (leads.CanManage(u)) yield return ChangeTracker.LeadQueue;
         yield return ChangeTracker.BoardQueue;
         if (compliance.IsAdmin(u)) yield return ChangeTracker.ComplianceQueue;
+        if (inward.IsAccounts(u) || inward.IsOperator(u)) yield return ChangeTracker.InwardQueue;
     }
 
-    private string RoleKey(ClaimsPrincipal u) => $"{u.IsAdmin()}|{u.IsApprover()}|{leads.CanManage(u)}|{u.Vertical()}|{compliance.GrantOf(u.UserId())}";
+    private string RoleKey(ClaimsPrincipal u) => $"{u.IsAdmin()}|{u.IsApprover()}|{leads.CanManage(u)}|{u.Vertical()}|{compliance.GrantOf(u.UserId())}|{inward.RoleKey(u)}";
 
     public DeskCounts Counts(ClaimsPrincipal u)
     {
@@ -143,6 +153,10 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
         public long ComplianceMine { get; set; }
         public long ComplianceCell { get; set; }
         public long ComplianceAssigned { get; set; }
+        public long InwardMine { get; set; }
+        public long InwardUnassigned { get; set; }
+        public long InvoiceQueue { get; set; }
+        public long InwardAssigned { get; set; }
     }
 
     private DeskCounts Compute(ClaimsPrincipal u)
@@ -162,14 +176,25 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
                    AND CreatedAt > COALESCE((SELECT BoardSeenAt FROM Users WHERE Id = @uid), @boardFloor)) ELSE 0 END AS BoardNew,
               CASE WHEN @comp = 1 THEN {ComplianceRepository.DeskMineSql} ELSE 0 END AS ComplianceMine,
               CASE WHEN @comp = 1 THEN {ComplianceRepository.DeskCellSql} ELSE 0 END AS ComplianceCell,
-              CASE WHEN @comp = 1 THEN {ComplianceRepository.DeskAssignedSql} ELSE 0 END AS ComplianceAssigned
+              CASE WHEN @comp = 1 THEN {ComplianceRepository.DeskAssignedSql} ELSE 0 END AS ComplianceAssigned,
+              CASE WHEN @inw = 1 THEN {InwardRepository.DeskMineSql} ELSE 0 END AS InwardMine,
+              {InwardUnassignedSql(u)} AS InwardUnassigned,
+              CASE WHEN @inw = 1 THEN {InwardRepository.DeskQueueSql} ELSE 0 END AS InvoiceQueue,
+              CASE WHEN @inw = 1 THEN {InwardRepository.DeskAssignedSql} ELSE 0 END AS InwardAssigned
             """, Args(u)).First();
         var c = new DeskCounts(r.Unread, r.Inbox, r.Returned, r.Registrations, r.VerticalChanges, r.NewLeads, r.MyLeadsDue, r.ENotesPending, r.ENotesMine, r.BoardNew,
-            r.ComplianceMine, r.ComplianceCell, r.ComplianceAssigned > 0);
-        return c with { Token = Hash($"{tracker.Boot}|{u.UserId()}|{c.Unread}|{c.Total}|{c.Inbox}|{c.AdminPending}|{c.NewLeads}|{c.ENotesPending}|{c.ENotesMine}|{c.BoardNew}|{c.ComplianceMine}|{c.ComplianceCell}|{c.ComplianceAssigned}") };
+            r.ComplianceMine, r.ComplianceCell, r.ComplianceAssigned > 0, r.InwardMine, r.InwardUnassigned, r.InvoiceQueue, r.InwardAssigned > 0);
+        return c with { Token = Hash($"{tracker.Boot}|{u.UserId()}|{c.Unread}|{c.Total}|{c.Inbox}|{c.AdminPending}|{c.NewLeads}|{c.ENotesPending}|{c.ENotesMine}|{c.BoardNew}|{c.ComplianceMine}|{c.ComplianceCell}|{c.ComplianceAssigned}|{c.InwardMine}|{c.InwardUnassigned}|{c.InvoiceQueue}|{c.InwardAssigned}") };
     }
 
     private static readonly string OpenExcluded = LeadRepository.ClosedSql;
+
+    /// <summary>Unassigned items in the operator's offices; office ids are numbers from the grants table, never user text.</summary>
+    private string InwardUnassignedSql(ClaimsPrincipal u)
+    {
+        var offices = inward.OperatorOffices(u);
+        return offices.Count == 0 ? "0" : $"(SELECT COUNT(*) FROM InwardItems WHERE Status = 'Unassigned' AND OfficeId IN ({string.Join(",", offices)}))";
+    }
 
     private object Args(ClaimsPrincipal u) => new
     {
@@ -178,6 +203,7 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
         board = board.Enabled, boardFloor = DateTime.UtcNow.AddDays(-30).ToString("o"),
         comp = compliance.Options.Enabled, cAdmin = compliance.IsAdmin(u), cSoon = fmt.Today.AddDays(compliance.Options.DueSoonDays).ToString("yyyy-MM-dd"),
         today = fmt.Today.ToString("yyyy-MM-dd"),
+        inw = inward.Options.Enabled, iSoon = fmt.Today.AddDays(1).ToString("yyyy-MM-dd"), iAccounts = inward.IsAccounts(u),
     };
 
     private const string ENoteRowSelect = """
@@ -249,6 +275,12 @@ public sealed class DeskService(Db db, ChangeTracker tracker, LeadAccess leads, 
             ShowComplianceCell = compliance.IsAdmin(u),
             ComplianceMine = compliance.Options.Enabled && counts.ComplianceMine > 0 ? complianceRepo.DeskMine(uid) : new(),
             ComplianceCell = compliance.IsAdmin(u) && counts.ComplianceCell > 0 ? CellRows(u) : new(),
+            ShowInward = inward.Options.Enabled && (counts.InwardAssigned || counts.InwardMine > 0),
+            ShowInwardRegistry = inward.IsOperator(u),
+            ShowInvoiceQueue = inward.IsAccounts(u),
+            InwardMine = counts.InwardMine > 0 ? inwardRepo.DeskMine(u) : new(),
+            InwardUnassigned = counts.InwardUnassigned > 0 ? inwardRepo.DeskUnassigned(u) : new(),
+            InvoiceQueue = counts.InvoiceQueue > 0 ? inwardRepo.DeskQueue(u) : new(),
         };
     }
 

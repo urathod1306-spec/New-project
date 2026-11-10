@@ -38,6 +38,8 @@ public sealed class ReportDocument
     public DateTime GeneratedAt { get; init; } = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     /// <summary>File name without extension.</summary>
     public string FileBase { get; init; } = "report";
+    /// <summary>A4 portrait instead of the default A4 landscape (e.g. the inward acknowledgement slip).</summary>
+    public bool Portrait { get; init; }
 
     /// <summary>Removes characters that are not allowed in XML 1.0 or would break a PDF line (control characters except tab and newline).</summary>
     public static string CleanText(string? s)

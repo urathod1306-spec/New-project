@@ -17,11 +17,11 @@ This guide covers the office-PC pilot (no installation) and the later move to a 
 ## 2. Get the package
 
 1. On an approved internet-connected machine, open the GitHub repository and download
-   `release/NABCONS-Intranet-v1.6.0-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
+   `release/NABCONS-Intranet-v1.7.0-win-x64.zip`. Its SHA-256 checksum is in the `.sha256` file next to it.
 2. Transfer the ZIP into the NABARD LAN **only by the IT-approved method** (approved media or transfer gateway), with malware scanning and a change ticket.
 3. On the office PC, check the checksum in PowerShell:
    ```powershell
-   Get-FileHash .\NABCONS-Intranet-v1.6.0-win-x64.zip -Algorithm SHA256
+   Get-FileHash .\NABCONS-Intranet-v1.7.0-win-x64.zip -Algorithm SHA256
    ```
    It must match the `.sha256` file. Inside the ZIP, `SHA256SUMS.txt` lists the checksum of every file, which helps with allow-listing.
 4. Right-click the ZIP → **Properties** → tick **Unblock** if shown → OK. Then extract it to `C:\NABCONSIntranet\`.
@@ -114,11 +114,24 @@ Edit with Notepad, save, then restart the intranet (close and reopen the window,
 | `Compliance:SignatureBlock` | `Company Secretary` | Printed at the end of ATRs (`\n` for a new line) |
 | `Compliance:MaxImportRows` / `MaxImportKB` | `500` / `1024` | CSV import limits |
 | `Compliance:DefaultOfficerCodeFormat` | `Code` | Dealing person in the internal-audit sheet: `Code`, `Name` or `NameAndCode` |
+| `Inward:Enabled` (v1.7) | `true` | `false` hides the Inward register (menu, pages, desk sections, reminders); data is kept |
+| `Inward:NumberPrefix` | `NCS/IN` | Start of every inward number; the office code and FY follow |
+| `Inward:DefaultOfficeName` | `Mumbai (Head Office)` | Office used for self-inward when a user has no operator grant and no matching directory location |
+| `Inward:SelfInwardEnabled` | `true` | Lets every user inward items they received directly |
+| `Inward:ReplyDueDaysNormal` / `Urgent` / `Immediate` | `7` / `3` / `1` | Default reply-due period, calendar days |
+| `Inward:MaxBackdateDays` | `90` | How far back "received on" may go |
+| `Inward:UnassignedAlertWorkingDays` / `NotAcceptedAlertDays` / `OverdueRepeatDays` / `InvoiceHolderAlertDays` | `1` / `2` / `3` / `7` | Reminder thresholds |
+| `Inward:InvoiceTermsDays` / `MsmeMaxDays` / `MsmeDueSoonDays` | `30` / `45` / `5` | Default payment terms; MSME limit; "MSME due soon" window |
+| `Inward:ReminderHour` | `9` | Daily inward reminders run once a day at or after this hour |
+| `Inward:ConvertedNotesAllowFiles` | `false` | `true` allows files on e-Notes created from inward items |
+| `Inward:MaxImportRows` / `MaxImportKB` | `5000` / `1900` | CSV import limits (project codes, ERP payments) |
 | `DataFolder`, `DocumentsFolder`, `BackupFolder`, `LogFolder` | relative | May be absolute paths, e.g. `D:\\NABCONSData\\documents` |
+
+**Inward access (v1.7).** After the upgrade, set the inward code of each office on *Administration → Master lists → Offices / Locations* (e.g. `HO`, `DEL`; offices without a code number as `GEN`). Then, on *Inward → Access*, the Administrator grants Inward Operator (for each office's registry), Inward Viewer (e.g. COO) and Invoice Accounts. Until then every user can still self-inward, and items they inward appear on their *My items* page.
 
 **Compliance access (v1.6).** Compliance is not given through the intranet roles: Compliance Admins (the Compliance Cell) grant it on *Compliance → Access*. To create the **first** Compliance Admin (or recover when none is left), run `Grant-Compliance-Admin.bat` in the program folder on the server and type the person's sign-in name (in Windows mode they must have signed in once). The grant is audited, existing Compliance Admins are notified, and it takes effect within 30 seconds (no restart needed).
 
-The `Notifications`, `ENote`, (from 1.4) `MessageBoard` and (from 1.6) `Compliance` sections sit at the top level of `appsettings.json`, next to `"Intranet"`. If a section or setting is missing, the default above applies.
+The `Notifications`, `ENote`, (from 1.4) `MessageBoard` (from 1.6) `Compliance` and (from 1.7) `Inward` sections sit at the top level of `appsettings.json`, next to `"Intranet"`. If a section or setting is missing, the default above applies.
 
 ## 6. HTTPS (recommended before wider LAN use)
 

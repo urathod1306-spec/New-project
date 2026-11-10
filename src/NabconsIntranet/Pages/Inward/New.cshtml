@@ -1,0 +1,24 @@
+@page
+@model NabconsIntranet.Pages.Inward.NewModel
+@{ ViewData["Title"] = "Inward an item"; }
+<div class="page-head">
+    <div><h1>Inward an item</h1>
+        <p>@(Model.SelfInward ? "Record a letter, e-mail or invoice you received directly. It gets an inward number of your office." : "Register an item received at the office. Mark it to an officer now or later from the register.")</p></div>
+</div>
+<partial name="_InwardTabs" />
+@if (Model.Error != null) { <div class="alert danger" role="alert">@Model.Error</div> }
+@if (Model.Warnings.Count > 0)
+{
+    <div class="alert @(Model.Blocked ? "danger" : "warning")" role="alert">
+        <ul>@foreach (var w in Model.Warnings) { <li>@w</li> }</ul>
+        @if (!Model.Blocked) { <p>Check, then use <strong>Confirm and save</strong> below if it is a new item.</p> }
+    </div>
+}
+<form method="post" class="card">
+    <partial name="_InwardForm" model="Model.Form" />
+    <div class="actions mt">
+        @if (Model.Warnings.Count > 0 && !Model.Blocked) { <input type="hidden" name="confirmed" value="true" /><button class="btn primary" type="submit">Confirm and save</button> }
+        else { <button class="btn primary" type="submit">Save and get the inward number</button> }
+        <a class="btn" href="/Inward/Mine">Cancel</a>
+    </div>
+</form>

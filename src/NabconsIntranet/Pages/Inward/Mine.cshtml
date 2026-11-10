@@ -1,0 +1,15 @@
+@page
+@model NabconsIntranet.Pages.Inward.MineModel
+@{ ViewData["Title"] = "My inward items"; }
+<div class="page-head">
+    <div><h1>My inward items</h1><p>Letters, e-mails and invoices marked or copied to you, and those you inwarded.</p></div>
+    <div class="actions"><a class="btn primary" href="/Inward/New">+ Inward an item</a></div>
+</div>
+<partial name="_InwardTabs" />
+<div class="tabs sub" role="navigation" aria-label="My items">
+    @foreach (var t in NabconsIntranet.Pages.Inward.MineModel.Tabs) { <a class="@(Model.Tab == t.Key ? "active" : "")" href="/Inward/Mine?tab=@t.Key">@t.Value</a> }
+</div>
+<div class="card table-wrap">
+    <partial name="_ItemTable" model='new NabconsIntranet.Pages.Inward.ItemTableModel(Model.Items, "Nothing here.")' />
+    @if (Model.Items.Count >= 500) { <p class="small muted">Showing the latest 500.</p> }
+</div>

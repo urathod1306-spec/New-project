@@ -172,6 +172,55 @@
             }
         </section>
     }
+    @if (v.ShowInward)
+    {
+        <section class="card desk-card" aria-labelledby="d-imine">
+            <div class="card-head"><h2 id="d-imine">Inward — with me <span class="badge @(c.InwardMine > 0 ? "warning" : "neutral")">@c.InwardMine</span></h2><a href="/Inward/Mine">All ›</a></div>
+            @if (v.InwardMine.Count == 0) { <p class="empty">Nothing needs attention: no item marked to you is overdue, due soon or waiting to be accepted.</p> }
+            else
+            {
+                <ul class="list">
+                    @foreach (var i in v.InwardMine)
+                    {
+                        <li><a href="/Inward/Item/@i.Id"><strong>@i.Number</strong> · @i.ShownSubject</a> @if (i.IsOverdue(F.Today)) { <span class="badge danger">overdue</span> } @if (i.AcceptedAt == null) { <span class="badge warning">not accepted</span> }
+                            <div class="meta">@InwardType.Label(i.ItemType) · @i.ShownSender@(i.ReplyDueOn != null ? " · reply due " + F.DateDot(i.ReplyDueOn) : "") · with you @For(i.HolderSince)</div></li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+    @if (v.ShowInwardRegistry)
+    {
+        <section class="card desk-card" aria-labelledby="d-ireg">
+            <div class="card-head"><h2 id="d-ireg">Registry — unassigned <span class="badge @(c.InwardUnassigned > 0 ? "info" : "neutral")">@c.InwardUnassigned</span></h2><a href="/Inward/Register?Status=unassigned">Register ›</a></div>
+            @if (v.InwardUnassigned.Count == 0) { <p class="empty">Every item in your offices has been marked.</p> }
+            else
+            {
+                <ul class="list">
+                    @foreach (var i in v.InwardUnassigned)
+                    {
+                        <li><a href="/Inward/Item/@i.Id"><strong>@i.Number</strong> · @i.ShownSubject</a><div class="meta">@i.OfficeName · @InwardType.Label(i.ItemType) · inwarded @Ago(i.InwardedAt)</div></li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+    @if (v.ShowInvoiceQueue)
+    {
+        <section class="card desk-card" aria-labelledby="d-iacc">
+            <div class="card-head"><h2 id="d-iacc">Accounts — invoices to pay <span class="badge @(c.InvoiceQueue > 0 ? "info" : "neutral")">@c.InvoiceQueue</span></h2><a href="/Inward/Invoices?Status=accounts">Invoices ›</a></div>
+            @if (v.InvoiceQueue.Count == 0) { <p class="empty">No certified invoice is waiting for payment.</p> }
+            else
+            {
+                <ul class="list">
+                    @foreach (var i in v.InvoiceQueue)
+                    {
+                        <li><a href="/Inward/Item/@i.Id"><strong>@i.Number</strong> · @i.ShownVendor</a><div class="meta">Invoice @i.InvoiceNo · outstanding @Paise.Format(i.OutstandingPaise) · @(i.InvoiceStatus == null ? "" : InvStatus.Label(i.InvoiceStatus))</div></li>
+                    }
+                </ul>
+            }
+        </section>
+    }
     @if (v.ShowLeads)
     {
         <section class="card desk-card" aria-labelledby="d-leads">

@@ -1,0 +1,25 @@
+@page
+@model NabconsIntranet.Pages.Inward.TransferModel
+@{ ViewData["Title"] = "Transfer inward items"; }
+<div class="page-head"><div><h1>Transfer open items</h1><p>Moves every open item held by one user (for example on transfer or retirement) to another. Certified invoices go back to "with verifier" for the new holder to certify.</p></div></div>
+<partial name="_InwardTabs" />
+<form method="get" class="card filters">
+    <div class="field"><label for="tf">From *</label><select id="tf" name="from" required><option value="">Choose…</option>@foreach (var u in Model.AllUsers) { <option value="@u.Id" selected="@(Model.From == u.Id)">@u.DisplayName</option> }</select></div>
+    <div class="field"><label for="tt">To *</label><select id="tt" name="to" required><option value="">Choose…</option>@foreach (var u in Model.Active) { <option value="@u.Id" selected="@(Model.To == u.Id)">@u.DisplayName</option> }</select></div>
+    <div class="actions"><button class="btn" type="submit">Preview</button></div>
+</form>
+@if (Model.Preview is { } p)
+{
+    <div class="card">
+        <p><strong>@(p.Items - p.SkippedInvoices)</strong> item(s) will move, of which @(p.Invoices - p.SkippedInvoices) invoice(s).
+            @if (p.SkippedInvoices > 0) { <span>@p.SkippedInvoices invoice(s) are skipped because the new holder inwarded them (they cannot verify their own entries).</span> }</p>
+        @if (p.Items - p.SkippedInvoices > 0)
+        {
+            <form method="post">
+                <input type="hidden" name="from" value="@Model.From" /><input type="hidden" name="to" value="@Model.To" />
+                <div class="field"><label for="trem">Remarks</label><input id="trem" name="remarks" maxlength="1000" /></div>
+                <button class="btn primary" type="submit">Transfer</button>
+            </form>
+        }
+    </div>
+}

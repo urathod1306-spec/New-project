@@ -1,5 +1,25 @@
 # Changelog — NABCONS Intranet
 
+## 1.7.0 — 2026-11-09
+**Upgrade note:** database schema 7 → 8 (additive only: new inward and invoice tables, one new column `ENotes.SourceInwardId`, eight inward categories added to the master lists; `NabconsIntranet.exe --migrate` takes a backup first). The new `Inward` settings section is optional. No new program files, packages or DLLs.
+
+Built with the *Elephant–Goldfish Model*: design document `docs/designs/DD-08-inward-and-invoices.md` first, reviewed by fresh readers in two rounds (comprehension, critic, readiness; 94 points, all resolved — `docs/designs/reviews/DD-08_consolidated_review_report.md`), then built from the document, benchmarked at 250,000 items and given a hostile code review.
+
+### Added — Inward register with invoice inward and tracking (new **Inward** tab)
+- **Inward numbers per office:** `NCS/IN/<office code>/<FY>/00001`, restarting each financial year. Office codes are set on *Master lists → Offices / Locations*; offices without a code share `GEN`.
+- **Registry and self-inward.** The Inward Operator of an office registers letters, e-mails, government orders, legal notices, invoices and credit/debit notes (type, mode, received time up to 90 days back, sender and reference, subject, summary, category, priority, action required, reply due, where the papers are kept). Any user can also inward an item they received directly (setting `SelfInwardEnabled`).
+- **Movement.** Mark to an officer, accept, re-mark, return to the registry, copy to others, notes, close (replied with outward reference, filed, forwarded, duplicate), cancel (entered in error) and reopen. Every step is kept in an append-only movement trail. Reply-due defaults: 7 / 3 / 1 calendar days (Normal / Urgent / Immediate).
+- **Reminder letters** are inwarded with their own number, linked to the original (whose holder is notified and which reopens if it was closed).
+- **Convert to e-Note** (where e-Note is on): creates a draft e-Note linked to the inward item; files cannot be attached to it (setting `ConvertedNotesAllowFiles`).
+- **Acknowledgement slip** (A4 PDF) for the sender; **register** with filters, search, Excel export and a printed register (PDF, up to 31 days).
+- **Dashboard:** open, overdue, due soon, unassigned, held by inactive users, received today; by holder, vertical and office; ageing; received vs closed per month.
+- **Invoices:** vendor, GSTIN (check digit verified), MSME / Udyam and class, invoice no. and date, project code, PO, taxable + GST + other = total, terms. Duplicate invoices (same vendor/GSTIN, number and FY) are blocked unless marked "not a duplicate" with a reason, and the first payment of such an invoice needs a "checked" confirmation. Lifecycle: received → with verifier → certified (never by the person who inwarded it) → with Accounts → part-paid / paid, with hold, return to vendor, reject, close short and credit/debit notes. Payments (net, TDS, other deductions, voucher/UTR) are append-only; mistakes are reversed, never edited. Amounts are kept in paise.
+- **MSME:** due date = invoice date + the lower of the terms and 45 days; flags for "past 45 days" and "due within 5 days"; **MSME / section 43B(h) report** (Excel) as on any date, reproducible with an "entries up to" date.
+- **Accounts:** invoice dashboard (unpaid and ₹ outstanding, ageing, by project / vendor / holder, received vs paid), invoice list export, **ERP payment import** from CSV with a preview (matched, already recorded, unmatched, not payable, would overpay, enter manually, invalid), and **project codes** by CSV.
+- **Access:** Inward Operator (per office), Inward Viewer and Invoice Accounts grants, managed by the Administrator on *Inward → Access* (never for themselves), with history. Confidential items show only their number, dates and status to anyone without full access, and their text is not in the search index. Bulk transfer of a person's open items.
+- **My Desk and reminders:** "Inward — with me", "Registry — unassigned" and "Accounts — invoices to pay" sections with a live badge; a daily summary per holder, a digest per registry and one for Accounts.
+- **Register only:** no file upload or storage; CSV imports are read in memory.
+
 ## 1.6.0 — 2026-11-08
 **Upgrade note:** database schema 6 → 7 (additive only: new compliance tables; `NabconsIntranet.exe --migrate` takes a backup first). The new `Compliance` settings section is optional. No new program files or DLLs except `Grant-Compliance-Admin.bat`.
 

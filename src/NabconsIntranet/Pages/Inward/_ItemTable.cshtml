@@ -1,0 +1,36 @@
+@model NabconsIntranet.Pages.Inward.ItemTableModel
+@{ var today = F.Today; }
+@if (Model.Items.Count == 0) { <p class="empty">@Model.Empty</p> }
+else
+{
+    <table class="table compact">
+        <thead>
+            <tr>
+                <th>Inward no.</th><th>Received</th><th>Type</th>
+                @if (Model.Invoices) { <th>Vendor</th><th>Invoice</th><th class="right">Outstanding</th> } else { <th>From</th><th>Subject</th> }
+                <th>With</th><th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var i in Model.Items)
+            {
+                <tr class="@(i.IsOverdue(today) ? "row-overdue" : "")">
+                    <td class="nowrap"><a href="/Inward/Item/@i.Id">@i.Number</a>@if (i.IsConfidential) { <span class="badge warning" title="Confidential">C</span> }</td>
+                    <td class="nowrap">@F.DateTime(i.ReceivedAt)</td>
+                    <td>@InwardType.Label(i.ItemType)</td>
+                    @if (Model.Invoices)
+                    {
+                        <td>@i.ShownVendor</td><td class="nowrap">@(i.Masked ? "" : i.InvoiceNo)</td><td class="right nowrap">@(i.Masked ? "" : Paise.Format(i.OutstandingPaise))</td>
+                    }
+                    else
+                    {
+                        <td>@i.ShownSender</td><td>@i.ShownSubject</td>
+                    }
+                    <td>@(i.Status == ItemStatus.WithAccounts ? "Accounts" : i.Status == ItemStatus.Unassigned ? "Registry" : i.HolderName)@if (!i.HolderActive) { <span class="badge danger">inactive</span> }</td>
+                    <td><span class="badge @NabconsIntranet.Pages.Inward.InwardPage.StatusCss(i, today)">@NabconsIntranet.Pages.Inward.InwardPage.StatusText(i)</span>
+                        @if (i.IsOpen && i.ReplyDueOn != null) { <div class="small muted">due @F.DateDot(i.ReplyDueOn)</div> }</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

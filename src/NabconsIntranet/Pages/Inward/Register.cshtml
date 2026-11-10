@@ -1,0 +1,27 @@
+@page
+@model NabconsIntranet.Pages.Inward.RegisterModel
+@{
+    ViewData["Title"] = "Inward register";
+    var f = Model.Filter;
+}
+<div class="page-head">
+    <div><h1>Register</h1><p>@Model.Result.Total.ToString("N0") item(s) match. Overdue rows are red. Confidential items show metadata only unless you have full access.</p></div>
+    <div class="actions"><a class="btn" href="@Model.Url(export: "xlsx")">Export to Excel</a><a class="btn" href="@Model.Url(export: "pdf")">Print register (PDF)</a></div>
+</div>
+<partial name="_InwardTabs" />
+<form class="card filters" method="get">
+    <div class="field wide"><label for="q">Search</label><input type="search" id="q" name="Q" value="@f.Q" maxlength="100" placeholder="Number, sender, reference, subject, vendor or invoice no." /></div>
+    <div class="field"><label for="status">Status</label><select id="status" name="Status">@foreach (var s in InwardFilter.StatusLabels) { <option value="@s.Key" selected="@(f.Status == s.Key)">@s.Value</option> }</select></div>
+    <div class="field"><label for="office">Office</label><select id="office" name="OfficeId"><option value="">All</option>@foreach (var o in Model.Offices) { <option value="@o.Id" selected="@(f.OfficeId == o.Id)">@o.Name</option> }</select></div>
+    <div class="field"><label for="from">Received from</label><input type="date" id="from" name="From" value="@f.From" /></div>
+    <div class="field"><label for="to">to</label><input type="date" id="to" name="To" value="@f.To" /></div>
+    <div class="field"><label for="type">Type</label><select id="type" name="Type"><option value="">All</option>@foreach (var t in InwardType.Labels) { <option value="@t.Key" selected="@(f.Type == t.Key)">@t.Value</option> }</select></div>
+    <div class="field"><label for="mode">Mode</label><select id="mode" name="Mode"><option value="">All</option>@foreach (var t in InwardMode.Labels) { <option value="@t.Key" selected="@(f.Mode == t.Key)">@t.Value</option> }</select></div>
+    <div class="field"><label for="holder">Holder</label><select id="holder" name="HolderId"><option value="">Anyone</option>@foreach (var u in Model.Holders) { <option value="@u.Id" selected="@(f.HolderId == u.Id)">@u.DisplayName</option> }</select></div>
+    <div class="field"><label for="priority">Priority</label><select id="priority" name="Priority"><option value="">All</option>@foreach (var p in InwardPriority.All) { <option selected="@(f.Priority == p)">@p</option> }</select></div>
+    <div class="actions"><button class="btn primary" type="submit">Filter</button><a class="btn" href="/Inward/Register">Clear</a></div>
+</form>
+<div class="card table-wrap">
+    <partial name="_ItemTable" model='new NabconsIntranet.Pages.Inward.ItemTableModel(Model.Result.Items, "No items match.")' />
+</div>
+<partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, p => Model.Url(p))" />

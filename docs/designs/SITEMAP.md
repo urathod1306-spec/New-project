@@ -43,5 +43,9 @@ Design documents in the Elephant–Goldfish Model (EGM) style: each explains *wh
 | EGM / Elephant / Goldfish | Elephant–Goldfish Model: the author (Elephant, full context) writes the design; fresh reviewers with no context (Goldfish) check it |
 | YAGNI | "You aren't gonna need it": do not build for speculative future needs |
 
+## Release 1.7.0 — Inward register and invoices
+Design: [DD-08-inward-and-invoices.md](DD-08-inward-and-invoices.md). Reviews: `reviews/DD-08_consolidated_review_report.md`.
+- `/Inward` dashboard · `/Inward/Register` · `/Inward/New` · `/Inward/Mine` · `/Inward/Item/{id}` (with `?handler=Ack` slip) · `/Inward/Edit/{id}` · `/Inward/Invoices` · `/Inward/Payments` (Accounts) · `/Inward/ProjectCodes` (Accounts) · `/Inward/Transfer` (Viewer, Administrator) · `/Inward/Access` (Administrator).
+
 ## Release 1.6.0 — Compliance Management
 Design: [DD-07-compliance-and-inward.md](DD-07-compliance-and-inward.md) (R1 built in 1.6.0; R2 Inward Register is an outline for a later release). Reviews: `reviews/2026-11-08_DD-07_G1_comprehension_report.md`, `reviews/DD-07_consolidated_review_report.md`.

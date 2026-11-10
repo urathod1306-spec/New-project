@@ -695,6 +695,209 @@ public static class Schema
             SELECT 'ComplianceCategory', m.Name, m.Ord, 1 FROM m
             WHERE NOT EXISTS (SELECT 1 FROM MasterItems x WHERE x.Type = 'ComplianceCategory' AND x.Name = m.Name COLLATE NOCASE);
             """),
+        // v1.7.0: inward register with invoice inward and tracking (DD-08). Additive only; registers only — no file is stored.
+        (8, "Inward register and invoices (v1.7.0)", """
+            ALTER TABLE ENotes ADD COLUMN SourceInwardId INTEGER DEFAULT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS UX_ENotes_SourceInward ON ENotes(SourceInwardId) WHERE SourceInwardId IS NOT NULL;
+
+            CREATE TABLE IF NOT EXISTS InwardSerials (OfficeCode TEXT NOT NULL, FinancialYear TEXT NOT NULL, LastSerial INTEGER NOT NULL, PRIMARY KEY (OfficeCode, FinancialYear));
+            CREATE TABLE IF NOT EXISTS InwardState (Key TEXT PRIMARY KEY, Value TEXT);
+
+            CREATE TABLE IF NOT EXISTS InwardMembers (
+                Id INTEGER PRIMARY KEY,
+                UserId INTEGER NOT NULL REFERENCES Users(Id),
+                Role TEXT NOT NULL,
+                OfficeId INTEGER NOT NULL DEFAULT 0,
+                GrantedByName TEXT NOT NULL,
+                GrantedAt TEXT NOT NULL,
+                CHECK ((Role = 'InwardOperator') = (OfficeId > 0)),
+                UNIQUE (UserId, Role, OfficeId)
+            );
+            CREATE TABLE IF NOT EXISTS InwardMemberHistory (
+                Id INTEGER PRIMARY KEY, UserId INTEGER NOT NULL, Action TEXT NOT NULL, Role TEXT, OfficeId INTEGER, ActorName TEXT NOT NULL, At TEXT NOT NULL
+            );
+            CREATE TRIGGER IF NOT EXISTS InwardMemberHistory_no_update BEFORE UPDATE ON InwardMemberHistory BEGIN SELECT RAISE(ABORT, 'Inward access history is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS InwardMemberHistory_no_delete BEFORE DELETE ON InwardMemberHistory BEGIN SELECT RAISE(ABORT, 'Inward access history is append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS InwardItems (
+                Id INTEGER PRIMARY KEY,
+                Number TEXT NOT NULL UNIQUE,
+                OfficeId INTEGER NOT NULL,
+                OfficeName TEXT NOT NULL,
+                OfficeCode TEXT NOT NULL,
+                FinancialYear TEXT NOT NULL,
+                Serial INTEGER NOT NULL,
+                ItemType TEXT NOT NULL,
+                Mode TEXT NOT NULL,
+                ReceivedAt TEXT NOT NULL,
+                SenderName TEXT NOT NULL CHECK (length(SenderName) <= 150),
+                SenderOrg TEXT CHECK (length(SenderOrg) <= 200),
+                SenderRef TEXT CHECK (length(SenderRef) <= 100),
+                SenderRefDate TEXT,
+                Subject TEXT NOT NULL CHECK (length(Subject) <= 300),
+                Summary TEXT CHECK (length(Summary) <= 2000),
+                Category TEXT CHECK (length(Category) <= 150),
+                Priority TEXT NOT NULL DEFAULT 'Normal',
+                IsConfidential INTEGER NOT NULL DEFAULT 0,
+                ActionRequired TEXT NOT NULL,
+                ReplyDueOn TEXT,
+                KeptAt TEXT NOT NULL CHECK (length(KeptAt) <= 300),
+                Pages INTEGER CHECK (Pages IS NULL OR Pages BETWEEN 0 AND 10000),
+                Irn TEXT CHECK (length(Irn) <= 64),
+                Status TEXT NOT NULL,
+                HolderUserId INTEGER,
+                HolderSince TEXT,
+                AcceptedAt TEXT,
+                LastHolderUserId INTEGER,
+                InwardedByUserId INTEGER NOT NULL,
+                InwardedByName TEXT NOT NULL,
+                InwardedAt TEXT NOT NULL,
+                SelfInward INTEGER NOT NULL DEFAULT 0,
+                ClosureType TEXT,
+                ClosureRemarks TEXT CHECK (length(ClosureRemarks) <= 1000),
+                ReplyDate TEXT,
+                OutwardRef TEXT CHECK (length(OutwardRef) <= 100),
+                FiledFileNo TEXT CHECK (length(FiledFileNo) <= 100),
+                ForwardedTo TEXT CHECK (length(ForwardedTo) <= 200),
+                DuplicateOfId INTEGER,
+                ENoteId INTEGER,
+                ClosedAt TEXT,
+                ClosedByName TEXT,
+                LinkedToId INTEGER,
+                ReminderCount INTEGER NOT NULL DEFAULT 0,
+                LastDueReminderOn TEXT,
+                LastOverdueReminderOn TEXT,
+                RowVersion INTEGER NOT NULL DEFAULT 1,
+                UpdatedAt TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_Inward_OfficeReceived ON InwardItems(OfficeId, ReceivedAt DESC);
+            CREATE INDEX IF NOT EXISTS IX_Inward_Holder ON InwardItems(HolderUserId, Status);
+            CREATE INDEX IF NOT EXISTS IX_Inward_StatusDue ON InwardItems(Status, ReplyDueOn);
+            CREATE INDEX IF NOT EXISTS IX_Inward_StatusOffice ON InwardItems(Status, OfficeId, InwardedAt);
+            CREATE INDEX IF NOT EXISTS IX_Inward_InwardedAt ON InwardItems(InwardedAt);
+            CREATE INDEX IF NOT EXISTS IX_Inward_ReceivedAt ON InwardItems(ReceivedAt);
+            CREATE INDEX IF NOT EXISTS IX_Inward_InwardedBy ON InwardItems(InwardedByUserId, Id);
+            CREATE INDEX IF NOT EXISTS IX_Inward_Closed ON InwardItems(ClosedAt) WHERE ClosedAt IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS IX_Inward_Linked ON InwardItems(LinkedToId) WHERE LinkedToId IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS IX_Inward_Type ON InwardItems(ItemType, Status);
+            CREATE INDEX IF NOT EXISTS IX_Inward_SenderRef ON InwardItems(SenderRef COLLATE NOCASE, SenderRefDate) WHERE SenderRef IS NOT NULL;
+            CREATE TRIGGER IF NOT EXISTS InwardItems_fixed BEFORE UPDATE ON InwardItems
+            WHEN new.Number IS NOT old.Number OR new.OfficeId IS NOT old.OfficeId OR new.OfficeCode IS NOT old.OfficeCode OR new.FinancialYear IS NOT old.FinancialYear OR new.Serial IS NOT old.Serial OR new.InwardedAt IS NOT old.InwardedAt OR new.InwardedByUserId IS NOT old.InwardedByUserId
+            BEGIN SELECT RAISE(ABORT, 'The number, office, FY and inwarding details of an inward item never change'); END;
+            CREATE TRIGGER IF NOT EXISTS InwardItems_no_delete BEFORE DELETE ON InwardItems
+            BEGIN SELECT RAISE(ABORT, 'Inward items are permanent records'); END;
+
+            CREATE TABLE IF NOT EXISTS InwardParticipants (ItemId INTEGER NOT NULL, UserId INTEGER NOT NULL, PRIMARY KEY (ItemId, UserId)) WITHOUT ROWID;
+            CREATE INDEX IF NOT EXISTS IX_InwardParticipants_User ON InwardParticipants(UserId, ItemId);
+
+            CREATE TABLE IF NOT EXISTS InwardMovements (
+                Id INTEGER PRIMARY KEY, ItemId INTEGER NOT NULL, At TEXT NOT NULL, ActorUserId INTEGER, ActorName TEXT NOT NULL,
+                Action TEXT NOT NULL, ToUserId INTEGER, ToName TEXT, Remarks TEXT CHECK (length(Remarks) <= 1000)
+            );
+            CREATE INDEX IF NOT EXISTS IX_InwardMovements_Item ON InwardMovements(ItemId, Id);
+            CREATE TABLE IF NOT EXISTS InwardCopies (ItemId INTEGER NOT NULL, UserId INTEGER NOT NULL, AddedAt TEXT NOT NULL, AddedByName TEXT NOT NULL, PRIMARY KEY (ItemId, UserId));
+            CREATE INDEX IF NOT EXISTS IX_InwardCopies_User ON InwardCopies(UserId, ItemId);
+            CREATE TABLE IF NOT EXISTS InwardNotes (
+                Id INTEGER PRIMARY KEY, ItemId INTEGER NOT NULL, At TEXT NOT NULL, UserId INTEGER NOT NULL, Name TEXT NOT NULL,
+                Text TEXT NOT NULL CHECK (length(Text) <= 2000)
+            );
+            CREATE INDEX IF NOT EXISTS IX_InwardNotes_Item ON InwardNotes(ItemId, Id);
+            CREATE TRIGGER IF NOT EXISTS InwardMovements_no_update BEFORE UPDATE ON InwardMovements BEGIN SELECT RAISE(ABORT, 'The inward movement trail is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS InwardMovements_no_delete BEFORE DELETE ON InwardMovements BEGIN SELECT RAISE(ABORT, 'The inward movement trail is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS InwardCopies_no_update BEFORE UPDATE ON InwardCopies BEGIN SELECT RAISE(ABORT, 'Inward copies are append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS InwardCopies_no_delete BEFORE DELETE ON InwardCopies BEGIN SELECT RAISE(ABORT, 'Inward copies are append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS InwardNotes_no_update BEFORE UPDATE ON InwardNotes BEGIN SELECT RAISE(ABORT, 'Inward notes are append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS InwardNotes_no_delete BEFORE DELETE ON InwardNotes BEGIN SELECT RAISE(ABORT, 'Inward notes are append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS ProjectCodes (
+                Code TEXT PRIMARY KEY COLLATE NOCASE, Name TEXT NOT NULL CHECK (length(Name) <= 200), OwnerUserId INTEGER,
+                IsActive INTEGER NOT NULL DEFAULT 1, UpdatedAt TEXT NOT NULL, UpdatedBy TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS InvoiceDetails (
+                ItemId INTEGER PRIMARY KEY REFERENCES InwardItems(Id),
+                VendorName TEXT NOT NULL CHECK (length(VendorName) <= 200),
+                VendorGstin TEXT,
+                IsMsme INTEGER NOT NULL DEFAULT 0,
+                IsTrader INTEGER NOT NULL DEFAULT 0,
+                UdyamNo TEXT CHECK (length(UdyamNo) <= 30),
+                MsmeClass TEXT,
+                InvoiceNo TEXT NOT NULL CHECK (length(InvoiceNo) <= 50),
+                InvoiceDate TEXT NOT NULL,
+                InvoiceFy TEXT NOT NULL,
+                ProjectCode TEXT,
+                PoRef TEXT CHECK (length(PoRef) <= 100),
+                TaxablePaise INTEGER CHECK (TaxablePaise IS NULL OR TaxablePaise >= 0),
+                GstPaise INTEGER CHECK (GstPaise IS NULL OR GstPaise >= 0),
+                OtherPaise INTEGER CHECK (OtherPaise IS NULL OR OtherPaise >= 0),
+                TotalPaise INTEGER NOT NULL CHECK (TotalPaise > 0),
+                AdjustPaise INTEGER NOT NULL DEFAULT 0,
+                SettledPaise INTEGER NOT NULL DEFAULT 0,
+                TermsDays INTEGER NOT NULL DEFAULT 30 CHECK (TermsDays BETWEEN 0 AND 365),
+                PaymentDueOn TEXT NOT NULL,
+                InvoiceStatus TEXT NOT NULL,
+                HoldFromStatus TEXT,
+                StatusReason TEXT CHECK (length(StatusReason) <= 1000),
+                CertifiedByUserId INTEGER,
+                CertifiedByName TEXT,
+                CertifiedOn TEXT,
+                SentToAccountsAt TEXT,
+                SettledAt TEXT,
+                DupKey TEXT NOT NULL,
+                OverrideReason TEXT CHECK (length(OverrideReason) <= 500),
+                DuplicateCheckedBy TEXT
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS UX_Invoice_Dup ON InvoiceDetails(DupKey) WHERE OverrideReason IS NULL AND InvoiceStatus <> 'Cancelled';
+            CREATE INDEX IF NOT EXISTS IX_Invoice_Key ON InvoiceDetails(DupKey);
+            CREATE INDEX IF NOT EXISTS IX_Invoice_Status ON InvoiceDetails(InvoiceStatus, InvoiceDate);
+            CREATE INDEX IF NOT EXISTS IX_Invoice_Project ON InvoiceDetails(ProjectCode, InvoiceStatus);
+            CREATE INDEX IF NOT EXISTS IX_Invoice_Gstin ON InvoiceDetails(VendorGstin, InvoiceDate);
+            CREATE INDEX IF NOT EXISTS IX_Invoice_Msme ON InvoiceDetails(IsMsme, InvoiceStatus, InvoiceDate);
+
+            CREATE TABLE IF NOT EXISTS InvoicePayments (
+                Id INTEGER PRIMARY KEY,
+                ItemId INTEGER NOT NULL,
+                PaidOn TEXT NOT NULL,
+                NetPaise INTEGER NOT NULL,
+                TdsPaise INTEGER NOT NULL DEFAULT 0,
+                OtherDeductionsPaise INTEGER NOT NULL DEFAULT 0,
+                VoucherRef TEXT NOT NULL CHECK (length(VoucherRef) <= 60),
+                ReversesId INTEGER UNIQUE,
+                Remarks TEXT CHECK (length(Remarks) <= 500),
+                Source TEXT NOT NULL,
+                EnteredByUserId INTEGER NOT NULL,
+                EnteredByName TEXT NOT NULL,
+                EnteredAt TEXT NOT NULL,
+                CHECK ((Source = 'Reversal') = (ReversesId IS NOT NULL)),
+                CHECK ((ReversesId IS NULL AND NetPaise >= 0 AND TdsPaise >= 0 AND OtherDeductionsPaise >= 0 AND NetPaise + TdsPaise + OtherDeductionsPaise > 0)
+                    OR (ReversesId IS NOT NULL AND NetPaise <= 0 AND TdsPaise <= 0 AND OtherDeductionsPaise <= 0))
+            );
+            CREATE INDEX IF NOT EXISTS IX_InvoicePayments_Item ON InvoicePayments(ItemId, Id);
+            CREATE INDEX IF NOT EXISTS IX_InvoicePayments_Voucher ON InvoicePayments(ItemId, VoucherRef);
+            CREATE TABLE IF NOT EXISTS InvoiceAdjustments (
+                Id INTEGER PRIMARY KEY, ItemId INTEGER NOT NULL, Kind TEXT NOT NULL,
+                DocNo TEXT NOT NULL CHECK (length(DocNo) <= 50), DocDate TEXT NOT NULL, AmountPaise INTEGER NOT NULL CHECK (AmountPaise > 0),
+                Remarks TEXT CHECK (length(Remarks) <= 500), EnteredByUserId INTEGER NOT NULL, EnteredByName TEXT NOT NULL, EnteredAt TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_InvoiceAdjustments_Item ON InvoiceAdjustments(ItemId, Id);
+            CREATE TRIGGER IF NOT EXISTS InvoicePayments_no_update BEFORE UPDATE ON InvoicePayments BEGIN SELECT RAISE(ABORT, 'Invoice payments are append-only (reverse a payment instead)'); END;
+            CREATE TRIGGER IF NOT EXISTS InvoicePayments_no_delete BEFORE DELETE ON InvoicePayments BEGIN SELECT RAISE(ABORT, 'Invoice payments are append-only (reverse a payment instead)'); END;
+            CREATE TRIGGER IF NOT EXISTS InvoiceAdjustments_no_update BEFORE UPDATE ON InvoiceAdjustments BEGIN SELECT RAISE(ABORT, 'Invoice adjustments are append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS InvoiceAdjustments_no_delete BEFORE DELETE ON InvoiceAdjustments BEGIN SELECT RAISE(ABORT, 'Invoice adjustments are append-only'); END;
+
+            CREATE TABLE IF NOT EXISTS InwardImports (Id INTEGER PRIMARY KEY, Kind TEXT NOT NULL, Sha256 TEXT NOT NULL, Rows INTEGER NOT NULL, ByName TEXT NOT NULL, At TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS IX_InwardImports_Sha ON InwardImports(Kind, Sha256);
+            CREATE TRIGGER IF NOT EXISTS InwardImports_no_update BEFORE UPDATE ON InwardImports BEGIN SELECT RAISE(ABORT, 'The import register is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS InwardImports_no_delete BEFORE DELETE ON InwardImports BEGIN SELECT RAISE(ABORT, 'The import register is append-only'); END;
+
+            CREATE VIRTUAL TABLE IF NOT EXISTS InwardSearch USING fts5(
+                Number, Sender, SenderRef, Subject, Summary, Vendor, InvoiceNo, content='', contentless_delete=1, tokenize='unicode61');
+
+            WITH m(Name, Ord) AS (VALUES ('General correspondence',1),('Client / project',2),('Government / regulator',3),('Legal',4),('Finance & accounts',5),('Human resources',6),('Tenders & procurement',7),('Other',8))
+            INSERT INTO MasterItems (Type, Name, SortOrder, IsActive)
+            SELECT 'InwardCategory', m.Name, m.Ord, 1 FROM m
+            WHERE NOT EXISTS (SELECT 1 FROM MasterItems x WHERE x.Type = 'InwardCategory' AND x.Name = m.Name COLLATE NOCASE);
+            """),
     };
 
     public const string Sql = """

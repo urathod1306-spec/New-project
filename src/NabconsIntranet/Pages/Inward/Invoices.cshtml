@@ -1,0 +1,82 @@
+@page
+@model NabconsIntranet.Pages.Inward.InvoicesModel
+@{
+    ViewData["Title"] = "Invoices";
+    var d = Model.D;
+    var f = Model.Filter;
+    var buckets = new[] { "0–30", "31–45", "46–60", "61–90", "> 90" };
+    var maxAge = Math.Max(1, d.Ageing.Select(x => x.N2).DefaultIfEmpty(0).Max());
+    var months = Enumerable.Range(0, 12).Select(i => F.Today.AddMonths(-11 + i).ToString("yyyy-MM")).ToList();
+}
+<div class="page-head">
+    <div><h1>Invoices</h1><p>Invoices inwarded, their certification and payment. MSME invoices must be paid within @Model.Options.MsmeMaxDays days of the invoice date.</p></div>
+    <div class="actions"><a class="btn" href="@Model.Url(export: true)">Export list to Excel</a></div>
+</div>
+<partial name="_InwardTabs" />
+<div class="grid stats">
+    <a class="stat" href="/Inward/Invoices?Status=open"><div class="n">@d.Unpaid</div><div class="l">Unpaid · @Paise.Format(d.OutstandingPaise)</div></a>
+    <a class="stat" href="/Inward/Invoices?Status=msme45"><div class="n">@d.Msme45</div><div class="l">MSME past @Model.Options.MsmeMaxDays days</div></a>
+    <a class="stat" href="/Inward/Invoices?Status=msmesoon"><div class="n">@d.MsmeSoon</div><div class="l">MSME due within @Model.Options.MsmeDueSoonDays days</div></a>
+    <a class="stat" href="/Inward/Invoices?Status=hold"><div class="n">@d.OnHold</div><div class="l">On hold</div></a>
+    <a class="stat" href="/Inward/Invoices?Status=override"><div class="n">@d.Overrides</div><div class="l">Duplicate overrides to check</div></a>
+    <div class="stat"><div class="n">@d.ClosedShortThisMonth</div><div class="l">Closed short this month</div></div>
+</div>
+<div class="grid halves mt">
+    <div class="card">
+        <h2>Unpaid by age of invoice (days)</h2>
+        <table class="table compact">
+            <thead><tr><th>Days</th><th></th><th class="right">n</th><th class="right">Outstanding</th></tr></thead>
+            @foreach (var b in buckets)
+            {
+                var row = d.Ageing.FirstOrDefault(x => x.Key == b);
+                <tr><td class="nowrap">@b</td><td class="bar-cell"><progress max="@maxAge" value="@(row?.N2 ?? 0)" aria-label="@b days"></progress></td><td class="right">@(row?.N ?? 0)</td><td class="right nowrap">@Paise.Format(row?.N2 ?? 0)</td></tr>
+            }
+        </table>
+        <h3 class="mt">MSME / 43B(h) report</h3>
+        <form method="get" class="inward-row">
+            <input type="hidden" name="handler" value="Msme" />
+            <div class="field"><label for="ason">As on</label><input type="date" id="ason" name="asOn" value="@Model.DefaultAsOn" required /></div>
+            <div class="field"><label for="ent">Entries up to (optional)</label><input type="date" id="ent" name="enteredBy" /></div>
+            <button class="btn" type="submit">Download (Excel)</button>
+        </form>
+    </div>
+    <div class="card">
+        <h2>Received and paid per month</h2>
+        <table class="table compact">
+            <thead><tr><th>Month</th><th class="right">Received</th><th class="right">₹</th><th class="right">Paid</th><th class="right">₹</th></tr></thead>
+            @foreach (var mo in months)
+            {
+                var r = d.Received.FirstOrDefault(x => x.Key == mo);
+                var p = d.Paid.FirstOrDefault(x => x.Key == mo);
+                <tr><td class="nowrap">@DateTime.ParseExact(mo, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture).ToString("MMM yyyy")</td>
+                    <td class="right">@(r?.N ?? 0)</td><td class="right nowrap">@Paise.Format(r?.N2 ?? 0)</td><td class="right">@(p?.N ?? 0)</td><td class="right nowrap">@Paise.Format(p?.N2 ?? 0)</td></tr>
+            }
+        </table>
+    </div>
+</div>
+<div class="grid halves mt">
+    <div class="card table-wrap">
+        <h2>Unpaid by project</h2>
+        <table class="table compact"><thead><tr><th>Project</th><th class="right">n</th><th class="right">Outstanding</th></tr></thead>
+            @foreach (var x in d.ByProject) { <tr><td>@x.Key</td><td class="right">@x.N</td><td class="right nowrap">@Paise.Format(x.N2)</td></tr> }</table>
+        <h2 class="mt">Unpaid by vendor (top 20)</h2>
+        <table class="table compact"><thead><tr><th>Vendor</th><th class="right">n</th><th class="right">Outstanding</th></tr></thead>
+            @foreach (var x in d.ByVendor) { <tr><td>@x.Key</td><td class="right">@x.N</td><td class="right nowrap">@Paise.Format(x.N2)</td></tr> }</table>
+    </div>
+    <div class="card table-wrap">
+        <h2>Unpaid by holder</h2>
+        <table class="table compact"><thead><tr><th>With</th><th class="right">n</th><th class="right">Outstanding</th></tr></thead>
+            @foreach (var x in d.ByHolder) { <tr><td>@x.Key</td><td class="right">@x.N</td><td class="right nowrap">@Paise.Format(x.N2)</td></tr> }</table>
+    </div>
+</div>
+<form class="card filters mt" method="get">
+    <div class="field wide"><label for="q">Search</label><input type="search" id="q" name="Q" value="@f.Q" maxlength="100" placeholder="Number, vendor or invoice no." /></div>
+    <div class="field"><label for="st">Show</label><select id="st" name="Status">@foreach (var s in InvoiceFilter.StatusLabels) { <option value="@s.Key" selected="@(f.Status == s.Key)">@s.Value</option> }</select></div>
+    <div class="field"><label for="pj">Project</label><select id="pj" name="Project"><option value="">All</option>@foreach (var p in Model.Projects) { <option value="@p.Code" selected="@(string.Equals(f.Project, p.Code, StringComparison.OrdinalIgnoreCase))">@p.Code</option> }</select></div>
+    <div class="actions"><button class="btn primary" type="submit">Filter</button><a class="btn" href="/Inward/Invoices">Clear</a></div>
+</form>
+<div class="card table-wrap">
+    <p class="small muted">@Model.Result.Total.ToString("N0") invoice(s), oldest invoice date first.</p>
+    <partial name="_ItemTable" model='new NabconsIntranet.Pages.Inward.ItemTableModel(Model.Result.Items, "No invoices match.", true)' />
+</div>
+<partial name="_Pager" model="new PagerModel(Model.Result.Page, Model.Result.Pages, p => Model.Url(p))" />

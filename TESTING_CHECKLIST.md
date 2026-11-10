@@ -1,5 +1,15 @@
 # NABCONS Intranet — Manual testing checklist (office machine)
 
+## 1.7.0: Inward register and invoices
+- [ ] Upgrade → *System information* shows 1.7.0 / schema 8; old data intact; no demo inward items.
+- [ ] Office codes set; Access grants for registry, Viewer and Accounts.
+- [ ] Registry inwards a letter → number `NCS/IN/<code>/<FY>/00001`, slip prints; officer accepts and closes as replied.
+- [ ] Confidential item: other staff get "page not found"; the Auditor sees "Confidential" only.
+- [ ] Invoice: duplicate refused; certify → Accounts → payment → Paid; reversal works.
+- [ ] MSME / 43B(h) report downloads; ERP payment preview shows the categories.
+- [ ] My Desk shows the inward sections; the Inward tab badge updates.
+- [ ] Phone: an inward item page is readable without horizontal scrolling.
+
 ## 1.6.0: Compliance Management
 - [ ] Upgrade → *System information* shows 1.6.0 / schema 7; old data intact.
 - [ ] `Grant-Compliance-Admin.bat` for the Company Secretary → they see the **Compliance** tab; the administrator does not.

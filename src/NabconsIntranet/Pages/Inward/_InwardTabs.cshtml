@@ -1,0 +1,26 @@
+@inject InwardAccess IAccess
+@inject InwardOptions IOptions
+@{
+    var path = Context.Request.Path.Value ?? "";
+    string A(string p) => string.Equals(path.TrimEnd('/'), p, StringComparison.OrdinalIgnoreCase) || (p != "/Inward" && path.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase)) ? "active" : "";
+    var reg = IAccess.SeesRegister(User);
+    var viewer = IAccess.IsViewer(User);
+    var accounts = IAccess.IsAccounts(User);
+}
+<div class="tabs" role="navigation" aria-label="Inward">
+    @if (reg)
+    {
+        <a class="@A("/Inward")" href="/Inward">Dashboard</a>
+        <a class="@A("/Inward/Register")" href="/Inward/Register">Register</a>
+    }
+    <a class="@A("/Inward/Mine")" href="/Inward/Mine">My items</a>
+    @if (IAccess.IsOperator(User) || IOptions.SelfInwardEnabled) { <a class="@A("/Inward/New")" href="/Inward/New">Inward an item</a> }
+    @if (viewer || accounts || IAccess.IsAuditor(User)) { <a class="@A("/Inward/Invoices")" href="/Inward/Invoices">Invoices</a> }
+    @if (accounts)
+    {
+        <a class="@A("/Inward/Payments")" href="/Inward/Payments">ERP payments</a>
+        <a class="@A("/Inward/ProjectCodes")" href="/Inward/ProjectCodes">Project codes</a>
+    }
+    @if (viewer || User.IsAdmin()) { <a class="@A("/Inward/Transfer")" href="/Inward/Transfer">Transfer</a> }
+    @if (User.IsAdmin()) { <a class="@A("/Inward/Access")" href="/Inward/Access">Access</a> }
+</div>

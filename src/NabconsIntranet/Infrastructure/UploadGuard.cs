@@ -9,8 +9,8 @@ namespace NabconsIntranet.Infrastructure;
 /// </summary>
 public static class UploadGuard
 {
-    public static readonly string[] NoUploadPrefixes = { "/Compliance" };
-    public static readonly string[] MultipartAllowed = { "/Compliance/Import" };
+    public static readonly string[] NoUploadPrefixes = { "/Compliance", "/Inward" };
+    public static readonly string[] MultipartAllowed = { "/Compliance/Import", "/Inward/ProjectCodes", "/Inward/Payments" };
     public const long BodyLimit = 256 * 1024, ImportBodyLimit = 2 * 1024 * 1024;
 
     private static bool IsWrite(HttpRequest r) => HttpMethods.IsPost(r.Method) || HttpMethods.IsPut(r.Method) || HttpMethods.IsPatch(r.Method) || HttpMethods.IsDelete(r.Method);

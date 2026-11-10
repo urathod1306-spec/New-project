@@ -194,6 +194,17 @@ document.querySelectorAll('select[data-status-select]').forEach(function (sel) {
     sel.addEventListener('change', sync); sync();
 });
 
+// ---------- inward forms: show the boxes that belong to the chosen type / closure (the server checks everything) ----------
+document.querySelectorAll('select[data-switch]').forEach(function (sel) {
+    var form = sel.form, key = sel.getAttribute('data-switch');
+    function sync() {
+        form.querySelectorAll('[data-when-' + key + ']').forEach(function (box) {
+            box.classList.toggle('hidden', box.getAttribute('data-when-' + key).split('|').indexOf(sel.value) < 0);
+        });
+    }
+    sel.addEventListener('change', sync); sync();
+});
+
 document.querySelectorAll('select[data-autosubmit]').forEach(function (s) { s.addEventListener('change', function () { s.form.submit(); }); });
 
 // ---------- notifications: badge refresh by a small poll (no WebSockets / SSE), and the bell drop-down ----------
@@ -210,7 +221,7 @@ document.querySelectorAll('select[data-autosubmit]').forEach(function (s) { s.ad
         });
     }
     function apply(d) {
-        ['unread', 'desk', 'inbox', 'admin', 'leads', 'enotes', 'board', 'compliance'].forEach(function (k) { if (typeof d[k] === 'number') setBadge(k, d[k]); });
+        ['unread', 'desk', 'inbox', 'admin', 'leads', 'enotes', 'board', 'compliance', 'inward'].forEach(function (k) { if (typeof d[k] === 'number') setBadge(k, d[k]); });
         var s = document.getElementById('bell-summary');
         if (s) s.setAttribute('aria-label', 'Notifications, ' + d.unread + ' unread');
         document.dispatchEvent(new CustomEvent('nab:summary', { detail: d }));

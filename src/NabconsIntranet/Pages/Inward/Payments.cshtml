@@ -1,0 +1,45 @@
+@page
+@model NabconsIntranet.Pages.Inward.PaymentsModel
+@{
+    ViewData["Title"] = "ERP payments";
+    var ready = Model.Rows.Count(r => r.Category == PaymentCategory.New);
+}
+<div class="page-head"><div><h1>Import payments from the ERP</h1>
+    <p>Upload the payment report as CSV (template below). Rows are matched by inward number, otherwise by vendor, invoice number and invoice date. Only new matched rows are recorded; the file is checked in memory and not kept.</p></div></div>
+<partial name="_InwardTabs" />
+@if (Model.Text == null)
+{
+    <div class="card narrow-form">
+        <p><a class="btn" href="/Inward/Payments?handler=Template">Download the template</a></p>
+        <p class="small muted">Columns: @string.Join(", ", NabconsIntranet.Data.InwardWorkflow.PaymentColumns). Amount is the net amount paid; TDS and other deductions are added to it. Dates as dd.MM.yyyy. At most @Model.Options.MaxImportRows rows and @Model.Options.MaxImportKB KB. The same file cannot be imported twice.</p>
+        <form method="post" asp-page-handler="Preview" enctype="multipart/form-data">
+            <div class="field"><label for="file">CSV file</label><input type="file" id="file" name="file" accept=".csv,text/csv" required /></div>
+            <button class="btn primary" type="submit">Check the file</button>
+        </form>
+    </div>
+}
+else
+{
+    <div class="grid stats">
+        @foreach (var c in PaymentCategory.All) { <div class="stat"><div class="n">@Model.Rows.Count(r => r.Category == c)</div><div class="l">@c</div></div> }
+    </div>
+    <div class="card table-wrap mt">
+        <table class="table compact">
+            <thead><tr><th>Line</th><th>Category</th><th>Matched</th><th>Invoice</th><th>Paid on</th><th class="right">Amount settled</th><th>Voucher</th><th>Note</th></tr></thead>
+            @foreach (var r in Model.Rows)
+            {
+                <tr class="@(r.Category == PaymentCategory.New ? "" : r.Category == PaymentCategory.Recorded ? "muted" : "row-overdue")">
+                    <td>@r.Line</td><td>@r.Category</td><td>@if (r.ItemId != null) { <a href="/Inward/Item/@r.ItemId">@r.MatchedNumber</a> } else { @r.InwardNo }</td>
+                    <td>@r.InvoiceNo</td><td class="nowrap">@r.PaidOn</td><td class="right nowrap">@(r.Settled > 0 ? Paise.Format(r.Settled) : "")</td><td>@r.Voucher</td><td class="small">@r.Problem</td></tr>
+            }
+        </table>
+        @if (ready > 0)
+        {
+            <form method="post" asp-page-handler="Confirm" enctype="multipart/form-data" class="mt">
+                <textarea name="csv" class="hidden" aria-hidden="true" tabindex="-1">@Model.Text</textarea>
+                <button class="btn primary" type="submit">Record @ready payment(s)</button> <a class="btn" href="/Inward/Payments">Start again</a>
+            </form>
+        }
+        else { <p class="alert warning">No row can be recorded from this file.</p> }
+    </div>
+}

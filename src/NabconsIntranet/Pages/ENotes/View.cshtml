@@ -23,6 +23,7 @@
 
 <div class="card enote-head">
     <dl class="meta-grid">
+        @if (Model.SourceInward != null) { <dt>Created from inward</dt><dd><a href="/Inward/Item/@Model.SourceInward.Id">@Model.SourceInward.Number</a></dd> }
         <dt>Initiated by</dt><dd>@n.InitiatorName@(n.InitiatorDesignation != null ? ", " + n.InitiatorDesignation : "") <span class="muted">· @n.InitiatorVertical</span></dd>
         <dt>Created / submitted</dt><dd>@F.DateTime(n.CreatedAt)@(n.SubmittedAt != null ? " · submitted " + F.DateTime(n.SubmittedAt) : " · not yet submitted")</dd>
         @if (n.CurrentHolderName != null && !ENoteStates.IsDecided(n.State))

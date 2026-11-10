@@ -123,6 +123,18 @@ To switch self-registration off, set `"SelfRegistrationEnabled": false` in `apps
 - **Daily housekeeping** (after the scheduled backup) sends ageing reminders and reports any stored e-Note file that has no database record. It never deletes files; see the log.
 - **Switching off:** set `"ENote": { "Enabled": false }`. The data stays and returns when it is switched back on.
 
+## Inward register and invoices (v1.7)
+- **Office codes.** On *Master lists → Offices / Locations* give each office that keeps a registry a short inward code (e.g. `HO`, `DEL`). Numbers are `NCS/IN/<code>/<FY>/00001`; offices without a code share `GEN`. Change a code only at the start of a financial year: issued numbers never change.
+- **Access** (*Inward → Access*, Administrator only, never for yourself):
+  - *Inward Operator* of an office — the registry/dispatch clerk: inwards, marks and re-marks items of that office, prints acknowledgement slips and the register.
+  - *Inward Viewer* — e.g. COO: sees every item in full, marks and transfers.
+  - *Invoice Accounts* — records payments, credit/debit notes, close-short and reversals, imports ERP payments and project codes.
+  Every change is kept in the history and the user and the Inward Viewers are notified. The page warns about offices with no operator and when no Invoice Accounts user exists.
+- **Confidential items** show only their number, dates and status to people without full access (the holder, those copied, the person who inwarded it, Inward Viewers, and Accounts for invoices).
+- **Transfer** (*Inward → Transfer*): when someone leaves, move all their open items to a successor in one step. Invoices the successor inwarded are skipped (segregation).
+- **Lists.** *Master lists → Inward categories*.
+- **Switching off:** `"Inward": { "Enabled": false }`. Data is kept.
+
 ## Compliance Management (v1.6)
 
 - **Who can do what.** Compliance access is **not** an intranet role, so the Administrator cannot give it (to anyone, including themselves).

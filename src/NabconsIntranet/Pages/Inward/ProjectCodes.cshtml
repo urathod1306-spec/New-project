@@ -1,0 +1,53 @@
+@page
+@model NabconsIntranet.Pages.Inward.ProjectCodesModel
+@{
+    ViewData["Title"] = "Project codes";
+    var ok = Model.Rows.Count > 0 && Model.Rows.All(r => r.Errors.Count == 0);
+}
+<div class="page-head"><div><h1>Project codes</h1><p>Codes offered on invoices. The owner is shown as the usual verifier. Maintained by CSV import (Excel → Save As → CSV UTF-8).</p></div></div>
+<partial name="_InwardTabs" />
+@if (Model.Text == null)
+{
+    <div class="card narrow-form">
+        <p><a class="btn" href="/Inward/ProjectCodes?handler=Template">Download the template</a></p>
+        <p class="small muted">Columns: @string.Join(", ", NabconsIntranet.Data.InwardWorkflow.ProjectColumns). Codes are matched without regard to case; OwnerUserName is a sign-in name; Active is Yes or No. At most @Model.Options.MaxImportRows rows and @Model.Options.MaxImportKB KB. All rows or none.</p>
+        <form method="post" asp-page-handler="Preview" enctype="multipart/form-data">
+            <div class="field"><label for="file">CSV file</label><input type="file" id="file" name="file" accept=".csv,text/csv" required /></div>
+            <button class="btn primary" type="submit">Check the file</button>
+        </form>
+    </div>
+}
+else
+{
+    <div class="card table-wrap">
+        <h2>@Model.Rows.Count row(s)</h2>
+        @if (!ok) { <div class="alert danger">Some rows have errors. Correct the file and upload it again; nothing has been imported.</div> }
+        <table class="table compact">
+            <thead><tr><th>Line</th><th>Code</th><th>Name</th><th>Owner</th><th>Active</th><th>Change</th><th>Check</th></tr></thead>
+            @foreach (var r in Model.Rows)
+            {
+                <tr class="@(r.Errors.Count > 0 ? "row-overdue" : "")"><td>@r.Line</td><td>@r.Code</td><td>@r.Name</td><td>@r.OwnerUserName</td><td>@(r.Active ? "Yes" : "No")</td><td>@r.Change</td>
+                    <td>@if (r.Errors.Count == 0) { <span class="badge success">OK</span> } else { <ul class="small">@foreach (var x in r.Errors) { <li>@x</li> }</ul> }</td></tr>
+            }
+        </table>
+        @if (ok)
+        {
+            <form method="post" asp-page-handler="Confirm" enctype="multipart/form-data" class="mt">
+                <textarea name="csv" class="hidden" aria-hidden="true" tabindex="-1">@Model.Text</textarea>
+                <label class="check"><input type="checkbox" name="deactivate" value="true" /> Deactivate codes that are not in this file</label>
+                <button class="btn primary" type="submit">Import</button> <a class="btn" href="/Inward/ProjectCodes">Start again</a>
+            </form>
+        }
+    </div>
+}
+<div class="card table-wrap mt">
+    <h2>Current codes</h2>
+    @if (Model.Codes.Count == 0) { <p class="empty">No project codes yet.</p> }
+    else
+    {
+        <table class="table compact">
+            <thead><tr><th>Code</th><th>Name</th><th>Owner (verifier)</th><th>Active</th><th>Updated</th></tr></thead>
+            @foreach (var c in Model.Codes) { <tr class="@(c.IsActive ? "" : "muted")"><td>@c.Code</td><td>@c.Name</td><td>@c.OwnerName</td><td>@(c.IsActive ? "Yes" : "No")</td><td class="small">@c.UpdatedBy, @F.DateTime(c.UpdatedAt)</td></tr> }
+        </table>
+    }
+</div>

@@ -51,6 +51,7 @@ public static class NotificationModules
         ["Profile"] = "My Profile",
         ["ENote"] = "e-Notes",
         ["Compliance"] = "Compliance",
+        ["Inward"] = "Inward register",
         ["System"] = "System",
     };
 }
@@ -66,6 +67,7 @@ public sealed class ChangeTracker
     public const string LeadQueue = "t:leads";
     public const string BoardQueue = "t:board";
     public const string ComplianceQueue = "t:compliance";
+    public const string InwardQueue = "t:inward";
 
     private long _seq;
     private readonly ConcurrentDictionary<string, (long Seq, long Ticks)> _keys = new();
